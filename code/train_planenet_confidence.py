@@ -1480,8 +1480,8 @@ def parse_args():
 
 if __name__=='__main__':
     args = parse_args()
-
     print "keyname=%s task=%s started"%(args.keyname, args.task)
+    
     try:
         if args.task == "train":
             main(args)
