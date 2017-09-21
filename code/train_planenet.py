@@ -458,6 +458,7 @@ def main(options):
                     batchType = 0
                     pass
 
+
                 _, total_loss, losses, losses_rgbd, summary_str = sess.run([train_op, loss, loss_dict, loss_dict_rgbd, summary_op], feed_dict = {training_flag: batchType})
                 writers[batchType].add_summary(summary_str, bno)
                 ema[batchType] = ema[batchType] * MOVING_AVERAGE_DECAY + total_loss
