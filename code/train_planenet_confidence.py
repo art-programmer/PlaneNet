@@ -33,8 +33,8 @@ def build_graph(img_inp_train, img_inp_val, img_inp_rgbd_train, img_inp_rgbd_val
         img_inp_rgbd = tf.cond(tf.equal(training_flag % 2, 0), lambda: img_inp_rgbd_train, lambda: img_inp_rgbd_val)
         img_inp = tf.cond(tf.less(training_flag, 2), lambda: tf.cond(tf.equal(training_flag % 2, 0), lambda: img_inp_train, lambda: img_inp_val), lambda: img_inp_rgbd)
         
-        #net = PlaneNet({'img_inp': img_inp}, is_training=tf.equal(training_flag % 2, 0), options=options)
-        net = PlaneNet({'img_inp': img_inp}, is_training=tf.equal(0, 0), options=options)
+        net = PlaneNet({'img_inp': img_inp}, is_training=tf.equal(training_flag % 2, 0), options=options)
+        #net = PlaneNet({'img_inp': img_inp}, is_training=tf.equal(0, 0), options=options)
         #global predictions
         plane_pred = net.layers['plane_pred']
 
@@ -707,10 +707,12 @@ def test(options):
             loader = tf.train.Saver(var_to_restore)
             loader.restore(sess, '../PlaneSetGeneration/dump_planenet_pixelwise/train_planenet_pixelwise.ckpt')
         else:
+            #var_to_restore = [v for v in var_to_restore if 'res4b22_relu_non_plane' not in v.name]
             loader = tf.train.Saver(var_to_restore)
             loader.restore(sess, "%s/checkpoint.ckpt"%(options.checkpoint_dir))
+            #loader.restore(sess, options.fineTuningCheckpoint)
             pass
-        #loader.restore(sess, options.fineTuningCheckpoint)
+        
 
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
@@ -732,7 +734,7 @@ def test(options):
             ranges = np.array([urange / imageWidth * 640 / focalLength, np.ones(urange.shape), -vrange / imageHeight * 480 / focalLength]).transpose([1, 2, 0])
 
 
-            for index in xrange(100):
+            for index in xrange(10):
                 print(('image', index))
                 t0=time.time()
 
@@ -996,7 +998,7 @@ def test(options):
             planeMasks = np.array(planeMasks)
             #predMasks = np.array(predMasks)
             evaluateDepths(predDepths, gtDepths, np.ones(planeMasks.shape, dtype=np.bool), planeMasks)
-            print(lossSum / num)
+            #print(lossSum / num)
             exit(1)
 
         except tf.errors.OutOfRangeError:
@@ -1423,7 +1425,8 @@ def parse_args():
     args = parser.parse_args()
     args.keyname = os.path.basename(__file__).rstrip('.py')
     args.keyname = args.keyname.replace('train_', '')
-
+    args.keyname = args.keyname.replace('_confidence', '')
+    
     if args.numOutputPlanes != 20:
         args.keyname += '_np' + str(args.numOutputPlanes)
         pass

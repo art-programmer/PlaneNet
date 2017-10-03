@@ -20,6 +20,7 @@ from modules import *
 from planenet import PlaneNet
 from RecordReader import *
 from RecordReaderRGBD import *
+from RecordReaderScanNet import *
 
 #training_flag: toggle dropout and batch normalization mode
 #it's true for training and false for validation, testing, prediction
@@ -29,7 +30,8 @@ from RecordReaderRGBD import *
 def build_graph(img_inp_train, img_inp_val, img_inp_rgbd_train, img_inp_rgbd_val, training_flag, options):
     with tf.device('/gpu:%d'%options.gpu_id):
         img_inp_rgbd = tf.cond(tf.equal(training_flag % 2, 0), lambda: img_inp_rgbd_train, lambda: img_inp_rgbd_val)
-        img_inp = tf.cond(tf.less(training_flag, 2), lambda: tf.cond(tf.equal(training_flag % 2, 0), lambda: img_inp_train, lambda: img_inp_val), lambda: img_inp_rgbd)
+        img_inp = tf.cond(tf.equal(training_flag % 2, 0), lambda: img_inp_train, lambda: img_inp_val)
+        img_inp = tf.cond(tf.less(training_flag, 2), lambda: img_inp, lambda: img_inp_rgbd)
         
         net = PlaneNet({'img_inp': img_inp}, is_training=tf.equal(training_flag % 2, 0), options=options)
 
@@ -94,6 +96,10 @@ def build_loss_rgbd(global_pred_dict, local_pred_dict, deep_pred_dicts, global_g
         validDepthMask = tf.cast(tf.greater(global_gt_dict['depth'], 1e-4), tf.float32)
         depth_loss = tf.reduce_mean(tf.reduce_sum(tf.squared_difference(all_depths, global_gt_dict['depth']) * all_segmentations_softmax, axis=3, keep_dims=True) * validDepthMask) * 1000
 
+        if options.predictPixelwise == 1:
+            depth_loss += tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_mask'], global_gt_dict['depth']) * validDepthMask) * 1000
+            pass
+        
         #non plane mask loss
         segmentation_loss = tf.reduce_mean(tf.slice(all_segmentations_softmax, [0, 0, 0, options.numOutputPlanes], [options.batchSize, HEIGHT, WIDTH, 1])) * 100
         
@@ -148,7 +154,7 @@ def build_loss(global_pred_dict, local_pred_dict, deep_pred_dicts, global_gt_dic
 
                 plane_gt_shuffled = tf.transpose(tf.matmul(global_gt_dict['plane'], forward_map, transpose_a=True), [0, 2, 1]) / tf.maximum(num_matches, 1e-4)
                 plane_confidence_gt = tf.cast(num_matches > 0.5, tf.float32)
-                plane_loss += tf.reduce_mean(tf.squared_difference(pred_dict['plane'], plane_gt_shuffled) * plane_confidence_gt) * 1000
+                plane_loss += tf.reduce_mean(tf.squared_difference(pred_dict['plane'], plane_gt_shuffled) * plane_confidence_gt) * 10000
 
                 
                 #all segmentations is the concatenation of plane segmentations and non plane mask
@@ -200,8 +206,13 @@ def build_loss(global_pred_dict, local_pred_dict, deep_pred_dicts, global_gt_dic
         validDepthMask = tf.cast(tf.greater(global_gt_dict['depth'], 1e-4), tf.float32)
         depth_loss = tf.reduce_mean(tf.reduce_sum(tf.squared_difference(all_depths, global_gt_dict['depth']) * all_segmentations_softmax, axis=3, keep_dims=True) * validDepthMask) * 1000
 
-        #normal loss for non-plane region
-        normal_loss = tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_normal'], global_gt_dict['normal']) * (1 - plane_mask)) * 1000
+        if options.predictPixelwise == 1:
+            depth_loss += tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_mask'], global_gt_dict['depth']) * validDepthMask) * 1000
+            normal_loss = tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_normal'], global_gt_dict['normal']) * validDepthMask) * 1000
+        else:
+            #normal loss for non-plane region
+            normal_loss = tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_normal'], global_gt_dict['normal']) * (1 - plane_mask)) * 1000
+            pass
         
 
         #local loss
@@ -292,14 +303,6 @@ def build_loss(global_pred_dict, local_pred_dict, deep_pred_dicts, global_gt_dic
         if options.predictBoundary:
             #we predict boundaries directly for post-processing purpose
             boundary_loss += tf.reduce_mean(tf.losses.sigmoid_cross_entropy(logits=global_pred_dict['boundary'], multi_class_labels=boundary_gt, weights=tf.maximum(global_gt_dict['boundary'] * 3, 1))) * 1000
-
-
-        if options.diverseLoss:
-            plane_diff = tf.reduce_sum(tf.pow(tf.expand_dims(global_pred_dict['plane'], 1) - tf.expand_dims(global_pred_dict['plane'], 2), 2), axis=3)
-            plane_diff = tf.matrix_set_diag(plane_diff, tf.ones((options.batchSize, options.numOutputPlanes)))
-            minPlaneDiff = 0.1
-            diverse_loss += tf.reduce_mean(tf.clip_by_value(1 - plane_diff / minPlaneDiff, 0, 1)) * 10000
-            pass
 
           
         #regularization
@@ -392,7 +395,7 @@ def main(options):
         sess.run(init_op)
         if options.restore == 0:
             #fine-tune from DeepLab model
-            var_to_restore = [v for v in var_to_restore if 'res5d' not in v.name and 'segmentation' not in v.name and 'plane' not in v.name and 'deep_supervision' not in v.name and 'local' not in v.name and 'boundary' not in v.name and 'degridding' not in v.name]
+            var_to_restore = [v for v in var_to_restore if 'res5d' not in v.name and 'segmentation' not in v.name and 'plane' not in v.name and 'deep_supervision' not in v.name and 'local' not in v.name and 'boundary' not in v.name and 'degridding' not in v.name and 'res2a_branch2a' not in v.name and 'res2a_branch1' not in v.name]
             pretrained_model_loader = tf.train.Saver(var_to_restore)
             pretrained_model_loader.restore(sess,"../pretrained_models/deeplab_resnet.ckpt")
         elif options.restore == 1:
@@ -406,8 +409,11 @@ def main(options):
             loader = tf.train.Saver(var_to_restore)
             loader.restore(sess,"%s/checkpoint.ckpt"%(options.checkpoint_dir))
             sess.run(batchno.assign(1))
-        elif options.restore == 3:
+        elif options.restore == 3:            
             #restore the same model from standard training
+            if options.predictBoundary == 1:
+                var_to_restore = [v for v in var_to_restore if 'boundary' not in v.name]
+                pass            
             if options.predictConfidence == 1:
                 var_to_restore = [v for v in var_to_restore if 'confidence' not in v.name]
                 pass
@@ -454,6 +460,7 @@ def main(options):
                     batchType = 0
                     pass
 
+
                 _, total_loss, losses, losses_rgbd, summary_str = sess.run([train_op, loss, loss_dict, loss_dict_rgbd, summary_op], feed_dict = {training_flag: batchType})
                 writers[batchType].add_summary(summary_str, bno)
                 ema[batchType] = ema[batchType] * MOVING_AVERAGE_DECAY + total_loss
@@ -467,6 +474,14 @@ def main(options):
                     pass
         
                 print bno,'train', ema[0] / ema_acc[0], 'val', ema[1] / ema_acc[1], 'train rgbd', ema[2] / ema_acc[2], 'val rgbd', ema[3] / ema_acc[3], 'loss', total_loss, 'time', time.time()-t0
+
+                if np.random.random() < 0.01:
+                    if batchType < 2:
+                        print(losses)
+                    else:
+                        print(losses_rgbd)
+                        pass
+                    pass                
                 continue
 
         except tf.errors.OutOfRangeError:
@@ -1056,7 +1071,10 @@ def parse_args():
                         default=0, type=int)
     parser.add_argument('--predictConfidence', dest='predictConfidence',
                         help='whether predict plane confidence or not: [0, 1]',
-                        default=0, type=int)        
+                        default=0, type=int)
+    parser.add_argument('--predictPixelwise', dest='predictPixelwise',
+                        help='whether predict pixelwise depth or not: [0, 1]',
+                        default=0, type=int)    
     parser.add_argument('--fineTuningCheckpoint', dest='fineTuningCheckpoint',
                         help='specify the model for fine-tuning',
                         default='../PlaneSetGeneration/dump_planenet_diverse/train_planenet_diverse.ckpt', type=str)
@@ -1104,6 +1122,9 @@ def parse_args():
         pass
     if args.predictConfidence == 1:
         args.keyname += '_pc'
+        pass    
+    if args.predictPixelwise == 1:
+        args.keyname += '_pp'
         pass    
     if args.sameMatching == 0:
         args.keyname += '_sm0'

@@ -945,3 +945,32 @@ def depthToNormalModule(depth):
     
     normal = normal / tf.norm(normal, axis=3, keep_dims=True)
     return normal
+
+def findBoundaryModule(depth, normal, segmentation, plane_mask, max_depth_diff = 0.1, max_normal_diff = np.sqrt(2 * (1 - np.cos(np.deg2rad(20))))):
+    kernel_size = 3
+    padding = (kernel_size - 1) / 2
+    neighbor_kernel_array = gaussian(kernel_size, kernel_size)
+    neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 0
+    neighbor_kernel_array /= neighbor_kernel_array.sum()
+    neighbor_kernel_array *= -1
+    neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 1
+    neighbor_kernel = tf.constant(neighbor_kernel_array.reshape(-1), shape=neighbor_kernel_array.shape, dtype=tf.float32)
+    neighbor_kernel = tf.reshape(neighbor_kernel, [kernel_size, kernel_size, 1, 1])
+        
+    depth_diff = tf.abs(tf.nn.depthwise_conv2d(depth, neighbor_kernel, strides=[1, 1, 1, 1], padding='VALID'))
+    depth_diff = tf.pad(depth_diff, paddings = [[0, 0], [padding, padding], [padding, padding], [0, 0]])
+    max_depth_diff = 0.1
+    depth_boundary = tf.greater(depth_diff, max_depth_diff)
+
+    normal_diff = tf.norm(tf.nn.depthwise_conv2d(normal, tf.tile(neighbor_kernel, [1, 1, 3, 1]), strides=[1, 1, 1, 1], padding='VALID'), axis=3, keep_dims=True)
+    normal_diff = tf.pad(normal_diff, paddings = [[0, 0], [padding, padding], [padding, padding], [0, 0]])
+    max_normal_diff = np.sqrt(2 * (1 - np.cos(np.deg2rad(20))))
+    normal_boundary = tf.greater(normal_diff, max_normal_diff)
+
+    plane_region = tf.nn.max_pool(plane_mask, ksize=[1, kernel_size, kernel_size, 1], strides=[1, 1, 1, 1], padding='SAME', name='max_pool')
+    segmentation_eroded = 1 - tf.nn.max_pool(1 - segmentation, ksize=[1, 3, 3, 1], strides=[1, 1, 1, 1], padding='SAME', name='max_pool')
+    plane_region -= tf.reduce_max(segmentation_eroded, axis=3, keep_dims=True)
+    boundary = tf.cast(tf.logical_or(depth_boundary, normal_boundary), tf.float32)
+    smooth_boundary = tf.cast(tf.logical_and(normal_boundary, tf.less_equal(depth_diff, max_depth_diff)), tf.float32) * plane_region
+    boundary_gt = tf.concat([smooth_boundary, boundary - smooth_boundary], axis=3)
+    return boundary_gt

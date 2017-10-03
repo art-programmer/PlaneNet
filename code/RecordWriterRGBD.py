@@ -100,10 +100,10 @@ def writeRecordFile(tfrecords_filename, imagePaths):
 if __name__=='__main__':
     imagePaths = glob.glob('/home/chenliu/Projects/Data/NYU_RGBD/raw/train/color_*.png')
     imagePaths = [{'image': imagePath, 'depth': imagePath.replace('color', 'depth')} for imagePath in imagePaths]
-    #print(len(imagePaths))
+    print(len(imagePaths))
     #exit(1)
     random.shuffle(imagePaths)
-    writeRecordFile('../planes_nyu_rgbd_train_temp.tfrecords', imagePaths)
+    writeRecordFile('../planes_nyu_rgbd_train.tfrecords', imagePaths)
     #reader.readRecordFile()
 
 

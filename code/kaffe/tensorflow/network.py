@@ -51,7 +51,7 @@ class Network(object):
                                                        shape=[],
                                                        name='use_dropout')
         
-        self.setup(True, options=options)
+        self.setup(is_training, options=options)
 
     def setup(self, is_training):
         '''Construct the network. '''

@@ -32,7 +32,7 @@ np.set_printoptions(precision=2, linewidth=200)
 MOVING_AVERAGE_DECAY = 0.99
                           
 deepSupervisionLayers=['res4b22_relu']
-deepSupervisionLayers=[]
+#deepSupervisionLayers=[]
 
 def build_graph(img_inp_train, img_inp_val, plane_gt_train, plane_gt_val, validating_inp, is_training=True, numOutputPlanes=20, gpu_id = 0, useCRF= 0, suffix='forward'):
     if suffix == '12_22':
@@ -731,7 +731,7 @@ def test(gpu_id, dumpdir, logdir, testdir, keyname, restore, numOutputPlanes=20,
             ranges = np.array([urange / imageWidth * 640 / focalLength, np.ones(urange.shape), -vrange / imageHeight * 480 / focalLength]).transpose([1, 2, 0])
 
 
-            for index in xrange(100):
+            for index in xrange(10):
                 print(('image', index))
                 t0=time.time()
                 #im, planes, depth, normal, boundary, s_8, p_8, b_8, s_16, p_16, b_16, s_32, p_32, b_32 = sess.run([img_inp, plane_gt, depth_gt, normal_gt, boundary_gt, s_8_gt, p_8_gt, b_8_gt, s_16_gt, p_16_gt, b_16_gt, s_32_gt, p_32_gt, b_32_gt])
