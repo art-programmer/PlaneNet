@@ -880,9 +880,9 @@ def fitPlaneMasksModule(planes, depth, normal, width = 640, height = 480, numPla
         planeMasks = tf.nn.max_pool(planeMasks, ksize=[1, 3, 3, 1], strides=[1, 1, 1, 1], padding='SAME', name='max_pool')
         pass
     plane_mask = tf.reduce_max(planeMasks, axis=3, keep_dims=True)
-    if closing:
-        plane_mask = 1 - tf.nn.max_pool(1 - plane_mask, ksize=[1, 3, 3, 1], strides=[1, 1, 1, 1], padding='SAME', name='max_pool')
-        pass
+    #if closing:
+    #plane_mask = 1 - tf.nn.max_pool(1 - plane_mask, ksize=[1, 3, 3, 1], strides=[1, 1, 1, 1], padding='SAME', name='max_pool')
+    #pass
     if one_hot:
         #one-hot encoding
         planeMasks = tf.one_hot(tf.argmax(planeMasks * (distanceThreshold - distance), axis=3), depth=numPlanes) * plane_mask

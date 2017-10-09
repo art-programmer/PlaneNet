@@ -49,7 +49,7 @@ class RecordReaderRGBD():
         if random:
             image_inp, depth_gt, image_path_inp = tf.train.shuffle_batch([image, depth, image_path], batch_size=batchSize, capacity=min_after_dequeue + (NUM_THREADS + 2) * batchSize, num_threads=NUM_THREADS, min_after_dequeue=min_after_dequeue)
         else:
-            image_inp, depth_gt, image_path_inp = tf.train.batch([image, depth, image_path], batch_size=batchSize, capacity=(NUM_THREADS + 2) * batchSize, num_threads=NUM_THREADS)
+            image_inp, depth_gt, image_path_inp = tf.train.batch([image, depth, image_path], batch_size=batchSize, capacity=(NUM_THREADS + 2) * batchSize, num_threads=1)
 
         global_gt_dict = {'depth': depth_gt, 'path': image_path_inp}
         local_gt_dict = {}

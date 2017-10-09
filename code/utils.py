@@ -892,6 +892,7 @@ def getNYURGBDCamera():
     camera['cy'] = 2.5373616633400465e+02 - 44
     camera['width'] = 560
     camera['height'] = 426
+    camera['depth_shift'] = 1000    
     return camera
 
 def getSUNCGCamera():
@@ -902,6 +903,29 @@ def getSUNCGCamera():
     camera['cy'] = 240
     camera['width'] = 640
     camera['height'] = 480
+    camera['depth_shift'] = 1000    
+    return camera
+
+def get3DCamera():
+    camera = {}
+    camera['fx'] = 1075
+    camera['fy'] = 1075
+    camera['cx'] = 637
+    camera['cy'] = 508
+    camera['width'] = 1280
+    camera['height'] = 1024
+    camera['depth_shift'] = 4000    
+    return camera
+
+def getCameraFromInfo(info):
+    camera = {}
+    camera['fx'] = info[3]
+    camera['fy'] = info[8]
+    camera['cx'] = info[5]
+    camera['cy'] = info[9]
+    camera['width'] = info[0]
+    camera['height'] = info[1]
+    camera['depth_shift'] = info[2]    
     return camera
 
 def fitPlane(points):
@@ -998,11 +1022,10 @@ def fitPlanes(depth, camera, numPlanes=50, planeAreaThreshold=3*4, numIterations
     return planes, planeSegmentation, depthPred
 
 
-def fitPlanesSegmentation(depth, segmentation, camera, numPlanes=50, numPlanesPerSegment=3, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=False):
+def fitPlanesSegmentation(depth, segmentation, camera, numPlanes=50, numPlanesPerSegment=3, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=-1):
     width = depth.shape[1]
     height = depth.shape[0]
 
-    #camera = getNYURGBDCamera()
     urange = (np.arange(width, dtype=np.float32) / width * camera['width'] - camera['cx']) / camera['fx']
     urange = urange.reshape(1, -1).repeat(height, 0)
     vrange = (np.arange(height, dtype=np.float32) / height * camera['height'] - camera['cy']) / camera['fy']
@@ -1024,9 +1047,9 @@ def fitPlanesSegmentation(depth, segmentation, camera, numPlanes=50, numPlanesPe
         for planeIndex in xrange(numPlanesPerSegment):
             maxNumInliers = planeAreaThreshold
             for iteration in xrange(numIterations):
-                if local:
+                if local > 0:
                     sampledPoint = XYZ[np.random.randint(XYZ.shape[0], size=(1))]
-                    sampledPoints = XYZ[np.linalg.norm(XYZ - sampledPoint, 2, 1) < 0.02]
+                    sampledPoints = XYZ[np.linalg.norm(XYZ - sampledPoint, 2, 1) < local]
 
                     if sampledPoints.shape[0] < 3:
                         continue
@@ -1056,7 +1079,7 @@ def fitPlanesSegmentation(depth, segmentation, camera, numPlanes=50, numPlanesPe
             diff = np.abs(np.matmul(XYZ, bestPlane) - np.ones(XYZ.shape[0])) / np.linalg.norm(bestPlane)
             inlierIndices = diff < distanceThreshold
             inliersPoints = XYZ[inlierIndices]
-            planePointsArray.append(inliersPoints)
+            planePointIndices.append(inliersPoints)
             XYZ = XYZ[np.logical_not(inlierIndices)]
             if XYZ.shape[0] < planeAreaThreshold:
                 break
@@ -1064,36 +1087,38 @@ def fitPlanesSegmentation(depth, segmentation, camera, numPlanes=50, numPlanesPe
         continue
 
     if len(planes) > numPlanes:
-        planeList = zip(planes, planePointsArray)
+        planeList = zip(planes, planePointIndices)
         planeList = sorted(planeList, key=lambda x:-len(x[1]))
         planeList = planeList[:numPlanes]
-        planes, planePointsArray = zip(*planeList)
+        planes, planePointIndices = zip(*planeList)
         pass
 
-    planes = np.array(planes)
-    if planes.shape[0] < numPlanes:
-        planes = np.concatenate([planes, np.zeros((numPlanes - planes.shape[0], 3))], axis=0)
-        pass
     
     
     planeSegmentation = np.ones(depth.shape) * numPlanes
-    for planeIndex, planePoints in enumerate(planePointsArray):
+    for planeIndex, planePoints in enumerate(planePointIndices):
         planeDepth = planePoints[:, 1]
         u = np.round((planePoints[:, 0] / planeDepth * camera['fx'] + camera['cx']) / camera['width'] * width).astype(np.int32)
         v = np.round((-planePoints[:, 2] / planeDepth * camera['fy'] + camera['cy']) / camera['height'] * height).astype(np.int32)
         planeSegmentation[v, u] = planeIndex
         continue
 
+    planes = np.array(planes)    
     planesD = 1 / np.linalg.norm(planes, 2, 1, keepdims=True)
     planes *= pow(planesD, 2)
+    if planes.shape[0] < numPlanes:
+        planes = np.concatenate([planes, np.zeros((numPlanes - planes.shape[0], 3))], axis=0)
+        pass
+
     planeDepths = calcPlaneDepths(planes, width, height)
+
     
     allDepths = np.concatenate([planeDepths, np.zeros((height, width, 1))], axis=2)
     depthPred = allDepths.reshape([height * width, numPlanes + 1])[np.arange(width * height), planeSegmentation.astype(np.int32).reshape(-1)].reshape(height, width)
 
     return planes, planeSegmentation, depthPred
 
-def fitPlanesPoints(points, segmentation, groupSegments, numPlanes=50, numPlanesPerSegment=3, numPlanesPerGroup=8, segmentRatio=0.1, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=-1):
+def fitPlanesPoints(points, segmentation, groupSegments, numPlanes=50, numPlanesPerSegment=3, numPlanesPerGroup=8, segmentRatio=0.1, planeAreaThreshold=100, numIterations=100, distanceThreshold=0.05, local=-1):
     allXYZ = points.reshape(-1, 3)
 
     
@@ -1146,15 +1171,19 @@ def fitPlanesPoints(points, segmentation, groupSegments, numPlanes=50, numPlanes
             XYZ = allXYZ[segmentMask.reshape(-1)]
             numPoints = XYZ.shape[0]
 
-            if numPoints < planeAreaThreshold:
+            if numPoints <= planeAreaThreshold:
+                if numPoints > 0:
+                    groupPlanes.append(np.random.random(3))
+                    groupPlanePointIndices.append(segmentMask.nonzero()[0])
+                    pass
                 continue
 
             for planeIndex in xrange(numPlanesPerSegment):
-                maxNumInliers = planeAreaThreshold
+                maxNumInliers = 0
                 for iteration in xrange(numIterations):
                     if local > 0:
                         sampledPoint = XYZ[np.random.randint(XYZ.shape[0], size=(1))]
-                        sampledPoints = XYZ[np.linalg.norm(XYZ - sampledPoint, 2, 1) < local]
+                        sampledPoints = XYZ[np.linalg.norm(XYZ - sampledPoint, axis=1) < local]
 
                         if sampledPoints.shape[0] < 3:
                             continue
@@ -1179,20 +1208,23 @@ def fitPlanesPoints(points, segmentation, groupSegments, numPlanes=50, numPlanes
                         pass
                     continue
 
-                if maxNumInliers == planeAreaThreshold:
-                    break
-                
                 groupPlanes.append(bestPlane)
             
                 diff = np.abs(np.matmul(XYZ, bestPlane) - np.ones(XYZ.shape[0])) / np.linalg.norm(bestPlane)
                 inlierIndices = diff < distanceThreshold
-                
+                if inlierIndices.sum() > numPoints * (1 - segmentRatio):
+                    inlierIndices = np.ones(diff.shape, dtype=np.bool)
+                    pass
                 pointIndices = segmentMask.nonzero()[0][inlierIndices]
                 groupPlanePointIndices.append(pointIndices)
                 segmentMask[pointIndices] = 0
                 
                 XYZ = XYZ[np.logical_not(inlierIndices)]
-                if XYZ.shape[0] < max(planeAreaThreshold, numPoints * segmentRatio):
+                if XYZ.shape[0] <= planeAreaThreshold:
+                    if XYZ.shape[0] > 0:
+                        groupPlanes.append(np.random.random(3))
+                        groupPlanePointIndices.append(segmentMask.nonzero()[0])
+                        pass
                     break
                 continue
             continue
@@ -1225,13 +1257,17 @@ def fitPlanesPoints(points, segmentation, groupSegments, numPlanes=50, numPlanes
         #     groupPlanes, groupPlanePointIndices = zip(*planeList)
         #     pass
 
+        
         numPointsOri = 0
         for indices in groupPlanePointIndices:
             numPointsOri += len(indices)
             continue
-
-        groupPlanes, groupPlanePointIndices = mergePlanes(points, groupPlanes, groupPlanePointIndices, planeDiffThreshold=distanceThreshold)
-        groupPlanes, groupPlanePointIndices = mergePlanes(points, groupPlanes, groupPlanePointIndices, planeDiffThreshold=distanceThreshold)
+        
+        groupPlanes, groupPlanePointIndices = mergePlanes(points, groupPlanes, groupPlanePointIndices, planeDiffThreshold=distanceThreshold, planeAreaThreshold=planeAreaThreshold)
+        if len(groupPlanes) > 1:
+            groupPlanes, groupPlanePointIndices = mergePlanes(points, groupPlanes, groupPlanePointIndices, planeDiffThreshold=distanceThreshold, planeAreaThreshold=planeAreaThreshold)
+            pass
+        #groupPlanes, groupPlanePointIndices = mergePlanes(points, groupPlanes, groupPlanePointIndices, planeDiffThreshold=distanceThreshold)
         
         # if groupIndex == 14:
         #     groupPlanes, groupPlanePointIndices = mergePlanes(points, groupPlanes, groupPlanePointIndices, planeDiffThreshold=distanceThreshold)
@@ -1268,6 +1304,10 @@ def fitPlanesPoints(points, segmentation, groupSegments, numPlanes=50, numPlanes
     #     planeList = planeList[:numPlanes]
     #     planes, planePointIndices = zip(*planeList)
     #     pass
+
+
+    if len(planes) == 0:
+        return np.array([]), np.ones(segmentation.shape).astype(np.int32) * (-1), []
     
     planes = np.array(planes)
     print('number of planes: ' + str(planes.shape[0]))
@@ -1290,7 +1330,79 @@ def fitPlanesPoints(points, segmentation, groupSegments, numPlanes=50, numPlanes
 
     return planes, planeSegmentation, groupNumPlanes
 
-def mergePlanes(points, planes, planePointIndices, planeDiffThreshold = 0.05, planeAngleThreshold = 30, inlierThreshold = 0.8):
+def mergePlanes(points, planes, planePointIndices, planeDiffThreshold = 0.05, planeAngleThreshold = 30, inlierThreshold = 0.9, planeAreaThreshold = 100):
+
+    # planesD = np.linalg.norm(planes, axis=1, keepdims=True)
+    # planes = planes / pow(planesD, 2)
+    # planesDiff = (np.linalg.norm(np.expand_dims(planes, 1) - np.expand_dims(planes, 0), axis=2) < planeDiffThreshold).astype(np.int32)
+
+    planeList = zip(planes, planePointIndices)
+    planeList = sorted(planeList, key=lambda x:-len(x[1]))
+    planes, planePointIndices = zip(*planeList)
+
+    groupedPlanes = []
+    groupedPlanePointIndices = []
+    
+    numPlanes = len(planes)
+    usedPlaneConfidence = np.ones(numPlanes, np.float32) * (-1)
+    usedPlaneMap = np.ones(numPlanes, np.int32) * (-1)
+    
+    for planeIndex, plane in enumerate(planes):
+        if usedPlaneConfidence[planeIndex] > 0:
+            continue
+        usedPlaneConfidence[planeIndex] = 1
+        usedPlaneMap[planeIndex] = planeIndex
+        XYZ = points[planePointIndices[planeIndex]]
+        for otherPlaneIndex in xrange(planeIndex + 1, numPlanes):
+            #if planeIndex not in [0, 1, 2, ]:
+            #break
+            #if usedPlanes[otherPlaneIndex]:
+            #continue
+            #otherPlane = planes[otherPlaneIndex]
+            #if np.abs(np.dot(plane, otherPlane)) / (np.linalg.norm(plane) * np.linalg.norm(otherPlane)) < np.cos(np.deg2rad(planeAngleThreshold)):
+            #continue
+
+            otherXYZ = points[planePointIndices[otherPlaneIndex]]
+
+            diff_1 = np.abs(np.matmul(otherXYZ, plane) - np.ones(otherXYZ.shape[0])) / np.linalg.norm(plane)
+            #diff_2 = np.abs(np.matmul(XYZ, otherPlane) - np.ones(XYZ.shape[0])) / np.linalg.norm(otherPlane)
+            ratio = float(np.sum(diff_1 < planeDiffThreshold)) / diff_1.shape[0]
+            if ratio > max(inlierThreshold, usedPlaneConfidence[otherPlaneIndex]):
+                usedPlaneConfidence[otherPlaneIndex] = ratio
+                usedPlaneMap[otherPlaneIndex] = planeIndex
+                pass
+            continue
+        continue
+
+    for planeIndex in xrange(numPlanes):
+        mergedPlanes = (usedPlaneMap == planeIndex).nonzero()[0].tolist()
+        if len(mergedPlanes) == 0:
+            continue
+        pointIndices = []
+        for mergedPlaneIndex in mergedPlanes:
+            pointIndices += planePointIndices[mergedPlaneIndex].tolist()
+            continue
+        if len(pointIndices) <= planeAreaThreshold:
+            continue
+        XYZ = points[pointIndices]
+        ranges = XYZ.max(0) - XYZ.min(0)
+        ranges.sort()
+        #print((planeIndex, ranges.tolist() + XYZ.mean(0).tolist()))
+        if ranges[1] < 0.2:
+            continue
+        #continue
+        #print(XYZ.shape[0])
+        #print(ranges)
+        #if ranges.max() * 5 >= XYZ.shape[0]:
+        #continue
+        plane = fitPlane(XYZ)
+        groupedPlanes.append(plane)
+        groupedPlanePointIndices.append(np.array(pointIndices))
+        continue
+    
+    return groupedPlanes, groupedPlanePointIndices
+
+def mergePlanesBackup(points, planes, planePointIndices, planeDiffThreshold = 0.05, planeAngleThreshold = 30, inlierThreshold = 0.8):
 
     # planesD = np.linalg.norm(planes, axis=1, keepdims=True)
     # planes = planes / pow(planesD, 2)
@@ -1387,6 +1499,10 @@ def evaluatePlaneSegmentation(predPlanes, predSegmentations, gtPlanes, gtSegment
     height = predSegmentations.shape[1]
 
     planeDiffs = np.linalg.norm(np.expand_dims(gtPlanes, 2) - np.expand_dims(predPlanes, 1), axis=3)
+    #print(gtPlanes[0])
+    #print(predPlanes[0])
+    #print(planeDiffs[0])
+    
     intersection = np.sum((np.expand_dims(gtSegmentations, -1) * np.expand_dims(predSegmentations, 3) > 0.5).astype(np.float32), axis=(1, 2))
     union = np.sum((np.expand_dims(gtSegmentations, -1) + np.expand_dims(predSegmentations, 3) > 0.5).astype(np.float32), axis=(1, 2))
     planeIOUs = intersection / np.maximum(union, 1e-4)
@@ -1394,9 +1510,7 @@ def evaluatePlaneSegmentation(predPlanes, predSegmentations, gtPlanes, gtSegment
     planeMask = np.expand_dims(np.arange(predPlanes.shape[1]), 0) < np.expand_dims(gtNumPlanes, 1)
     for index, numPlanes in enumerate(gtNumPlanes.tolist()):
         planeDiffs[index, numPlanes:] = 1000000
-        planeDiffs[index, :, numPlanes:] = 1000000
         planeIOUs[index, numPlanes:] = -1
-        planeIOUs[index, :, numPlanes:] = -1
         pass
     
     totalNumPlanes = gtNumPlanes.sum()
@@ -1417,11 +1531,19 @@ def evaluatePlaneSegmentation(predPlanes, predSegmentations, gtPlanes, gtSegment
             planeRecalls.append(float(((maxIOU >= IOU) * planeMask).sum()) / totalNumPlanes)            
             continue
 
+        # if planeDistanceThreshold == 0.5:
+        #     print(intersection.shape)
+        #     print(intersection.sum(2).sum(1))
+        #     print(height * width)
+        #     print(planeIOUs)
+        #     print(pixelRecalls)
+        #     pass
+        
         pixel_curves.append(pixelRecalls)
         plane_curves.append(planeRecalls)
         pass
     
-    for IOUThreshold in [0.3, 0.5, 0.7]
+    for IOUThreshold in [0.3, 0.5, 0.7]:
         IOUMask = (planeIOUs > IOUThreshold).astype(np.float32)
         minDiff = np.min(planeDiffs * IOUMask + 1000000 * (1 - IOUMask), axis=2)
         stride = 0.05
@@ -1453,7 +1575,7 @@ def plotCurves(x, ys, filename = 'test/test.png', xlabel='', ylabel='', title=''
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.title(title)    
-    plt.ylim((0, 1))
+    plt.ylim((-0.1, 1.1))
     plt.savefig(filename)
     return
     
@@ -1476,3 +1598,8 @@ def transformPlanes(planes, transformation):
     planesD = -np.sum(newCenters * planeNormals, axis=1, keepdims=True)
     newPlanes = -planeNormals * planesD
     return newPlanes
+
+
+def softmax(values):
+    exp = np.exp(values - values.max())
+    return exp / exp.sum(-1, keepdims=True)

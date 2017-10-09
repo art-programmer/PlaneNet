@@ -19,13 +19,7 @@ NUM_PLANES = 50
 NUM_THREADS = 4
 
 
-def loadImagePaths():
-    image_set_file = '../PythonScripts/SUNCG/image_list_500000.txt'
-    with open(image_set_file) as f:
-        filenames = [x.strip().replace('plane_global.npy', '') for x in f.readlines()]
-        image_paths = [{'image': x + 'mlt.png', 'plane': x + 'plane_global.npy', 'normal': x + 'norm_camera.png', 'depth': x + 'depth.png', 'mask': x + 'valid.png', 'masks': x + 'masks.npy'} for x in filenames]
-        pass
-    return image_paths
+
 
 
 class RecordReader():
@@ -54,6 +48,7 @@ class RecordReader():
                 'grid_s': tf.FixedLenFeature([HEIGHT / 8  * WIDTH / 8 * 1], tf.float32),
                 'grid_p': tf.FixedLenFeature([HEIGHT / 8  * WIDTH / 8 * 3], tf.float32),
                 'grid_m_raw': tf.FixedLenFeature([], tf.string),
+                'image_path': tf.FixedLenFeature([], tf.string),                
             })
 
         # Convert from a scalar string tensor (whose single string has
@@ -197,11 +192,11 @@ class RecordReader():
 
         if getLocal:
             if random:
-                image_inp, plane_inp, depth_gt, normal_gt, plane_mask_inp, boundary_gt, grid_s_gt, grid_p_gt, grid_m_gt, num_planes_gt = tf.train.shuffle_batch([image, planes, depth, normal, planeMasks, boundary, grid_s, grid_p, grid_m, numPlanes], batch_size=batchSize, capacity=min_after_dequeue + (NUM_THREADS + 2) * batchSize, num_threads=NUM_THREADS, min_after_dequeue=min_after_dequeue)
+                image_inp, plane_inp, depth_gt, normal_gt, plane_mask_inp, boundary_gt, grid_s_gt, grid_p_gt, grid_m_gt, num_planes_gt, image_path_gt = tf.train.shuffle_batch([image, planes, depth, normal, planeMasks, boundary, grid_s, grid_p, grid_m, numPlanes, features['image_path']], batch_size=batchSize, capacity=min_after_dequeue + (NUM_THREADS + 2) * batchSize, num_threads=NUM_THREADS, min_after_dequeue=min_after_dequeue)
             else:
-                image_inp, plane_inp, depth_gt, normal_gt, plane_mask_inp, boundary_gt, grid_s_gt, grid_p_gt, grid_m_gt, num_planes_gt = tf.train.batch([image, planes, depth, normal, planeMasks, boundary, grid_s, grid_p, grid_m, numPlanes], batch_size=batchSize, capacity=(NUM_THREADS + 2) * batchSize, num_threads=1)
+                image_inp, plane_inp, depth_gt, normal_gt, plane_mask_inp, boundary_gt, grid_s_gt, grid_p_gt, grid_m_gt, num_planes_gt, image_path_gt = tf.train.batch([image, planes, depth, normal, planeMasks, boundary, grid_s, grid_p, grid_m, numPlanes, features['image_path']], batch_size=batchSize, capacity=(NUM_THREADS + 2) * batchSize, num_threads=1)
                 pass
-            global_gt_dict = {'plane': plane_inp, 'depth': depth_gt, 'normal': normal_gt, 'segmentation': plane_mask_inp, 'boundary': boundary_gt, 'num_planes': num_planes_gt}
+            global_gt_dict = {'plane': plane_inp, 'depth': depth_gt, 'normal': normal_gt, 'segmentation': plane_mask_inp, 'boundary': boundary_gt, 'num_planes': num_planes_gt, 'image_path': image_path_gt}
             local_gt_dict = {'score': grid_s_gt, 'plane': grid_p_gt, 'mask': grid_m_gt}
             return image_inp, global_gt_dict, local_gt_dict
 

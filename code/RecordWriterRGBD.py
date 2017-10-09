@@ -4,6 +4,8 @@ import cv2
 import random
 import PIL.Image
 import glob
+import scipy.io as sio
+from utils import *
 
 HEIGHT=192
 WIDTH=256
@@ -20,90 +22,92 @@ def _float_feature(value):
 
 def writeExample(writer, imagePath):
     #img = np.array(Image.open(imagePath['image']))
-    img = cv2.imread(imagePath['image'])
+    #img = cv2.imread(imagePath['image'])
+    img = sio.loadmat(imagePath['image'])['imgRgb']
     img = cv2.resize(img, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)
 
     height = img.shape[0]
     width = img.shape[1]
     img_raw = img.tostring()
 
-    depth = np.array(PIL.Image.open(imagePath['depth'])).astype(np.float32) / 255 * 10
+    depth = sio.loadmat(imagePath['depth'])['imgDepth']
     depth = cv2.resize(depth, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)
+    
+    normal = sio.loadmat(imagePath['normal'])['imgNormals']
+    depth = cv2.resize(depth, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)
+    
+    plane_data = sio.loadmat(imagePath['plane'])['planeData']
+    segmentation = (plane_data[0][0][0] - 1).astype(np.int32)
+    segmentation = cv2.resize(segmentation, (WIDTH, HEIGHT), interpolation=cv2.INTER_NEAREST)
 
-
+    planes = plane_data[0][0][1]
+    planes = planes[:, :3] * planes[:, 3:4]
+    numPlanes = planes.shape[0]
+    if numPlanes > NUM_PLANES:
+        return
+    
+    if numPlanes < NUM_PLANES:
+        segmentation[segmentation == numPlanes] = NUM_PLANES
+        planes = np.concatenate([planes, np.zeros((NUM_PLANES - numPlanes, 3))], axis=0)
+        pass
+    
     example = tf.train.Example(features=tf.train.Features(feature={
         'image_path': _bytes_feature(imagePath['image']),
         'image_raw': _bytes_feature(img_raw),
         'depth': _float_feature(depth.reshape(-1)),
+        'normal': _float_feature(normal.reshape(-1)),
+        'plane': _float_feature(planes.reshape(-1)),
+        'num_planes': _int64_feature([numPlanes]),
+        'segmentation_raw': _bytes_feature(segmentation.tostring()),
+        'dataset': _int64_feature([1]),
     }))
     writer.write(example.SerializeToString())
-    return
-
-def loadImagePaths():
-    image_set_file = '../PythonScripts/SUNCG/image_list_500000.txt'
-    with open(image_set_file) as f:
-        filenames = [x.strip().replace('plane_global.npy', '') for x in f.readlines()]
-        image_paths = [{'image': x + 'mlt.png', 'plane': x + 'plane_global.npy', 'normal': x + 'norm_camera.png', 'depth': x + 'depth.png', 'mask': x + 'valid.png', 'masks': x + 'masks.npy'} for x in filenames]
-        pass
-    return image_paths
-
-
-def readRecordFile():
-    tfrecords_filename = '../planes.tfrecords'
-    record_iterator = tf.python_io.tf_record_iterator(path=tfrecords_filename)
-
-    for string_record in record_iterator:
-
-        example = tf.train.Example()
-        example.ParseFromString(string_record)
-        height = int(example.features.feature['height']
-                     .int64_list
-                     .value[0])
-
-        width = int(example.features.feature['width']
-                        .int64_list
-                        .value[0])
-
-        img_string = (example.features.feature['image_raw']
-                      .bytes_list
-                      .value[0])
-
-        plane = (example.features.feature['plane_raw']
-                 .float_list
-                 .value)
-
-        plane_mask = (example.features.feature['plane_mask_raw']
-                      .int64_list
-                      .value)
-
-        img_1d = np.fromstring(img_string, dtype=np.uint8)
-        reconstructed_img = img_1d.reshape((height, width, -1))
-        print(np.array(plane).shape)
-        print(np.array(plane_mask).shape)
-        exit(1)
-        continue
     return
 
 
 def writeRecordFile(tfrecords_filename, imagePaths):
     writer = tf.python_io.TFRecordWriter(tfrecords_filename)
     for index, imagePath in enumerate(imagePaths):
+        print(index)
         if index % 100 == 0:
-            print(index)
             pass
         writeExample(writer, imagePath)
+        #cv2.imwrite('test/image_' + str(index) + '.png', img)
+        #cv2.imwrite('test/segmentation_' + str(index) + '.png', drawSegmentationImage(segmentation, planeMask=segmentation < segmentation.max(), black=True))
+        #if index == 10:
+        #break
         continue
     writer.close()
     return
 
 
 if __name__=='__main__':
-    imagePaths = glob.glob('/home/chenliu/Projects/Data/NYU_RGBD/raw/train/color_*.png')
-    imagePaths = [{'image': imagePath, 'depth': imagePath.replace('color', 'depth')} for imagePath in imagePaths]
+    splits = sio.loadmat('/mnt/vision/NYU_RGBD/splits.mat')
+    trainInds = splits['trainNdxs'].reshape(-1).tolist()
+    imagePaths = []
+    for index in trainInds:
+        imagePath = '/mnt/vision/NYU_RGBD/images_rgb/rgb_%06d.mat' % (index)
+        imagePaths.append({'image': imagePath, 'depth': imagePath.replace('rgb', 'depth'), 'normal': imagePath.replace('images_rgb', 'surface_normals').replace('rgb', 'surface_normals'), 'plane': imagePath.replace('images_rgb', 'planes').replace('rgb', 'plane_data')})
+        continue
+        
     print(len(imagePaths))
     #exit(1)
     random.shuffle(imagePaths)
     writeRecordFile('../planes_nyu_rgbd_train.tfrecords', imagePaths)
+
+    testInds = splits['testNdxs'].reshape(-1).tolist()
+    imagePaths = []
+    for index in testInds:
+        imagePath = '/mnt/vision/NYU_RGBD/images_rgb/rgb_%06d.mat' % (index)
+        imagePaths.append({'image': imagePath, 'depth': imagePath.replace('rgb', 'depth'), 'normal': imagePath.replace('images_rgb', 'surface_normals').replace('rgb', 'surface_normals'), 'plane': imagePath.replace('images_rgb', 'planes').replace('rgb', 'plane_data')})
+        continue
+        
+    print(len(imagePaths))
+    #exit(1)
+    random.shuffle(imagePaths)
+    writeRecordFile('../planes_nyu_rgbd_val.tfrecords', imagePaths)
+
+    
     #reader.readRecordFile()
 
 
