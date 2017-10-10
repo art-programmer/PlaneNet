@@ -18,9 +18,7 @@ from modules import *
 
 from train_planenet import *
 from planenet import PlaneNet
-from RecordReader import *
-from RecordReaderRGBD import *
-from RecordReader3D import *
+from RecordReaderAll import *
 from SegmentationRefinement import refineSegmentation
 
 ALL_TITLES = ['planenet', 'pixelwise', 'pixelwise+RANSAC', 'depth observation+RANSAC', 'planenet+crf', 'pixelwise+semantics+RANSAC', 'gt']
@@ -452,30 +450,29 @@ def getPrediction(options):
     min_after_dequeue = 1000
 
     if options.dataset == 'SUNCG':
-        reader = RecordReader()
-        filename_queue = tf.train.string_input_producer(['/home/chenliu/Projects/Data/SUNCG_plane/planes_test_1000_450000.tfrecords'], num_epochs=10000)
-        img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
+        reader = RecordReaderAll()
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/planes_SUNCG_val.tfrecords'], num_epochs=10000)
     elif options.dataset == 'NYU_RGBD':
-        reader = RecordReaderRGBD()
-        filename_queue = tf.train.string_input_producer(['../planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
-        img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
-
+        reader = RecordReaderAll()
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
         options.deepSupervision = 0
         options.predictLocal = 0
+    elif options.dataset == 'matterport':
+        reader = RecordReaderAll()
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
-        reader = RecordReader3D()
-        filename_queue = tf.train.string_input_producer(['../planes_matterport_val.tfrecords'], num_epochs=1)
-        img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
-        
-        options.deepSupervision = 0
-        options.predictLocal = 0
+        reader = RecordReaderAll()
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/planes_scannet_val.tfrecords'], num_epochs=1)
         pass
+    
+    img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
+        
 
     
-    training_flag = tf.constant(1, tf.int32)
+    training_flag = tf.constant(False, tf.bool)
 
     options.gpu_id = 0
-    global_pred_dict, local_pred_dict, deep_pred_dicts = build_graph(img_inp, img_inp, img_inp, img_inp, img_inp, img_inp, training_flag, options)
+    global_pred_dict, local_pred_dict, deep_pred_dicts = build_graph(img_inp, img_inp, training_flag, options)
 
     var_to_restore = tf.global_variables()
 
@@ -600,36 +597,35 @@ def getGroundTruth(options):
     min_after_dequeue = 1000
 
     if options.dataset == 'SUNCG':
-        reader = RecordReader()
-        filename_queue = tf.train.string_input_producer(['/home/chenliu/Projects/Data/SUNCG_plane/planes_test_1000_450000.tfrecords'], num_epochs=10000)
-        img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
+        reader = RecordReaderAll()
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/planes_SUNCG_val.tfrecords'], num_epochs=10000)
     elif options.dataset == 'NYU_RGBD':
-        reader = RecordReaderRGBD()
-        filename_queue = tf.train.string_input_producer(['../planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
-        img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
-
+        reader = RecordReaderAll()
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
         options.deepSupervision = 0
         options.predictLocal = 0
+    elif options.dataset == 'matterport':
+        reader = RecordReaderAll()
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
-        reader = RecordReader3D()
-        filename_queue = tf.train.string_input_producer(['../planes_matterport_val.tfrecords'], num_epochs=1)
-        img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
-        
-        options.deepSupervision = 0
-        options.predictLocal = 0        
+        reader = RecordReaderAll()
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/planes_scannet_val.tfrecords'], num_epochs=1)
         pass
+    
+    img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
+    
 
-    training_flag = tf.constant(1, tf.int32)
+    training_flag = tf.constant(False, tf.bool)
 
-    if options.dataset == 'NYU_RGBD':
-        global_gt_dict['segmentation'], global_gt_dict['plane_mask'] = tf.ones((options.batchSize, HEIGHT, WIDTH, options.numOutputPlanes)), tf.ones((options.batchSize, HEIGHT, WIDTH, 1))
-    elif options.dataset == 'SUNCG':
-        normalDotThreshold = np.cos(np.deg2rad(5))
-        distanceThreshold = 0.05        
-        global_gt_dict['segmentation'], global_gt_dict['plane_mask'] = fitPlaneMasksModule(global_gt_dict['plane'], global_gt_dict['depth'], global_gt_dict['normal'], width=WIDTH, height=HEIGHT, normalDotThreshold=normalDotThreshold, distanceThreshold=distanceThreshold, closing=True, one_hot=True)
-    else:
-        global_gt_dict['plane_mask'] = 1 - global_gt_dict['non_plane_mask']
-        pass
+    # if options.dataset == 'NYU_RGBD':
+    #     global_gt_dict['segmentation'], global_gt_dict['plane_mask'] = tf.ones((options.batchSize, HEIGHT, WIDTH, options.numOutputPlanes)), tf.ones((options.batchSize, HEIGHT, WIDTH, 1))
+    # elif options.dataset == 'SUNCG':
+    #     normalDotThreshold = np.cos(np.deg2rad(5))
+    #     distanceThreshold = 0.05        
+    #     global_gt_dict['segmentation'], global_gt_dict['plane_mask'] = fitPlaneMasksModule(global_gt_dict['plane'], global_gt_dict['depth'], global_gt_dict['normal'], width=WIDTH, height=HEIGHT, normalDotThreshold=normalDotThreshold, distanceThreshold=distanceThreshold, closing=True, one_hot=True)
+    # else:
+    #     global_gt_dict['plane_mask'] = 1 - global_gt_dict['non_plane_mask']
+    #     pass
 
     config=tf.ConfigProto()
     config.gpu_options.allow_growth=True

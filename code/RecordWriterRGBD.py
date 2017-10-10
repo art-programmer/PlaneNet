@@ -34,12 +34,13 @@ def writeExample(writer, imagePath):
     depth = cv2.resize(depth, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)
     
     normal = sio.loadmat(imagePath['normal'])['imgNormals']
-    depth = cv2.resize(depth, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)
+    normal = cv2.resize(normal, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)
     
     plane_data = sio.loadmat(imagePath['plane'])['planeData']
     segmentation = (plane_data[0][0][0] - 1).astype(np.int32)
+    print(segmentation.shape)
     segmentation = cv2.resize(segmentation, (WIDTH, HEIGHT), interpolation=cv2.INTER_NEAREST)
-
+    print(segmentation.shape)
     planes = plane_data[0][0][1]
     planes = planes[:, :3] * planes[:, 3:4]
     numPlanes = planes.shape[0]
@@ -50,7 +51,8 @@ def writeExample(writer, imagePath):
         segmentation[segmentation == numPlanes] = NUM_PLANES
         planes = np.concatenate([planes, np.zeros((NUM_PLANES - numPlanes, 3))], axis=0)
         pass
-    
+    print(segmentation.shape)
+    exit(1)
     example = tf.train.Example(features=tf.train.Features(feature={
         'image_path': _bytes_feature(imagePath['image']),
         'image_raw': _bytes_feature(img_raw),
@@ -93,8 +95,9 @@ if __name__=='__main__':
     print(len(imagePaths))
     #exit(1)
     random.shuffle(imagePaths)
-    writeRecordFile('../planes_nyu_rgbd_train.tfrecords', imagePaths)
-
+    writeRecordFile('../planes_nyu_rgbd_temp.tfrecords', imagePaths)
+    exit(1)
+    
     testInds = splits['testNdxs'].reshape(-1).tolist()
     imagePaths = []
     for index in testInds:

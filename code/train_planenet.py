@@ -161,10 +161,13 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
         validDepthMask = tf.cast(tf.greater(global_gt_dict['depth'], 1e-4), tf.float32)
         depth_loss = tf.reduce_mean(tf.reduce_sum(tf.squared_difference(all_depths, global_gt_dict['depth']) * all_segmentations_softmax, axis=3, keep_dims=True) * validDepthMask) * 1000
 
-        if options.predictPixelwise == 1:
-            depth_loss += tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_mask'], global_gt_dict['depth']) * validDepthMask) * 1000
-            pass
-        normal_loss = tf.constant(0.0)
+        #if options.predictPixelwise == 1:
+        depth_loss += tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_depth'], global_gt_dict['depth']) * validDepthMask) * 1000
+
+        valid_normal_mask = tf.squeeze(tf.less(tf.slice(global_gt_dict['info'], [0, 19], [options.batchSize, 1]), 2))
+        normal_loss += tf.reduce_mean(tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_normal'], global_gt_dict['normal']) * validDepthMask, axis=[1, 2, 3]) * valid_normal_mask) * 1000
+        
+        #normal_loss = tf.constant(0.0)
 
         
 
@@ -201,7 +204,7 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
             pass
 
 
-        if options.boundaryLoss == 1 and False:
+        if options.boundaryLoss == 1:
             all_segmentations_pred = all_segmentations_softmax
             all_segmentations_min = 1 - tf.nn.max_pool(1 - all_segmentations_pred, ksize=[1, 3, 3, 1], strides=[1, 1, 1, 1], padding='SAME')
             segmentation_diff = tf.reduce_max(all_segmentations_pred - all_segmentations_min, axis=3, keep_dims=True)
@@ -211,7 +214,7 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
             minDepthDiff = 0.02
             depth_diff = tf.clip_by_value(tf.squared_difference(depth_pred, depth_neighbor) - pow(minDepthDiff, 2), 0, 1)
 
-            boundary = tf.reduce_max(boundary_gt, axis=3, keep_dims=True)
+            boundary = tf.reduce_max(global_gt_dict['boundary'], axis=3, keep_dims=True)
             smooth_boundary = tf.slice(boundary_gt, [0, 0, 0, 0], [options.batchSize, HEIGHT, WIDTH, 1])
             smooth_mask = segmentation_diff + boundary - 2 * segmentation_diff * boundary + depth_diff * smooth_boundary
             margin = 0.0
@@ -270,22 +273,43 @@ def main(options):
     # img_inp_rgbd_val, global_gt_dict_rgbd_val, local_gt_dict_rgbd_val = reader_rgbd_val.getBatch(filename_queue_rgbd_val, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
 
 
-    reader_train = RecordReader3D()
-    filename_queue_train = tf.train.string_input_producer(['../planes_matterport_train.tfrecords'], num_epochs=10000)    
-    img_inp_train, global_gt_dict_train, local_gt_dict_train = reader_train.getBatch(filename_queue_train, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
-
-    reader_val = RecordReader3D()
-    filename_queue_val = tf.train.string_input_producer(['../planes_matterport_val.tfrecords'], num_epochs=10000)    
-    img_inp_val, global_gt_dict_val, local_gt_dict_val = reader_val.getBatch(filename_queue_val, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
-
-
-    # reader_train = RecordReaderAll()
-    # filename_queue_train = tf.train.string_input_producer(['/mnt/vision/planes_SUNCG_train.tfrecords'], num_epochs=10000)    
+    # reader_train = RecordReader3D()
+    # filename_queue_train = tf.train.string_input_producer(['../planes_matterport_train.tfrecords'], num_epochs=10000)    
     # img_inp_train, global_gt_dict_train, local_gt_dict_train = reader_train.getBatch(filename_queue_train, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
 
-    # reader_val = RecordReaderAll()
-    # filename_queue_val = tf.train.string_input_producer(['/mnt/vision/planes_SUNCG_val.tfrecords'], num_epochs=10000)
+    # reader_val = RecordReader3D()
+    # filename_queue_val = tf.train.string_input_producer(['../planes_matterport_val.tfrecords'], num_epochs=10000)    
     # img_inp_val, global_gt_dict_val, local_gt_dict_val = reader_val.getBatch(filename_queue_val, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
+
+
+    train_inputs = []
+    val_inputs = []
+    if '0' in options.hybrid:
+        train_inputs.append('/mnt/vision/planes_SUNCG_train.tfrecords')
+        val_inputs.append('/mnt/vision/planes_SUNCG_val.tfrecords')        
+        pass
+    if '1' in options.hybrid:
+        for _ in xrange(10):
+            train_inputs.append('/mnt/vision/planes_nyu_rgbd_train.tfrecords')
+            val_inputs.append('/mnt/vision/planes_nyu_rgbd_val.tfrecords')
+            continue
+        pass
+    if '2' in options.hybrid:
+        train_inputs.append('/mnt/vision/planes_matterport_train.tfrecords')
+        val_inputs.append('/mnt/vision/planes_matterport_val.tfrecords')
+        pass
+    if '3' in options.hybrid:
+        train_inputs.append('/mnt/vision/planes_scannet_train.tfrecords')
+        val_inputs.append('/mnt/vision/planes_scannet_val.tfrecords')
+        pass
+    
+    reader_train = RecordReaderAll()
+    filename_queue_train = tf.train.string_input_producer(train_inputs, num_epochs=10000)    
+    img_inp_train, global_gt_dict_train, local_gt_dict_train = reader_train.getBatch(filename_queue_train, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
+
+    reader_val = RecordReaderAll()
+    filename_queue_val = tf.train.string_input_producer(val_inputs, num_epochs=10000)
+    img_inp_val, global_gt_dict_val, local_gt_dict_val = reader_val.getBatch(filename_queue_val, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
     
     training_flag = tf.placeholder(tf.bool, shape=[], name='training_flag')
     
@@ -357,7 +381,7 @@ def main(options):
                 pass
             
             loader = tf.train.Saver(var_to_restore)
-            loader.restore(sess,"checkpoint/planenet_pb_pp_hybrid1/checkpoint.ckpt")
+            loader.restore(sess,"checkpoint/planenet_pb_pp_hybrid12/checkpoint.ckpt")
             #loader.restore(sess,"checkpoint/planenet/checkpoint.ckpt")
             sess.run(batchno.assign(1))
         elif options.restore == 4:
@@ -831,15 +855,15 @@ def test(options):
                     exit(1)
                 continue
 
-            if options.dataset != 'NYU_RGBD':
-                if 'pixelwise' not in options.suffix:
-                    evaluatePlaneSegmentation(np.array(predPlanes), np.array(predSegmentations), np.array(gtPlanes), np.array(gtSegmentations), np.array(gtNumPlanes), planeDistanceThreshold = 0.3, IOUThreshold = 0.5, prefix='test/planenet_')
-                elif '_2' in options.suffix:
-                    evaluatePlaneSegmentation(np.array(predPlanes), np.array(predSegmentations), np.array(gtPlanes), np.array(gtSegmentations), np.array(gtNumPlanes), planeDistanceThreshold = 0.3, IOUThreshold = 0.5, prefix='test/pixelwise_pred_')
-                elif '_3' in options.suffix:
-                    evaluatePlaneSegmentation(np.array(predPlanes), np.array(predSegmentations), np.array(gtPlanes), np.array(gtSegmentations), np.array(gtNumPlanes), planeDistanceThreshold = 0.3, IOUThreshold = 0.5, prefix='test/pixelwise_gt_')
-                    pass
-                pass
+            # if options.dataset == 'SUNCG':
+            #     if 'pixelwise' not in options.suffix:
+            #         evaluatePlaneSegmentation(np.array(predPlanes), np.array(predSegmentations), np.array(gtPlanes), np.array(gtSegmentations), np.array(gtNumPlanes), planeDistanceThreshold = 0.3, IOUThreshold = 0.5, prefix='test/planenet_')
+            #     elif '_2' in options.suffix:
+            #         evaluatePlaneSegmentation(np.array(predPlanes), np.array(predSegmentations), np.array(gtPlanes), np.array(gtSegmentations), np.array(gtNumPlanes), planeDistanceThreshold = 0.3, IOUThreshold = 0.5, prefix='test/pixelwise_pred_')
+            #     elif '_3' in options.suffix:
+            #         evaluatePlaneSegmentation(np.array(predPlanes), np.array(predSegmentations), np.array(gtPlanes), np.array(gtSegmentations), np.array(gtNumPlanes), planeDistanceThreshold = 0.3, IOUThreshold = 0.5, prefix='test/pixelwise_gt_')
+            #         pass
+            #     pass
             
             predDepths = np.array(predDepths)
             gtDepths = np.array(gtDepths)
@@ -1226,7 +1250,7 @@ def parse_args():
     if args.sameMatching == 0:
         args.keyname += '_sm0'
         pass
-    args.keyname += '_hybrid' + args.hybrid
+    args.keyname += '_hybrid' + args.hybrid    
 
     
     args.checkpoint_dir = 'checkpoint/' + args.keyname

@@ -6,12 +6,18 @@ from functools import partial
 from multiprocessing import Pool
 import cv2
 
-FETCH_BATCH_SIZE=32
-BATCH_SIZE=32
+import sys
+import os
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from modules import *
+
+
 HEIGHT=192
 WIDTH=256
-NUM_PLANES = 50
+NUM_PLANES = 20
 NUM_THREADS = 4
+
 
 
 class RecordReaderRGBD():
@@ -19,7 +25,7 @@ class RecordReaderRGBD():
         return
 
 
-    def getBatch(self, filename_queue, numOutputPlanes = 20, batchSize = BATCH_SIZE, min_after_dequeue = 1000, random=True, getLocal=False, getSegmentation=False):
+    def getBatch(self, filename_queue, numOutputPlanes = 20, batchSize = 16, min_after_dequeue = 1000, random=True, getLocal=False, getSegmentation=False, test=True):
         reader = tf.TFRecordReader()
         _, serialized_example = reader.read(filename_queue)
 
@@ -29,9 +35,16 @@ class RecordReaderRGBD():
             features={
                 #'height': tf.FixedLenFeature([], tf.int64),
                 #'width': tf.FixedLenFeature([], tf.int64),
-                'image_path': tf.FixedLenFeature([], tf.string),
+                'image_path': tf.FixedLenFeature([], tf.string),                
                 'image_raw': tf.FixedLenFeature([], tf.string),
                 'depth': tf.FixedLenFeature([HEIGHT * WIDTH], tf.float32),
+                'normal': tf.FixedLenFeature([561 * 427 * 3], tf.float32),
+                'plane': tf.FixedLenFeature([NUM_PLANES * 3], tf.float32),
+                'num_planes': tf.FixedLenFeature([], tf.int64),                
+                #'plane_relation': tf.FixedLenFeature([NUM_PLANES * NUM_PLANES], tf.float32),
+                'segmentation_raw': tf.FixedLenFeature([], tf.string),
+                #'smooth_boundary_raw': tf.FixedLenFeature([], tf.string),
+                #'info': tf.FixedLenFeature([3 + 4*4], tf.float32),                
             })
 
         # Convert from a scalar string tensor (whose single string has
@@ -44,13 +57,23 @@ class RecordReaderRGBD():
         depth = features['depth']
         depth = tf.reshape(depth, [HEIGHT, WIDTH, 1])
 
-        image_path = features['image_path']
+        normal = features['normal']
+        normal = tf.reshape(normal, [1, 427, 561, 3])
+        normal = tf.squeeze(tf.image.resize_images(normal, [HEIGHT, WIDTH]), axis=0)
+        
+        numPlanes = tf.minimum(tf.cast(features['num_planes'], tf.int32), numOutputPlanes)
+        
+        planes = features['plane']
+        planes = tf.reshape(planes, [NUM_PLANES, 3])
+
+        segmentation = tf.decode_raw(features['segmentation_raw'], tf.int32)
+        segmentation = tf.cast(tf.reshape(segmentation, [HEIGHT, WIDTH, 1]), tf.int32)
 
         if random:
-            image_inp, depth_gt, image_path_inp = tf.train.shuffle_batch([image, depth, image_path], batch_size=batchSize, capacity=min_after_dequeue + (NUM_THREADS + 2) * batchSize, num_threads=NUM_THREADS, min_after_dequeue=min_after_dequeue)
+            image_inp, plane_inp, depth_gt, normal_gt, segmentation_gt, num_planes_gt, image_path = tf.train.shuffle_batch([image, planes, depth, normal, segmentation, numPlanes, features['image_path']], batch_size=batchSize, capacity=min_after_dequeue + (NUM_THREADS + 2) * batchSize, num_threads=NUM_THREADS, min_after_dequeue=min_after_dequeue)
         else:
-            image_inp, depth_gt, image_path_inp = tf.train.batch([image, depth, image_path], batch_size=batchSize, capacity=(NUM_THREADS + 2) * batchSize, num_threads=1)
-
-        global_gt_dict = {'depth': depth_gt, 'path': image_path_inp}
-        local_gt_dict = {}
-        return image_inp, global_gt_dict, local_gt_dict
+            image_inp, plane_inp, depth_gt, normal_gt, segmentation_gt, num_planes_gt, image_path = tf.train.batch([image, planes, depth, normal, segmentation, numPlanes, features['image_path']], batch_size=batchSize, capacity = (NUM_THREADS + 2) * batchSize, num_threads=1)
+            pass
+        
+        global_gt_dict = {'plane': plane_inp, 'depth': depth_gt, 'normal': normal_gt, 'segmentation': segmentation_gt, 'num_planes': num_planes_gt, 'image_path': image_path}
+        return image_inp, global_gt_dict, {}

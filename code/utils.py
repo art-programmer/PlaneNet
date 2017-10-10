@@ -890,8 +890,8 @@ def getNYURGBDCamera():
     camera['fy'] = 5.1946961112127485e+02
     camera['cx'] = 3.2558244941119034e+02 - 40
     camera['cy'] = 2.5373616633400465e+02 - 44
-    camera['width'] = 560
-    camera['height'] = 426
+    camera['width'] = 561
+    camera['height'] = 427
     camera['depth_shift'] = 1000    
     return camera
 

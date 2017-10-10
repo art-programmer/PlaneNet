@@ -80,9 +80,9 @@ def writeRecordFile(split):
                     info[18] = 1000
                     info[19] = 0
                     
-                    cv2.imwrite('test/segmentation_' + str(batchIndex) + '.png', drawSegmentationImage(segmentation, planeMask = segmentation < 20, black=True))
-                    boundary = np.concatenate([boundary, np.zeros((HEIGHT, WIDTH, 1))], axis=2)                
-                    cv2.imwrite('test/boundary_' + str(batchIndex) + '.png', drawMaskImage(boundary))
+                    #cv2.imwrite('test/segmentation_' + str(batchIndex) + '.png', drawSegmentationImage(segmentation, planeMask = segmentation < 20, black=True))
+                    #boundary = np.concatenate([boundary, np.zeros((HEIGHT, WIDTH, 1))], axis=2)                
+                    #cv2.imwrite('test/boundary_' + str(batchIndex) + '.png', drawMaskImage(boundary))
                     
                     example = tf.train.Example(features=tf.train.Features(feature={
                         'image_path': _bytes_feature(global_gt['image_path'][batchIndex]),
@@ -116,5 +116,5 @@ def writeRecordFile(split):
 
     
 if __name__=='__main__':
-    #writeRecordFile('train')
-    writeRecordFile('val')
+    writeRecordFile('train')
+    #writeRecordFile('val')
