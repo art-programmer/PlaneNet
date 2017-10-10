@@ -183,7 +183,7 @@ if __name__=='__main__':
     datasets = {'scannet': '/mnt/vision/ScanNet/data/', 'matterport': '/mnt/vision/matterport/data/v1/scans/'}
 
     for dataset, ROOT_FOLDER in datasets.iteritems():
-        if dataset == 'scannet':
+        if dataset == 'matterport':
             continue
         all_scene_ids = os.listdir(ROOT_FOLDER)
 
@@ -203,9 +203,8 @@ if __name__=='__main__':
             continue
         random.shuffle(imagePaths)
     
-        writeRecordFile('../planes_matterport_val.tfrecords', imagePaths)
+        writeRecordFile('/mnt/vision/planes_matterport_val.tfrecords', imagePaths)
 
-        continue
     
         scene_ids = all_scene_ids[:int(len(all_scene_ids) * 0.9)]
         segmentationPaths = []
@@ -223,7 +222,7 @@ if __name__=='__main__':
         #exit(1)
         random.shuffle(imagePaths)
     
-        writeRecordFile('../planes_matterport_train.tfrecords', imagePaths)
+        writeRecordFile('/mnt/vision/planes_matterport_train.tfrecords', imagePaths)
         continue
     
 

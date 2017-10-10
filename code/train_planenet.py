@@ -545,7 +545,7 @@ def test(options):
 
                     if options.dataset != 'NYU_RGBD' and ('_2' in options.suffix or '_3' in options.suffix):
                         gt_p = global_gt['plane'][0]
-                        gt_s = debug['segmentation'][0]
+                        gt_s = global_gt['segmentation'][0]
                         gt_num_p = global_gt['num_planes'][0]
 
                         pred_s = (np.expand_dims(pred_s, -1) == np.reshape(np.arange(options.numOutputPlanes), [1, 1, -1])).astype(np.float32)
@@ -560,8 +560,8 @@ def test(options):
                     continue
                 
                 print((losses['plane'], losses['segmentation'], losses['depth']))
-                print(losses)
-                exit(1)
+                #print(losses)
+                #exit(1)
                 im = img[0]
                 image = ((im + 0.5) * 255).astype(np.uint8)                
 
@@ -680,7 +680,7 @@ def test(options):
 
                 if options.dataset != 'NYU_RGBD':
                     gt_p = global_gt['plane'][0]
-                    gt_s = debug['segmentation'][0]
+                    gt_s = global_gt['segmentation'][0]
                     gt_num_p = global_gt['num_planes'][0]
                     gtPlanes.append(gt_p)
                     predPlanes.append(pred_p)
@@ -711,8 +711,8 @@ def test(options):
                     gt_np_m = global_gt['non_plane_mask'][0]
                     #print(np.unique(np.argmax(global_gt['segmentation'][0], axis=2)))
                     #cv2.imwrite(options.test_dir + '/' + str(index) + '_segmentation_gt.png', drawSegmentationImage(gt_s, planeMask=planeMask, numColors = 51))
-                    cv2.imwrite(options.test_dir + '/' + str(index) + '_non_plane_mask_gt.png', drawMaskImage(gt_np_m))
-                    exit(1)
+                    cv2.imwrite(options.test_dir + '/' + str(index) + '_plane_mask_gt.png', drawMaskImage(1 - gt_np_m))
+                    #exit(1)
                     pass
                 
 
@@ -760,8 +760,8 @@ def test(options):
                     cv2.imwrite(options.test_dir + '/' + str(index) + '_boundary_pred.png', drawMaskImage(boundary))
                     pass
 
-                if 'boundary' in debug:
-                    gt_boundary = debug['boundary'][0]
+                if 'boundary' in global_gt:
+                    gt_boundary = global_gt['boundary'][0]
                     boundary = np.concatenate([gt_boundary, np.zeros((HEIGHT, WIDTH, 1))], axis=2)                
                     cv2.imwrite(options.test_dir + '/' + str(index) + '_boundary_gt.png', drawMaskImage(boundary))
                     pass
@@ -788,7 +788,7 @@ def test(options):
                 #exit(1)
                 
                 cv2.imwrite(options.test_dir + '/' + str(index) + '_segmentation_pred.png', drawSegmentationImage(all_segmentations))
-                exit(1)
+                #exit(1)
                 cv2.imwrite(options.test_dir + '/' + str(index) + '_depth_pred.png', drawDepthImage(pred_d))
                 cv2.imwrite(options.test_dir + '/' + str(index) + '_plane_mask.png', drawMaskImage(planeMask))                
 
