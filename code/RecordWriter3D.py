@@ -208,8 +208,12 @@ if __name__=='__main__':
                 imagePaths.append(imagePath)
                 continue
             random.shuffle(imagePaths)
-            imagePaths = imagePaths[:2000]
-    
+            if split == 'val':
+                imagePaths = imagePaths[:2000]
+            else:
+                imagePaths = imagePaths[:70000]
+                pass
+                
             writeRecordFile('/mnt/vision/planes_' + dataset + '_' + split + '.tfrecords', imagePaths)
             continue
         continue
