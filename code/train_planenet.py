@@ -356,7 +356,7 @@ def main(options):
                 pass
             
             loader = tf.train.Saver(var_to_restore)
-            loader.restore(sess,"/mnt/vision/PlaneNet/checkpoint/planenet_pb_pp_hybrid12/checkpoint.ckpt")
+            loader.restore(sess,"/mnt/vision/PlaneNet/checkpoint/planenet_hybrid12_pb_pp/checkpoint.ckpt")
             #loader.restore(sess,"checkpoint/planenet/checkpoint.ckpt")
             sess.run(batchno.assign(1))
         elif options.restore == 4:
