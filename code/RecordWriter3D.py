@@ -202,6 +202,7 @@ if __name__=='__main__':
             imagePaths.append(imagePath)
             continue
         random.shuffle(imagePaths)
+        imagePaths = imagePaths[:2000]
     
         writeRecordFile('/mnt/vision/planes_matterport_val.tfrecords', imagePaths)
 
@@ -221,7 +222,8 @@ if __name__=='__main__':
         #print(len(imagePaths))
         #exit(1)
         random.shuffle(imagePaths)
-    
+        imagePaths = imagePaths[:70000]
+        
         writeRecordFile('/mnt/vision/planes_matterport_train.tfrecords', imagePaths)
         continue
     
