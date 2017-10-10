@@ -164,11 +164,9 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
         #if options.predictPixelwise == 1:
         depth_loss += tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_depth'], global_gt_dict['depth']) * validDepthMask) * 1000
 
-        valid_normal_mask = tf.squeeze(tf.less(tf.slice(global_gt_dict['info'], [0, 19], [options.batchSize, 1]), 2))
-        normal_loss += tf.reduce_mean(tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_normal'], global_gt_dict['normal']) * validDepthMask, axis=[1, 2, 3]) * valid_normal_mask) * 1000
-        
+        valid_normal_mask = tf.squeeze(tf.cast(tf.less(tf.slice(global_gt_dict['info'], [0, 19], [options.batchSize, 1]), 2), tf.float32))
+        normal_loss = tf.reduce_mean(tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_normal'], global_gt_dict['normal']) * validDepthMask, axis=[1, 2, 3]) * valid_normal_mask) * 1000        
         #normal_loss = tf.constant(0.0)
-
         
 
         local_score_loss = tf.constant(0.0)
@@ -179,7 +177,6 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
         boundary_loss = tf.constant(0.0)
         
         if False:
-            #calculate boundary ground truth on-the-fly as the calculation is subject to change
             kernel_size = 3
             padding = (kernel_size - 1) / 2
             neighbor_kernel_array = gaussian(kernel_size, kernel_size)
@@ -189,6 +186,8 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
             neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 1
             neighbor_kernel = tf.constant(neighbor_kernel_array.reshape(-1), shape=neighbor_kernel_array.shape, dtype=tf.float32)
             neighbor_kernel = tf.reshape(neighbor_kernel, [kernel_size, kernel_size, 1, 1])
+            
+            #calculate boundary ground truth on-the-fly as the calculation is subject to change
         
             depth_diff = tf.abs(tf.nn.depthwise_conv2d(global_gt_dict['depth'], neighbor_kernel, strides=[1, 1, 1, 1], padding='VALID'))
             depth_diff = tf.pad(depth_diff, paddings = [[0, 0], [padding, padding], [padding, padding], [0, 0]])
@@ -204,7 +203,8 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
             pass
 
 
-        if options.boundaryLoss == 1:
+        if options.boundaryLoss == 1 and False:
+            
             all_segmentations_pred = all_segmentations_softmax
             all_segmentations_min = 1 - tf.nn.max_pool(1 - all_segmentations_pred, ksize=[1, 3, 3, 1], strides=[1, 1, 1, 1], padding='SAME')
             segmentation_diff = tf.reduce_max(all_segmentations_pred - all_segmentations_min, axis=3, keep_dims=True)
@@ -223,9 +223,10 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
             boundary_loss += tf.reduce_mean(smooth_mask) * 1000            
             pass
           
-        # if options.predictBoundary:
-        #     #we predict boundaries directly for post-processing purpose
-        #     boundary_loss += tf.reduce_mean(tf.losses.sigmoid_cross_entropy(logits=global_pred_dict['boundary'], multi_class_labels=boundary_gt, weights=tf.maximum(global_gt_dict['boundary'] * 3, 1))) * 1000
+        if options.predictBoundary:
+            #we predict boundaries directly for post-processing purpose
+            boundary_loss += tf.reduce_mean(tf.losses.sigmoid_cross_entropy(logits=global_pred_dict['boundary'], multi_class_labels=global_gt_dict['boundary'], weights=tf.maximum(global_gt_dict['boundary'] * 3, 1))) * 1000
+            pass
 
           
         #regularization
@@ -424,32 +425,35 @@ def test(options):
     if not os.path.exists(options.test_dir):
         os.system("mkdir -p %s"%options.test_dir)
         pass
-    
+
+    if options.dataset == '':
+        assert(len(options.hybrid) == 1)
+        if options.hybrid == '0':
+            options.dataset = 'SUNCG'
+        elif options.hybrid == '1':
+            options.dataset = 'nyu_rgbd'
+        elif options.hybrid == '2':
+            options.dataset = 'matterport'
+        elif options.hybrid == '3':
+            options.dataset = 'ScanNet'
+            
+        options.dataset
     options.batchSize = 1
     min_after_dequeue = 1000
 
+    reader = RecordReaderAll()
     if options.dataset == 'SUNCG':
-        reader = RecordReaderAll()
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_SUNCG_val.tfrecords'], num_epochs=10000)
-        img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
     elif options.dataset == 'NYU_RGBD':
-        reader = RecordReaderRGBD()
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
-        img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
-
         options.deepSupervision = 0
         options.predictLocal = 0
     elif options.dataset == 'matterport':
-        reader = RecordReader3D()
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_matterport_val.tfrecords'], num_epochs=1)
-        img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
     else:
-        reader = RecordReader3D()
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
-        img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
-        #options.deepSupervision = 0
-        #options.predictLocal = 0        
         pass
+    img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
 
     training_flag = tf.constant(False, tf.bool)
 
@@ -1139,7 +1143,7 @@ def parse_args():
                         default=16, type=int)
     parser.add_argument('--dataset', dest='dataset',
                         help='dataset name for test/predict',
-                        default='SUNCG', type=str)
+                        default='', type=str)
     parser.add_argument('--numImages', dest='numImages',
                         help='the number of images to test/predict',
                         default=100, type=int)

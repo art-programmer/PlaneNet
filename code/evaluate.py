@@ -449,19 +449,16 @@ def getPrediction(options):
     options.batchSize = 1
     min_after_dequeue = 1000
 
+    reader = RecordReaderAll()
     if options.dataset == 'SUNCG':
-        reader = RecordReaderAll()
         filename_queue = tf.train.string_input_producer(['/mnt/vision/planes_SUNCG_val.tfrecords'], num_epochs=10000)
     elif options.dataset == 'NYU_RGBD':
-        reader = RecordReaderAll()
         filename_queue = tf.train.string_input_producer(['/mnt/vision/planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
         options.deepSupervision = 0
         options.predictLocal = 0
     elif options.dataset == 'matterport':
-        reader = RecordReaderAll()
         filename_queue = tf.train.string_input_producer(['/mnt/vision/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
-        reader = RecordReaderAll()
         filename_queue = tf.train.string_input_producer(['/mnt/vision/planes_scannet_val.tfrecords'], num_epochs=1)
         pass
     
