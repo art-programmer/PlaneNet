@@ -1194,7 +1194,7 @@ def parse_args():
                         default='0', type=str)
     parser.add_argument('--rootFolder', dest='rootFolder',
                         help='root folder',
-                        default=options.rootFolder + '/', type=str)
+                        default='/mnt/vision/PlaneNet/', type=str)
     
 
     args = parser.parse_args()
