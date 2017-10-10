@@ -255,52 +255,26 @@ def main(options):
     
     min_after_dequeue = 1000
 
-    # reader_train = RecordReader()
-    # #filename_queue_train = tf.train.string_input_producer(['/mnt/vision/SUNCG_plane/planes_test_450000.tfrecords'], num_epochs=10000)
-    # filename_queue_train = tf.train.string_input_producer(['/media/chenliu/My Passport/planes_test_450000.tfrecords'], num_epochs=10000)
-    # img_inp_train, global_gt_dict_train, local_gt_dict_train = reader_train.getBatch(filename_queue_train, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
-
-    # reader_val = RecordReader()
-    # filename_queue_val = tf.train.string_input_producer(['/home/chenliu/Projects/Data/SUNCG_plane/planes_test_1000_450000.tfrecords'], num_epochs=10000)
-    # img_inp_val, global_gt_dict_val, local_gt_dict_val = reader_val.getBatch(filename_queue_val, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
-
-    # reader_rgbd_train = RecordReaderRGBD()
-    # filename_queue_rgbd_train = tf.train.string_input_producer(['../planes_nyu_rgbd_train.tfrecords'], num_epochs=10000)
-    # img_inp_rgbd_train, global_gt_dict_rgbd_train, local_gt_dict_rgbd_train = reader_rgbd_train.getBatch(filename_queue_rgbd_train, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
-
-    # reader_rgbd_val = RecordReaderRGBD()
-    # filename_queue_rgbd_val = tf.train.string_input_producer(['../planes_nyu_rgbd_val.tfrecords'], num_epochs=10000)
-    # img_inp_rgbd_val, global_gt_dict_rgbd_val, local_gt_dict_rgbd_val = reader_rgbd_val.getBatch(filename_queue_rgbd_val, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
-
-
-    # reader_train = RecordReader3D()
-    # filename_queue_train = tf.train.string_input_producer(['../planes_matterport_train.tfrecords'], num_epochs=10000)    
-    # img_inp_train, global_gt_dict_train, local_gt_dict_train = reader_train.getBatch(filename_queue_train, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
-
-    # reader_val = RecordReader3D()
-    # filename_queue_val = tf.train.string_input_producer(['../planes_matterport_val.tfrecords'], num_epochs=10000)    
-    # img_inp_val, global_gt_dict_val, local_gt_dict_val = reader_val.getBatch(filename_queue_val, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
-
 
     train_inputs = []
     val_inputs = []
     if '0' in options.hybrid:
-        train_inputs.append('/mnt/vision/planes_SUNCG_train.tfrecords')
-        val_inputs.append('/mnt/vision/planes_SUNCG_val.tfrecords')        
+        train_inputs.append('/mnt/vision/PlaneNet/planes_SUNCG_train.tfrecords')
+        val_inputs.append('/mnt/vision/PlaneNet/planes_SUNCG_val.tfrecords')        
         pass
     if '1' in options.hybrid:
         for _ in xrange(10):
-            train_inputs.append('/mnt/vision/planes_nyu_rgbd_train.tfrecords')
-            val_inputs.append('/mnt/vision/planes_nyu_rgbd_val.tfrecords')
+            train_inputs.append('/mnt/vision/PlaneNet/planes_nyu_rgbd_train.tfrecords')
+            val_inputs.append('/mnt/vision/PlaneNet/planes_nyu_rgbd_val.tfrecords')
             continue
         pass
     if '2' in options.hybrid:
-        train_inputs.append('/mnt/vision/planes_matterport_train.tfrecords')
-        val_inputs.append('/mnt/vision/planes_matterport_val.tfrecords')
+        train_inputs.append('/mnt/vision/PlaneNet/planes_matterport_train.tfrecords')
+        val_inputs.append('/mnt/vision/PlaneNet/planes_matterport_val.tfrecords')
         pass
     if '3' in options.hybrid:
-        train_inputs.append('/mnt/vision/planes_scannet_train.tfrecords')
-        val_inputs.append('/mnt/vision/planes_scannet_val.tfrecords')
+        train_inputs.append('/mnt/vision/PlaneNet/planes_scannet_train.tfrecords')
+        val_inputs.append('/mnt/vision/PlaneNet/planes_scannet_val.tfrecords')
         pass
     
     reader_train = RecordReaderAll()
@@ -456,22 +430,25 @@ def test(options):
 
     if options.dataset == 'SUNCG':
         reader = RecordReaderAll()
-        filename_queue = tf.train.string_input_producer(['/mnt/vision/planes_SUNCG_val.tfrecords'], num_epochs=10000)
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_SUNCG_val.tfrecords'], num_epochs=10000)
         img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
     elif options.dataset == 'NYU_RGBD':
         reader = RecordReaderRGBD()
-        filename_queue = tf.train.string_input_producer(['../planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
         img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
 
         options.deepSupervision = 0
         options.predictLocal = 0
+    elif options.dataset == 'matterport':
+        reader = RecordReader3D()
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_matterport_val.tfrecords'], num_epochs=1)
+        img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
     else:
         reader = RecordReader3D()
-        filename_queue = tf.train.string_input_producer(['../planes_matterport_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
         img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
-        
-        options.deepSupervision = 0
-        options.predictLocal = 0        
+        #options.deepSupervision = 0
+        #options.predictLocal = 0        
         pass
 
     training_flag = tf.constant(False, tf.bool)
@@ -1220,6 +1197,8 @@ def parse_args():
     if args.numOutputPlanes != 20:
         args.keyname += '_np' + str(args.numOutputPlanes)
         pass
+    args.keyname += '_hybrid' + args.hybrid
+    
     if args.boundaryLoss != 1:
         args.keyname += '_bl' + str(args.boundaryLoss)
         pass
@@ -1233,27 +1212,26 @@ def parse_args():
         args.keyname += '_crf' + str(args.crf)
         pass
     if args.backwardLossWeight > 0:
-        args.keyname += '_bw'
+        args.keyname += '_bw' + str(args.backwardLossWeight)
         pass    
     if args.predictBoundary == 1:
         args.keyname += '_pb'
         pass
+    if args.predictConfidence == 1:
+        args.keyname += '_pc'
+        pass        
     if args.predictLocal == 1:
         args.keyname += '_pl'
         pass
-    if args.predictConfidence == 1:
-        args.keyname += '_pc'
-        pass    
     if args.predictPixelwise == 1:
         args.keyname += '_pp'
         pass    
     if args.sameMatching == 0:
         args.keyname += '_sm0'
         pass
-    args.keyname += '_hybrid' + args.hybrid    
 
     
-    args.checkpoint_dir = 'checkpoint/' + args.keyname
+    args.checkpoint_dir = '/mnt/vision/PlaneNet/checkpoint/' + args.keyname
     args.log_dir = 'log/' + args.keyname
     args.test_dir = 'test/' + args.keyname + '_' + args.dataset
     args.predict_dir = 'predict/' + args.keyname + '_' + args.dataset
