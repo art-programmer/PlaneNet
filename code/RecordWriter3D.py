@@ -187,46 +187,32 @@ if __name__=='__main__':
             continue
         all_scene_ids = os.listdir(ROOT_FOLDER)
 
-        all_scene_ids = os.listdir(ROOT_FOLDER)
+        for split in ['val', 'train']:
+            if split == 'val':
+                continue
+            if split == 'val':
+                scene_ids = all_scene_ids[int(len(all_scene_ids) * 0.9):]
+            else:
+                scene_ids = all_scene_ids[:int(len(all_scene_ids) * 0.9)]
+                pass
+            
+            segmentationPaths = []
+            for scene_id in scene_ids:
+                segmentationPaths += glob.glob(ROOT_FOLDER + scene_id + '/annotation/segmentation*/frame-*.segmentation.png')
+                continue
 
-        scene_ids = all_scene_ids[int(len(all_scene_ids) * 0.9):]
-        segmentationPaths = []
-        for scene_id in scene_ids:
-            segmentationPaths += glob.glob(ROOT_FOLDER + scene_id + '/annotation/segmentation*/frame-*.segmentation.png')
-            continue
-
-        imagePaths = []
-        for segmentationPath in segmentationPaths:
-            framePath = segmentationPath.replace('annotation/segmentation', 'frames')
-            imagePath = {'image': framePath.replace('segmentation.png', 'color.jpg'), 'depth': framePath.replace('segmentation.png', 'depth.pgm'), 'segmentation': segmentationPath, 'plane': '/'.join(segmentationPath.split('/')[:-2]) + '/planes.npy', 'plane_relation': '/'.join(segmentationPath.split('/')[:-2]) + '/plane_relations.npy', 'pose': framePath.replace('segmentation.png', 'pose.txt'), 'info': '/'.join(framePath.split('/')[:-1]) + '/_info.txt'}
-            imagePaths.append(imagePath)
-            continue
-        random.shuffle(imagePaths)
-        imagePaths = imagePaths[:2000]
+            imagePaths = []
+            for segmentationPath in segmentationPaths:
+                framePath = segmentationPath.replace('annotation/segmentation', 'frames')
+                imagePath = {'image': framePath.replace('segmentation.png', 'color.jpg'), 'depth': framePath.replace('segmentation.png', 'depth.pgm'), 'segmentation': segmentationPath, 'plane': '/'.join(segmentationPath.split('/')[:-2]) + '/planes.npy', 'plane_relation': '/'.join(segmentationPath.split('/')[:-2]) + '/plane_relations.npy', 'pose': framePath.replace('segmentation.png', 'pose.txt'), 'info': '/'.join(framePath.split('/')[:-1]) + '/_info.txt'}
+                imagePaths.append(imagePath)
+                continue
+            random.shuffle(imagePaths)
+            imagePaths = imagePaths[:2000]
     
-        writeRecordFile('/mnt/vision/planes_matterport_val.tfrecords', imagePaths)
-
-    
-        scene_ids = all_scene_ids[:int(len(all_scene_ids) * 0.9)]
-        segmentationPaths = []
-        for scene_id in scene_ids:
-            segmentationPaths += glob.glob(ROOT_FOLDER + scene_id + '/annotation/segmentation_*/frame-*.segmentation.png')
+            writeRecordFile('/mnt/vision/planes_' + dataset + '_' + split + '.tfrecords', imagePaths)
             continue
-
-        imagePaths = []
-        for segmentationPath in segmentationPaths:
-            framePath = segmentationPath.replace('annotation/segmentation', 'frames')
-            imagePath = {'image': framePath.replace('segmentation.png', 'color.jpg'), 'depth': framePath.replace('segmentation.png', 'depth.pgm'), 'segmentation': segmentationPath, 'plane': '/'.join(segmentationPath.split('/')[:-2]) + '/planes.npy', 'plane_relation': '/'.join(segmentationPath.split('/')[:-2]) + '/plane_relations.npy', 'pose': framePath.replace('segmentation.png', 'pose.txt'), 'info': '/'.join(framePath.split('/')[:-1]) + '/_info.txt'}
-            imagePaths.append(imagePath)
-            continue
-        #print(len(imagePaths))
-        #exit(1)
-        random.shuffle(imagePaths)
-        imagePaths = imagePaths[:70000]
-        
-        writeRecordFile('/mnt/vision/planes_matterport_train.tfrecords', imagePaths)
         continue
-    
 
 
     # # The op for initializing the variables.

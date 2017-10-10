@@ -21,6 +21,7 @@ from planenet import PlaneNet
 from RecordReader import *
 from RecordReaderRGBD import *
 from RecordReader3D import *
+from RecordReaderAll import *
 
 #training_flag: toggle dropout and batch normalization mode
 #it's true for training and false for validation, testing, prediction
@@ -269,14 +270,22 @@ def main(options):
     # img_inp_rgbd_val, global_gt_dict_rgbd_val, local_gt_dict_rgbd_val = reader_rgbd_val.getBatch(filename_queue_rgbd_val, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
 
 
-    reader_train = RecordReader3D()
-    filename_queue_train = tf.train.string_input_producer(['../planes_matterport_train.tfrecords'], num_epochs=10000)    
+    # reader_train = RecordReader3D()
+    # filename_queue_train = tf.train.string_input_producer(['../planes_matterport_train.tfrecords'], num_epochs=10000)    
+    # img_inp_train, global_gt_dict_train, local_gt_dict_train = reader_train.getBatch(filename_queue_train, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
+
+    # reader_val = RecordReader3D()
+    # filename_queue_val = tf.train.string_input_producer(['../planes_matterport_val.tfrecords'], num_epochs=10000)    
+    # img_inp_val, global_gt_dict_val, local_gt_dict_val = reader_val.getBatch(filename_queue_val, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
+
+
+    reader_train = RecordReaderAll()
+    filename_queue_train = tf.train.string_input_producer(['/mnt/vision/planes_SUNCG_train.tfrecords'], num_epochs=10000)    
     img_inp_train, global_gt_dict_train, local_gt_dict_train = reader_train.getBatch(filename_queue_train, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
 
-    reader_val = RecordReader3D()
-    filename_queue_val = tf.train.string_input_producer(['../planes_matterport_val.tfrecords'], num_epochs=10000)    
+    reader_val = RecordReaderAll()
+    filename_queue_val = tf.train.string_input_producer(['/mnt/vision/planes_SUNCG_val.tfrecords'], num_epochs=10000)
     img_inp_val, global_gt_dict_val, local_gt_dict_val = reader_val.getBatch(filename_queue_val, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
-
     
     training_flag = tf.placeholder(tf.bool, shape=[], name='training_flag')
     
@@ -348,7 +357,7 @@ def main(options):
                 pass
             
             loader = tf.train.Saver(var_to_restore)
-            loader.restore(sess,"checkpoint/planenet_hybrid1/checkpoint.ckpt")
+            loader.restore(sess,"checkpoint/planenet_pb_pp_hybrid1/checkpoint.ckpt")
             #loader.restore(sess,"checkpoint/planenet/checkpoint.ckpt")
             sess.run(batchno.assign(1))
         elif options.restore == 4:
@@ -422,8 +431,8 @@ def test(options):
     min_after_dequeue = 1000
 
     if options.dataset == 'SUNCG':
-        reader = RecordReader()
-        filename_queue = tf.train.string_input_producer(['/home/chenliu/Projects/Data/SUNCG_plane/planes_test_1000_450000.tfrecords'], num_epochs=10000)
+        reader = RecordReaderAll()
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/planes_SUNCG_val.tfrecords'], num_epochs=10000)
         img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
     elif options.dataset == 'NYU_RGBD':
         reader = RecordReaderRGBD()
@@ -461,6 +470,7 @@ def test(options):
         #var_to_restore = [v for v in var_to_restore if 'res4b22_relu_non_plane' not in v.name]
         loader = tf.train.Saver(var_to_restore)
         loader.restore(sess, "%s/checkpoint.ckpt"%(options.checkpoint_dir))
+        #loader.restore(sess, "%s/checkpoint.ckpt"%('checkpoint/planenet_pb_pp_hybrid1'))
         #loader.restore(sess, options.fineTuningCheckpoint)
         
         coord = tf.train.Coordinator()

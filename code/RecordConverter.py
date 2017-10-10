@@ -68,21 +68,23 @@ def writeRecordFile(split):
                     
                     segmentation = global_gt['segmentation'][batchIndex].astype(np.uint8)
                     boundary = global_gt['boundary'][batchIndex].astype(np.uint8)
-                    info = np.zeros(19)
-                    info[0] = 640
-                    info[1] = 480
-                    info[2] = 1000
-                    info[3] = 517.97
-                    info[5] = 320
-                    info[8] = 517.97
-                    info[9] = 240
-                    info[13] = 1
-                    info[18] = 1
+                    info = np.zeros(20)
+                    info[0] = 517.97
+                    info[2] = 320
+                    info[5] = 517.97
+                    info[6] = 240
+                    info[10] = 1
+                    info[15] = 1
+                    info[16] = 640
+                    info[17] = 480
+                    info[18] = 1000
+                    info[19] = 0
                     
                     example = tf.train.Example(features=tf.train.Features(feature={
                         'image_path': _bytes_feature(global_gt['image_path'][batchIndex]),
                         'image_raw': _bytes_feature(image.tostring()),
                         'depth': _float_feature(global_gt['depth'][batchIndex].reshape(-1)),
+                        'normal': _float_feature(global_gt['normal'][batchIndex].reshape(-1)),
                         'plane': _float_feature(global_gt['plane'][batchIndex].reshape(-1)),
                         'num_planes': _int64_feature([global_gt['num_planes'][batchIndex]]),
                         'segmentation_raw': _bytes_feature(segmentation.tostring()),        

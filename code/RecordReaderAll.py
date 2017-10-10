@@ -62,7 +62,7 @@ class RecordReaderAll():
         planes = tf.slice(planes, [0, 0], [numPlanes, 3])
 
         #shuffle_inds = tf.one_hot(tf.random_shuffle(tf.range(numPlanes)), depth = numPlanes)
-        shuffle_inds = tf.one_hot(tf.range(numPlanes), depth = numPlanes)
+        shuffle_inds = tf.one_hot(tf.range(numPlanes), numPlanes)
         
         planes = tf.transpose(tf.matmul(tf.transpose(planes), shuffle_inds))
         planes = tf.reshape(planes, [numPlanes, 3])
@@ -71,7 +71,7 @@ class RecordReaderAll():
 
         
         boundary = tf.decode_raw(features['boundary_raw'], tf.uint8)
-
+        boundary = tf.reshape(boundary, (HEIGHT, WIDTH, 2))
 
         segmentation = tf.decode_raw(features['segmentation_raw'], tf.uint8)
         segmentation = tf.reshape(segmentation, [HEIGHT, WIDTH, 1])
