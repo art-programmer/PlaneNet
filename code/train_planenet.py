@@ -1238,7 +1238,7 @@ def parse_args():
         pass
 
     
-    args.checkpoint_dir = options.rootFolder + '/checkpoint/' + args.keyname
+    args.checkpoint_dir = args.rootFolder + '/checkpoint/' + args.keyname
     args.log_dir = 'log/' + args.keyname
     args.test_dir = 'test/' + args.keyname + '_' + args.dataset
     args.predict_dir = 'predict/' + args.keyname + '_' + args.dataset
