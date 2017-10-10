@@ -42,7 +42,7 @@ class RecordReaderAll():
                 'segmentation_raw': tf.FixedLenFeature([], tf.string),
                 'depth': tf.FixedLenFeature([HEIGHT * WIDTH], tf.float32),
                 'boundary_raw': tf.FixedLenFeature([], tf.string),
-                'info': tf.FixedLenFeature([3 + 4*4], tf.float32),                
+                'info': tf.FixedLenFeature([4 * 4 + 4], tf.float32),                
             })
 
         # Convert from a scalar string tensor (whose single string has

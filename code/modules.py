@@ -856,9 +856,9 @@ def findBoundaries(planes, planeMasks):
 
 def fitPlaneMasksModule(planes, depth, normal, width = 640, height = 480, numPlanes = 20, normalDotThreshold = np.cos(np.deg2rad(5)), distanceThreshold = 0.05, closing=True, one_hot=True):
     focalLength = 517.97
-    urange = (tf.range(width, dtype=tf.float32) / width - 0.5) / focalLength * 640
+    urange = (tf.range(width, dtype=tf.float32) / (width + 1) - 0.5) / focalLength * 641
     urange = tf.tile(tf.reshape(urange, [1, -1]), [height, 1])
-    vrange = (tf.range(height, dtype=tf.float32) / height - 0.5) / focalLength * 480
+    vrange = (tf.range(height, dtype=tf.float32) / (height + 1) - 0.5) / focalLength * 481
     vrange = tf.tile(tf.reshape(vrange, [-1, 1]), [1, width])
         
     X = depth * tf.expand_dims(urange, -1)
@@ -880,10 +880,10 @@ def fitPlaneMasksModule(planes, depth, normal, width = 640, height = 480, numPla
         planeMasks = tf.nn.max_pool(planeMasks, ksize=[1, 3, 3, 1], strides=[1, 1, 1, 1], padding='SAME', name='max_pool')
         pass
     plane_mask = tf.reduce_max(planeMasks, axis=3, keep_dims=True)
-    #if closing:
-    #plane_mask = 1 - tf.nn.max_pool(1 - plane_mask, ksize=[1, 3, 3, 1], strides=[1, 1, 1, 1], padding='SAME', name='max_pool')
-    #pass
     if one_hot:
+        if closing:
+            plane_mask = 1 - tf.nn.max_pool(1 - plane_mask, ksize=[1, 3, 3, 1], strides=[1, 1, 1, 1], padding='SAME', name='max_pool')
+            pass
         #one-hot encoding
         planeMasks = tf.one_hot(tf.argmax(planeMasks * (distanceThreshold - distance), axis=3), depth=numPlanes) * plane_mask
         pass
@@ -970,7 +970,11 @@ def findBoundaryModule(depth, normal, segmentation, plane_mask, max_depth_diff =
     plane_region = tf.nn.max_pool(plane_mask, ksize=[1, kernel_size, kernel_size, 1], strides=[1, 1, 1, 1], padding='SAME', name='max_pool')
     segmentation_eroded = 1 - tf.nn.max_pool(1 - segmentation, ksize=[1, 3, 3, 1], strides=[1, 1, 1, 1], padding='SAME', name='max_pool')
     plane_region -= tf.reduce_max(segmentation_eroded, axis=3, keep_dims=True)
-    boundary = tf.cast(tf.logical_or(depth_boundary, normal_boundary), tf.float32)
-    smooth_boundary = tf.cast(tf.logical_and(normal_boundary, tf.less_equal(depth_diff, max_depth_diff)), tf.float32) * plane_region
+    boundary = tf.cast(tf.logical_or(depth_boundary, normal_boundary), tf.float32) * plane_region
+    #boundary = plane_region
+    #smooth_boundary = tf.cast(tf.less_equal(depth_diff, max_depth_diff), tf.float32) * boundary
+    smooth_boundary = tf.cast(tf.logical_and(normal_boundary, tf.less_equal(depth_diff, max_depth_diff)), tf.float32)
+    smooth_boundary = tf.nn.max_pool(smooth_boundary, ksize=[1, kernel_size, kernel_size, 1], strides=[1, 1, 1, 1], padding='SAME', name='max_pool') * boundary
+    #smooth_boundary = smooth_boundary * boundary
     boundary_gt = tf.concat([smooth_boundary, boundary - smooth_boundary], axis=3)
     return boundary_gt

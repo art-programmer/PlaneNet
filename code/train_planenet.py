@@ -270,22 +270,22 @@ def main(options):
     # img_inp_rgbd_val, global_gt_dict_rgbd_val, local_gt_dict_rgbd_val = reader_rgbd_val.getBatch(filename_queue_rgbd_val, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
 
 
-    # reader_train = RecordReader3D()
-    # filename_queue_train = tf.train.string_input_producer(['../planes_matterport_train.tfrecords'], num_epochs=10000)    
-    # img_inp_train, global_gt_dict_train, local_gt_dict_train = reader_train.getBatch(filename_queue_train, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
-
-    # reader_val = RecordReader3D()
-    # filename_queue_val = tf.train.string_input_producer(['../planes_matterport_val.tfrecords'], num_epochs=10000)    
-    # img_inp_val, global_gt_dict_val, local_gt_dict_val = reader_val.getBatch(filename_queue_val, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
-
-
-    reader_train = RecordReaderAll()
-    filename_queue_train = tf.train.string_input_producer(['/mnt/vision/planes_SUNCG_train.tfrecords'], num_epochs=10000)    
+    reader_train = RecordReader3D()
+    filename_queue_train = tf.train.string_input_producer(['../planes_matterport_train.tfrecords'], num_epochs=10000)    
     img_inp_train, global_gt_dict_train, local_gt_dict_train = reader_train.getBatch(filename_queue_train, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
 
-    reader_val = RecordReaderAll()
-    filename_queue_val = tf.train.string_input_producer(['/mnt/vision/planes_SUNCG_val.tfrecords'], num_epochs=10000)
+    reader_val = RecordReader3D()
+    filename_queue_val = tf.train.string_input_producer(['../planes_matterport_val.tfrecords'], num_epochs=10000)    
     img_inp_val, global_gt_dict_val, local_gt_dict_val = reader_val.getBatch(filename_queue_val, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
+
+
+    # reader_train = RecordReaderAll()
+    # filename_queue_train = tf.train.string_input_producer(['/mnt/vision/planes_SUNCG_train.tfrecords'], num_epochs=10000)    
+    # img_inp_train, global_gt_dict_train, local_gt_dict_train = reader_train.getBatch(filename_queue_train, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
+
+    # reader_val = RecordReaderAll()
+    # filename_queue_val = tf.train.string_input_producer(['/mnt/vision/planes_SUNCG_val.tfrecords'], num_epochs=10000)
+    # img_inp_val, global_gt_dict_val, local_gt_dict_val = reader_val.getBatch(filename_queue_val, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
     
     training_flag = tf.placeholder(tf.bool, shape=[], name='training_flag')
     

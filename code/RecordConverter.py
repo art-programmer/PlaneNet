@@ -48,7 +48,7 @@ def writeRecordFile(split):
                        tf.local_variables_initializer())
 
     segmentation_gt, plane_mask = fitPlaneMasksModule(global_gt_dict['plane'], global_gt_dict['depth'], global_gt_dict['normal'], width=WIDTH, height=HEIGHT, normalDotThreshold=np.cos(np.deg2rad(5)), distanceThreshold=0.05, closing=True, one_hot=True)
-    global_gt_dict['segmentation'] = tf.argmax(tf.concat([segmentation_gt, plane_mask], axis=3), axis=3)
+    global_gt_dict['segmentation'] = tf.argmax(tf.concat([segmentation_gt, 1 - plane_mask], axis=3), axis=3)
 
     global_gt_dict['boundary'] = findBoundaryModule(global_gt_dict['depth'], global_gt_dict['normal'], segmentation_gt, plane_mask, max_depth_diff = 0.1, max_normal_diff = np.sqrt(2 * (1 - np.cos(np.deg2rad(20)))))
     
@@ -80,6 +80,10 @@ def writeRecordFile(split):
                     info[18] = 1000
                     info[19] = 0
                     
+                    cv2.imwrite('test/segmentation_' + str(batchIndex) + '.png', drawSegmentationImage(segmentation, planeMask = segmentation < 20, black=True))
+                    boundary = np.concatenate([boundary, np.zeros((HEIGHT, WIDTH, 1))], axis=2)                
+                    cv2.imwrite('test/boundary_' + str(batchIndex) + '.png', drawMaskImage(boundary))
+                    
                     example = tf.train.Example(features=tf.train.Features(feature={
                         'image_path': _bytes_feature(global_gt['image_path'][batchIndex]),
                         'image_raw': _bytes_feature(image.tostring()),
@@ -95,7 +99,7 @@ def writeRecordFile(split):
                     
                     writer.write(example.SerializeToString())
                     continue
-
+                #exit(1)
                 continue
             pass
         except tf.errors.OutOfRangeError:
@@ -112,5 +116,5 @@ def writeRecordFile(split):
 
     
 if __name__=='__main__':
-    writeRecordFile('train')
+    #writeRecordFile('train')
     writeRecordFile('val')
