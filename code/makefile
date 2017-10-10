@@ -1,5 +1,5 @@
-nvcc = /usr/local/cuda-8.0/bin/nvcc
-cudalib = /usr/local/cuda-8.0/lib64/
+nvcc = /usr/local/cuda/bin/nvcc
+cudalib = /usr/local/cuda/lib64/
 tensorflow = /usr/local/lib/python2.7/dist-packages/tensorflow/include
 
 all: tf_nndistance_so.so
