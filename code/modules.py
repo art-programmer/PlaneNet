@@ -28,11 +28,11 @@ def segmentationRefinementModule(segmentation, planeDepths, numOutputPlanes = 20
     #return tf.nn.softmax(-beta * (-coef[0] * tf.log(P) + coef[1] * tf.log(DS) + coef[2] * tf.log(S_diff))), tf.nn.softmax(tf.log(P)), 1 - tf.clip_by_value(DS / 2, 0, 1), 1 - S_diff, 1 - tf.clip_by_value(tf.multiply(D_diff, tf.expand_dims(S_neighbors, 3)) / 2, 0, 1), S_neighbors, D_diff
     return tf.nn.softmax(-beta * (-coef[0] * tf.log(P) + coef[1] * tf.log(DS) + coef[2] * tf.log(S_diff)))
 
-def planeDepthsModule(plane_parameters, width, height):
+def planeDepthsModule(plane_parameters, width, height, info):
     focalLength = 517.97
-    urange = (tf.range(width, dtype=tf.float32) / (width + 1) - 0.5) / focalLength * 641
+    urange = (tf.range(width, dtype=tf.float32) / (width + 1) * (info[16] + 1) - info[2]) / info[0]
     urange = tf.tile(tf.reshape(urange, [1, -1]), [height, 1])
-    vrange = (tf.range(height, dtype=tf.float32) / (height + 1) - 0.5) / focalLength * 481
+    vrange = (tf.range(height, dtype=tf.float32) / (height + 1) * (info[17] + 1) - info[6]) / info[5]
     vrange = tf.tile(tf.reshape(vrange, [-1, 1]), [1, width])
             
     ranges = tf.stack([urange, np.ones([height, width]), -vrange], axis=2)

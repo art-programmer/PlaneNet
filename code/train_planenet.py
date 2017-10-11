@@ -152,7 +152,8 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
 
         #depth loss
         plane_parameters = tf.reshape(global_pred_dict['plane'], (-1, 3))
-        plane_depths = planeDepthsModule(plane_parameters, WIDTH, HEIGHT)
+        info = global_gt_dict['info'][0]
+        plane_depths = planeDepthsModule(plane_parameters, WIDTH, HEIGHT, info)
         plane_depths = tf.transpose(tf.reshape(plane_depths, [HEIGHT, WIDTH, -1, options.numOutputPlanes]), [2, 0, 1, 3])
 
         all_segmentations_softmax = tf.nn.softmax(all_segmentations)
@@ -431,7 +432,7 @@ def test(options):
         if options.hybrid == '0':
             options.dataset = 'SUNCG'
         elif options.hybrid == '1':
-            options.dataset = 'nyu_rgbd'
+            options.dataset = 'NYU_RGBD'
         elif options.hybrid == '2':
             options.dataset = 'matterport'
         elif options.hybrid == '3':
@@ -445,7 +446,7 @@ def test(options):
     if options.dataset == 'SUNCG':
         filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_SUNCG_val.tfrecords'], num_epochs=10000)
     elif options.dataset == 'NYU_RGBD':
-        filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_nyu_rgbd_train.tfrecords'], num_epochs=1)
         options.deepSupervision = 0
         options.predictLocal = 0
     elif options.dataset == 'matterport':
@@ -514,7 +515,6 @@ def test(options):
                 # boundary = np.concatenate([boundary, np.zeros((HEIGHT, WIDTH, 1))], axis=2)
                 # cv2.imwrite(options.test_dir + '/boundary.png', drawMaskImage(boundary))
                 # cv2.imwrite(options.test_dir + '/depth_gt.png', drawDepthImage(debug['depth_gt'][0].squeeze()))
-                # cv2.imwrite(options.test_dir + '/segmentation.png', drawSegmentationImage(debug['segmentation'][0]))
                 # exit(1)
 
                 if 'pixelwise' in options.suffix:
@@ -581,12 +581,7 @@ def test(options):
                 image = ((im + 0.5) * 255).astype(np.uint8)                
 
                 gt_d = global_gt['depth'].squeeze()
-                
-                if 'normal' in global_gt:
-                    gt_n = global_gt['normal'][0]
-                    cv2.imwrite(options.test_dir + '/' + str(index) + '_normal.png', drawNormalImage(gt_n))
-                    pass
-                  
+                                
 
                 if options.predictLocal:
                     pred_local_s = 1 / (1 + np.exp(-local_pred['score'][0]))
@@ -633,62 +628,39 @@ def test(options):
                 pred_np_d = global_pred['non_plane_depth'][0]
                 pred_np_n = global_pred['non_plane_normal'][0]
                 
-                if 'plane_mask' in debug:
-                    planeMask = np.squeeze(debug['plane_mask'])
-                else:
-                    #planeMask = np.ones((HEIGHT, WIDTH))
-                    planeMask = (np.max(pred_s, axis=2) > pred_np_m.squeeze()).astype(np.float32)
-                    pass
+                planeMask = 1 - global_gt['non_plane_mask'][0]
+                info = global_gt['info'][0]
 
-
-
-                all_segmentations = np.concatenate([pred_np_m, pred_s], axis=2)
-                plane_depths = calcPlaneDepths(pred_p, WIDTH, HEIGHT)
-                all_depths = np.concatenate([pred_np_d, plane_depths], axis=2)
+                all_segmentations = np.concatenate([pred_s, pred_np_m], axis=2)
+                plane_depths = calcPlaneDepths(pred_p, WIDTH, HEIGHT, info)
+                all_depths = np.concatenate([plane_depths, pred_np_d], axis=2)
 
                 segmentation = np.argmax(all_segmentations, 2)
                 pred_d = all_depths.reshape(-1, options.numOutputPlanes + 1)[np.arange(WIDTH * HEIGHT), segmentation.reshape(-1)].reshape(HEIGHT, WIDTH)
 
-                if False:
-                    gt_p = global_gt['plane'][0]
-                    gt_s = debug['segmentation'][0]
-                    gt_num_p = global_gt['num_planes'][0]                    
 
-                    planesD = np.linalg.norm(gt_p, axis=1, keepdims=True)
-                    gt_p = gt_p / pow(np.maximum(planesD, 1e-4), 2)
-                    print(gt_p)
-                    gt_p = transformPlanes(gt_p, None)
-                    print(gt_p)
-                    plane_depths = calcPlaneDepths(gt_p, WIDTH, HEIGHT)
-                    segmentation = np.argmax(gt_s, 2)
-                    for planeIndex in xrange(options.numOutputPlanes):
-                        mask = gt_s[:, :, planeIndex]
-                        if mask.sum() > 0:
-                            cv2.imwrite(options.test_dir + '/mask_' + str(planeIndex) + '.png', drawMaskImage(mask))
-                            pass
-                        continue
-                    pred_d = plane_depths.reshape(-1, options.numOutputPlanes)[np.arange(WIDTH * HEIGHT), segmentation.reshape(-1)].reshape(HEIGHT, WIDTH)
-                    print(np.max(pred_d))
-                    print(pred_d[60][120])
-                    cv2.imwrite(options.test_dir + '/' + str(index) + '_depth_pred.png', drawDepthImage(pred_d))
-                    exit(1)
-                    pass
-
-                if False:
-                    gt_s = debug['segmentation'][0]
-                    all_segmentations = np.concatenate([pred_np_m, gt_s], axis=2)
+                if True:
+                    gt_s = global_gt['segmentation'][0]
+                    all_segmentations = np.concatenate([gt_s, 1 - planeMask], axis=2)
                     gt_p = global_gt['plane'][0]
 
-                    valid_mask = (np.linalg.norm(gt_p, axis=1) > 0).astype(np.float32)
-                    diff = np.min(np.linalg.norm(np.expand_dims(gt_p, 1) - np.expand_dims(pred_p, 0), axis=2), 1)
-                    num += valid_mask.sum()
-                    lossSum += (diff * valid_mask).sum()
+                    # valid_mask = (np.linalg.norm(gt_p, axis=1) > 0).astype(np.float32)
+                    # diff = np.min(np.linalg.norm(np.expand_dims(gt_p, 1) - np.expand_dims(pred_p, 0), axis=2), 1)
+                    # num += valid_mask.sum()
+                    # lossSum += (diff * valid_mask).sum()
+                    #gt_p = np.stack([-gt_p[:, 0], -gt_p[:, 2], -gt_p[:, 1]], axis=1)
                     
-                    plane_depths = calcPlaneDepths(gt_p, WIDTH, HEIGHT)
-                    all_depths = np.concatenate([pred_np_d, plane_depths], axis=2)
+                    plane_depths = calcPlaneDepths(gt_p, WIDTH, HEIGHT, info)
+                    all_depths = np.concatenate([plane_depths, pred_np_d], axis=2)
 
                     segmentation = np.argmax(all_segmentations, 2)
                     pred_d = all_depths.reshape(-1, options.numOutputPlanes + 1)[np.arange(WIDTH * HEIGHT), segmentation.reshape(-1)].reshape(HEIGHT, WIDTH)
+                    # print(gt_p)
+                    # for segmentIndex in xrange(options.numOutputPlanes):
+                    #     cv2.imwrite(options.test_dir + '/' + str(index) + '_mask_' + str(segmentIndex) + '.png', drawMaskImage(segmentation == segmentIndex))
+                    #     continue
+                    cv2.imwrite(options.test_dir + '/' + str(index) + '_depth_pred.png', drawDepthImage(pred_d))
+                    #exit(1)
                     pass
 
                 
@@ -705,31 +677,32 @@ def test(options):
                     pass
             
                 gtDepths.append(gt_d)
-                #planeMask = np.ones(planeMask.shape)
-                planeMasks.append(planeMask)
+                planeMasks.append(planeMask.squeeze())
                 predDepths.append(pred_d)
-                evaluateDepths(predDepths[-1], gtDepths[-1], np.ones(planeMasks[-1].shape), planeMasks[-1])
+                evaluateDepths(predDepths[-1], gtDepths[-1], gtDepths[-1] > 0, planeMasks[-1])
                 
                 
                 if index >= 10:
                     continue
+
+                if 'normal' in global_gt:
+                    gt_n = global_gt['normal'][0]
+                    #gt_n = np.stack([-gt_n[:, :, 0], -gt_n[:, :, 2], -gt_n[:, :, 1]], axis=2)
+                    cv2.imwrite(options.test_dir + '/' + str(index) + '_normal_gt.png', drawNormalImage(gt_n))
+                    cv2.imwrite(options.test_dir + '/' + str(index) + '_normal_pred.png', drawNormalImage(pred_np_n))
+                    pass
                 
                 if 'segmentation' in global_gt:
                     gt_s = global_gt['segmentation'][0]
-                    #print(np.unique(np.argmax(global_gt['segmentation'][0], axis=2)))
-                    #cv2.imwrite(options.test_dir + '/' + str(index) + '_segmentation_gt.png', drawSegmentationImage(gt_s, planeMask=planeMask, numColors = 51))
-                    cv2.imwrite(options.test_dir + '/' + str(index) + '_segmentation_gt.png', drawSegmentationImage(gt_s))
+                    print(gt_s.shape)
+                    cv2.imwrite(options.test_dir + '/' + str(index) + '_plane_mask_gt.png', drawMaskImage(planeMask))  
+                    cv2.imwrite(options.test_dir + '/' + str(index) + '_segmentation_gt.png', drawSegmentationImage(np.concatenate([gt_s, 1 - planeMask], axis=2), blackIndex=options.numOutputPlanes)
+)
+                    #cv2.imwrite(options.test_dir + '/' + str(index) + '_test.png', drawMaskImage(np.sum(np.concatenate([gt_s, 1 - planeMask], axis=2), axis=2)))
+                    #exit(1)
                     #exit(1)
                     pass
 
-                if 'non_plane_mask' in global_gt:
-                    gt_np_m = global_gt['non_plane_mask'][0]
-                    #print(np.unique(np.argmax(global_gt['segmentation'][0], axis=2)))
-                    #cv2.imwrite(options.test_dir + '/' + str(index) + '_segmentation_gt.png', drawSegmentationImage(gt_s, planeMask=planeMask, numColors = 51))
-                    cv2.imwrite(options.test_dir + '/' + str(index) + '_plane_mask_gt.png', drawMaskImage(1 - gt_np_m))
-                    #exit(1)
-                    pass
-                
 
                 if options.predictConfidence == 1 and options.dataset == 'SUNCG':
                     pred_p_c = global_pred['confidence'][0]
@@ -766,7 +739,7 @@ def test(options):
 
                 cv2.imwrite(options.test_dir + '/' + str(index) + '_image.png', image)
                 cv2.imwrite(options.test_dir + '/' + str(index) + '_depth.png', drawDepthImage(gt_d))
-                cv2.imwrite(options.test_dir + '/' + str(index) + '_overlay.png', drawDepthImageOverlay(image, gt_d))
+                #cv2.imwrite(options.test_dir + '/' + str(index) + '_overlay.png', drawDepthImageOverlay(image, gt_d))
                 
                 if options.predictBoundary:
                     pred_boundary = global_pred['boundary'][0]
@@ -787,7 +760,7 @@ def test(options):
                     segmentation_deep[segmentation_deep == options.numOutputPlanes] = -1
                     segmentation_deep += 1
                 
-                    plane_depths_deep = calcPlaneDepths(deep_preds[0]['plane'][0], WIDTH, HEIGHT)
+                    plane_depths_deep = calcPlaneDepths(deep_preds[0]['plane'][0], WIDTH, HEIGHT, info)
                     all_depths_deep = np.concatenate([pred_np_d, plane_depths_deep], axis=2)
                     pred_d_deep = all_depths_deep.reshape(-1, options.numOutputPlanes + 1)[np.arange(WIDTH * HEIGHT), segmentation_deep.reshape(-1)].reshape(HEIGHT, WIDTH)
                 
@@ -802,10 +775,11 @@ def test(options):
                 #print(pred_p)
                 #exit(1)
                 
-                cv2.imwrite(options.test_dir + '/' + str(index) + '_segmentation_pred.png', drawSegmentationImage(all_segmentations))
+                cv2.imwrite(options.test_dir + '/' + str(index) + '_segmentation_pred.png', drawSegmentationImage(all_segmentations, blackIndex=options.numOutputPlanes))
                 #exit(1)
                 cv2.imwrite(options.test_dir + '/' + str(index) + '_depth_pred.png', drawDepthImage(pred_d))
-                cv2.imwrite(options.test_dir + '/' + str(index) + '_plane_mask.png', drawMaskImage(planeMask))                
+                cv2.imwrite(options.test_dir + '/' + str(index) + '_depth_diff.png', drawMaskImage(np.abs(pred_d - gt_d) * planeMask.squeeze() / 0.2))
+                #cv2.imwrite(options.test_dir + '/' + str(index) + '_plane_mask.png', drawMaskImage(planeMask))           
 
                 #print(np.concatenate([np.arange(options.numOutputPlanes).reshape(-1, 1), planes, pred_p, preds_p[0][0]], axis=1))
 
@@ -815,7 +789,7 @@ def test(options):
                 #writePLYFile(options.test_dir, index, image, pred_d, segmentation, np.zeros(pred_boundary[0].shape))
                 #writePLYFileParts(options.test_dir, index, image, pred_d, segmentation)
                 #gt_s_ori = gt_s_ori[0]
-                #cv2.imwrite(options.test_dir + '/' + str(index) + '_segmentation_gt_ori.png', drawSegmentationImage(gt_s_ori, planeMask=np.max(gt_s_ori, 2) > 0.5, numColors=51))
+
                 
                 if False:
                     #distance = distance[0]
@@ -850,7 +824,7 @@ def test(options):
             gtDepths = np.array(gtDepths)
             planeMasks = np.array(planeMasks)
             #predMasks = np.array(predMasks)
-            evaluateDepths(predDepths, gtDepths, np.ones(planeMasks.shape, dtype=np.bool), planeMasks)
+            evaluateDepths(predDepths, gtDepths, gtDepths > 0, planeMasks)
             exit(1)
 
         except tf.errors.OutOfRangeError:

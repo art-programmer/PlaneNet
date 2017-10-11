@@ -19,7 +19,7 @@ class ColorPalette:
     def __init__(self, numColors):
         np.random.seed(1)
         self.colorMap = np.random.randint(255, size = (numColors, 3))
-        self.colorMap[0] = 0
+        #self.colorMap[0] = 0
         return
 
     def getColorMap(self):
@@ -572,27 +572,21 @@ def drawDepthImageOverlay(image, depth):
 def drawNormalImage(normal):
     return ((normal + 1) / 2 * 255).astype(np.uint8)
     
-def drawSegmentationImage(segmentations, randomColor=None, numColors=22, planeMask=1, offset=1, black=False):
+def drawSegmentationImage(segmentations, randomColor=None, numColors=22, blackIndex=-1):
     if segmentations.ndim == 2:
         numColors = max(numColors, segmentations.max() + 2)
     else:
         numColors = max(numColors, segmentations.shape[2] + 2)
         pass
     randomColor = ColorPalette(numColors).getColorMap()
-    if black:
-        randomColor[0] = 0
+    if blackIndex >= 0:
+        randomColor[blackIndex] = 0
         pass
     width = segmentations.shape[1]
     height = segmentations.shape[0]
-    if segmentations.ndim == 2:
-        segmentation = (segmentations + offset) * planeMask
-    else:
+    if segmentations.ndim == 3:
         #segmentation = (np.argmax(segmentations, 2) + 1) * (np.max(segmentations, 2) > 0.5)
-        if black:
-            segmentation = np.argmax(segmentations, 2)
-        else:
-            segmentation = (np.argmax(segmentations, 2) + 1) * planeMask
-            pass
+        segmentation = np.argmax(segmentations, 2)
         pass
     segmentation = segmentation.astype(np.int)
     return randomColor[segmentation.reshape(-1)].reshape((height, width, 3))
@@ -625,12 +619,10 @@ def getSuperpixels(depth, normal, width, height, numPlanes=50, numGlobalPlanes =
     return planeSegmentation, superpixels
 
 
-def calcPlaneDepths(planes, width, height):
-    focalLength = 517.97
-    urange = np.arange(width).reshape(1, -1).repeat(height, 0) - width * 0.5
-    vrange = np.arange(height).reshape(-1, 1).repeat(width, 1) - height * 0.5
-    ranges = np.array([urange / width * 640 / focalLength, np.ones(urange.shape), -vrange / height * 480 / focalLength]).transpose([1, 2, 0])
-    
+def calcPlaneDepths(planes, width, height, info):
+    urange = np.arange(width, dtype=np.float32).reshape(1, -1).repeat(height, 0) / (width + 1) * (info[16] + 1) - info[2]
+    vrange = np.arange(height, dtype=np.float32).reshape(-1, 1).repeat(width, 1) / (height + 1) * (info[17] + 1) - info[6]
+    ranges = np.array([urange / info[0], np.ones(urange.shape), -vrange / info[5]]).transpose([1, 2, 0])
     planeDepths = PlaneDepthLayer(planes, ranges)
     return planeDepths
 

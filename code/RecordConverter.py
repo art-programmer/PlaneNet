@@ -33,13 +33,13 @@ def writeRecordFile(split):
         reader = RecordReader()
         filename_queue = tf.train.string_input_producer(['/media/chenliu/My Passport/planes_test_450000.tfrecords'], num_epochs=1)
         img_inp, global_gt_dict, _ = reader.getBatch(filename_queue, numOutputPlanes=numOutputPlanes, batchSize=batchSize, random=False, getLocal=True)
-        writer = tf.python_io.TFRecordWriter('/mnt/vision/planes_SUNCG_train.tfrecords')
+        writer = tf.python_io.TFRecordWriter('/mnt/vision/PlaneNet/planes_SUNCG_train.tfrecords')
         numImages = 50000
     else:
         reader = RecordReader()
         filename_queue = tf.train.string_input_producer(['/mnt/vision/SUNCG_plane/planes_test_1000_450000.tfrecords'], num_epochs=1)
         img_inp, global_gt_dict, _ = reader.getBatch(filename_queue, numOutputPlanes=numOutputPlanes, batchSize=batchSize, random=False, getLocal=True)
-        writer = tf.python_io.TFRecordWriter('/mnt/vision/planes_SUNCG_val.tfrecords')
+        writer = tf.python_io.TFRecordWriter('/mnt/vision/PlaneNet/planes_SUNCG_val.tfrecords')
         numImages = 1000
         pass
     
@@ -117,4 +117,4 @@ def writeRecordFile(split):
     
 if __name__=='__main__':
     writeRecordFile('train')
-    #writeRecordFile('val')
+    writeRecordFile('val')
