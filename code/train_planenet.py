@@ -248,10 +248,10 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
 
 def main(options):
     if not os.path.exists(options.checkpoint_dir):
-        os.system('mkdir -p %s'%options.checkpoint_dir)
+        os.system("mkdir -p %s"%options.checkpoint_dir)
         pass
     if not os.path.exists(options.test_dir):
-        os.system('mkdir -p %s'%options.test_dir)
+        os.system("mkdir -p %s"%options.test_dir)
         pass
     
     min_after_dequeue = 1000
@@ -260,22 +260,22 @@ def main(options):
     train_inputs = []
     val_inputs = []
     if '0' in options.hybrid:
-        train_inputs.append(options.rootFolder + '/planes_SUNCG_train.tfrecords')
-        val_inputs.append(options.rootFolder + '/planes_SUNCG_val.tfrecords')        
+        train_inputs.append('/mnt/vision/PlaneNet/planes_SUNCG_train.tfrecords')
+        val_inputs.append('/mnt/vision/PlaneNet/planes_SUNCG_val.tfrecords')        
         pass
     if '1' in options.hybrid:
         for _ in xrange(10):
-            train_inputs.append(options.rootFolder + '/planes_nyu_rgbd_train.tfrecords')
-            val_inputs.append(options.rootFolder + '/planes_nyu_rgbd_val.tfrecords')
+            train_inputs.append('/mnt/vision/PlaneNet/planes_nyu_rgbd_train.tfrecords')
+            val_inputs.append('/mnt/vision/PlaneNet/planes_nyu_rgbd_val.tfrecords')
             continue
         pass
     if '2' in options.hybrid:
-        train_inputs.append(options.rootFolder + '/planes_matterport_train.tfrecords')
-        val_inputs.append(options.rootFolder + '/planes_matterport_val.tfrecords')
+        train_inputs.append('/mnt/vision/PlaneNet/planes_matterport_train.tfrecords')
+        val_inputs.append('/mnt/vision/PlaneNet/planes_matterport_val.tfrecords')
         pass
     if '3' in options.hybrid:
-        train_inputs.append(options.rootFolder + '/planes_scannet_train.tfrecords')
-        val_inputs.append(options.rootFolder + '/planes_scannet_val.tfrecords')
+        train_inputs.append('/mnt/vision/PlaneNet/planes_scannet_train.tfrecords')
+        val_inputs.append('/mnt/vision/PlaneNet/planes_scannet_val.tfrecords')
         pass
     
     reader_train = RecordReaderAll()
@@ -328,23 +328,28 @@ def main(options):
     init_op = tf.group(tf.global_variables_initializer(),
                        tf.local_variables_initializer())
 
+    for v in var_to_restore:
+        print(v.name)
+        print(v.shape)
+        continue
+    
     with tf.Session(config=config) as sess:
         sess.run(init_op)
         if options.restore == 0:
             #fine-tune from DeepLab model
             var_to_restore = [v for v in var_to_restore if 'res5d' not in v.name and 'segmentation' not in v.name and 'plane' not in v.name and 'deep_supervision' not in v.name and 'local' not in v.name and 'boundary' not in v.name and 'degridding' not in v.name and 'res2a_branch2a' not in v.name and 'res2a_branch1' not in v.name]
             pretrained_model_loader = tf.train.Saver(var_to_restore)
-            pretrained_model_loader.restore(sess,'../pretrained_models/deeplab_resnet.ckpt')
+            pretrained_model_loader.restore(sess,"../pretrained_models/deeplab_resnet.ckpt")
         elif options.restore == 1:
             #restore the same model from checkpoint
             loader = tf.train.Saver(var_to_restore)
-            loader.restore(sess,'%s/checkpoint.ckpt'%(options.checkpoint_dir))
+            loader.restore(sess,"%s/checkpoint.ckpt"%(options.checkpoint_dir))
             bno=sess.run(batchno)
             print(bno)
         elif options.restore == 2:            
             #restore the same model from checkpoint but reset batchno to 1
             loader = tf.train.Saver(var_to_restore)
-            loader.restore(sess,'%s/checkpoint.ckpt'%(options.checkpoint_dir))
+            loader.restore(sess,"%s/checkpoint.ckpt"%(options.checkpoint_dir))
             sess.run(batchno.assign(1))
         elif options.restore == 3:            
             #restore the same model from standard training
@@ -356,8 +361,8 @@ def main(options):
                 pass
             
             loader = tf.train.Saver(var_to_restore)
-            loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid12_pb_pp/checkpoint.ckpt')
-            #loader.restore(sess,'checkpoint/planenet/checkpoint.ckpt')
+            loader.restore(sess,"/mnt/vision/PlaneNet/checkpoint/planenet_hybrid12_pb_pp/checkpoint.ckpt")
+            #loader.restore(sess,"checkpoint/planenet/checkpoint.ckpt")
             sess.run(batchno.assign(1))
         elif options.restore == 4:
             #fine-tune another model
@@ -423,7 +428,7 @@ def main(options):
 
 def test(options):
     if not os.path.exists(options.test_dir):
-        os.system('mkdir -p %s'%options.test_dir)
+        os.system("mkdir -p %s"%options.test_dir)
         pass
 
     if options.dataset == '':
@@ -443,15 +448,15 @@ def test(options):
 
     reader = RecordReaderAll()
     if options.dataset == 'SUNCG':
-        filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_SUNCG_val.tfrecords'], num_epochs=10000)
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_SUNCG_val.tfrecords'], num_epochs=10000)
     elif options.dataset == 'NYU_RGBD':
-        filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
         options.deepSupervision = 0
         options.predictLocal = 0
     elif options.dataset == 'matterport':
-        filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_matterport_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
-        filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_scannet_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
         pass
     img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
 
@@ -474,8 +479,8 @@ def test(options):
         sess.run(init_op)
         #var_to_restore = [v for v in var_to_restore if 'res4b22_relu_non_plane' not in v.name]
         loader = tf.train.Saver(var_to_restore)
-        loader.restore(sess, '%s/checkpoint.ckpt'%(options.checkpoint_dir))
-        #loader.restore(sess, '%s/checkpoint.ckpt'%('checkpoint/planenet_pb_pp_hybrid1'))
+        loader.restore(sess, "%s/checkpoint.ckpt"%(options.checkpoint_dir))
+        #loader.restore(sess, "%s/checkpoint.ckpt"%('checkpoint/planenet_pb_pp_hybrid1'))
         #loader.restore(sess, options.fineTuningCheckpoint)
         
         coord = tf.train.Coordinator()
@@ -870,7 +875,7 @@ def test(options):
 def predict(options):
     options.test_dir += '_predict'
     if not os.path.exists(options.test_dir):
-        os.system('mkdir -p %s'%options.test_dir)
+        os.system("mkdir -p %s"%options.test_dir)
         pass
 
     batchSize = 1
@@ -913,7 +918,7 @@ def predict(options):
     with tf.Session(config=config) as sess:
         saver = tf.train.Saver()
         #sess.run(tf.global_variables_initializer())
-        saver.restore(sess,'%s/%s.ckpt'%(options.checkpoint_dir,keyname))
+        saver.restore(sess,"%s/%s.ckpt"%(options.checkpoint_dir,keyname))
 
         gtDepths = []
         predDepths = []
@@ -1046,10 +1051,10 @@ def fitPlanesRGBD(options):
     writeHTMLRGBD('../results/RANSAC_RGBD/index.html', 10)
     exit(1)
     if not os.path.exists(options.checkpoint_dir):
-        os.system('mkdir -p %s'%options.checkpoint_dir)
+        os.system("mkdir -p %s"%options.checkpoint_dir)
         pass
     if not os.path.exists(options.test_dir):
-        os.system('mkdir -p %s'%options.test_dir)
+        os.system("mkdir -p %s"%options.test_dir)
         pass
     
     min_after_dequeue = 1000
@@ -1121,9 +1126,9 @@ def writeInfo(options):
     return
 
 def parse_args():
-    '''
+    """
     Parse input arguments
-    '''
+    """
     parser = argparse.ArgumentParser(description='Planenet')
     parser.add_argument('--gpu', dest='gpu_id',
                         help='GPU device id to use [0]',
@@ -1192,9 +1197,6 @@ def parse_args():
     parser.add_argument('--hybrid', dest='hybrid',
                         help='hybrid training',
                         default='0', type=str)
-    parser.add_argument('--rootFolder', dest='rootFolder',
-                        help='root folder',
-                        default='/mnt/vision/PlaneNet/', type=str)
     
 
     args = parser.parse_args()
@@ -1238,7 +1240,7 @@ def parse_args():
         pass
 
     
-    args.checkpoint_dir = args.rootFolder + '/checkpoint/' + args.keyname
+    args.checkpoint_dir = '/mnt/vision/PlaneNet/checkpoint/' + args.keyname
     args.log_dir = 'log/' + args.keyname
     args.test_dir = 'test/' + args.keyname + '_' + args.dataset
     args.predict_dir = 'predict/' + args.keyname + '_' + args.dataset
@@ -1258,20 +1260,20 @@ def parse_args():
 if __name__=='__main__':
     args = parse_args()
 
-    print 'keyname=%s task=%s started'%(args.keyname, args.task)
+    print "keyname=%s task=%s started"%(args.keyname, args.task)
     try:
-        if args.task == 'train':
+        if args.task == "train":
             main(args)
-        elif args.task == 'test':
+        elif args.task == "test":
             test(args)
-        elif args.task == 'predict':
+        elif args.task == "predict":
             predict(args)
-        elif args.task == 'fit':
+        elif args.task == "fit":
             fitPlanesRGBD(args)
-        elif args.task == 'write':
+        elif args.task == "write":
             writeInfo(args)
         else:
-            assert False,'format wrong'
+            assert False,"format wrong"
             pass
     finally:
         pass
