@@ -261,22 +261,22 @@ def main(options):
     train_inputs = []
     val_inputs = []
     if '0' in options.hybrid:
-        train_inputs.append('/mnt/vision/PlaneNet/planes_SUNCG_train.tfrecords')
-        val_inputs.append('/mnt/vision/PlaneNet/planes_SUNCG_val.tfrecords')        
+        train_inputs.append(options.rootFolder + '/planes_SUNCG_train.tfrecords')
+        val_inputs.append(options.rootFolder + '/planes_SUNCG_val.tfrecords')        
         pass
     if '1' in options.hybrid:
         for _ in xrange(10):
-            train_inputs.append('/mnt/vision/PlaneNet/planes_nyu_rgbd_train.tfrecords')
-            val_inputs.append('/mnt/vision/PlaneNet/planes_nyu_rgbd_val.tfrecords')
+            train_inputs.append(options.rootFolder + '/planes_nyu_rgbd_train.tfrecords')
+            val_inputs.append(options.rootFolder + '/planes_nyu_rgbd_val.tfrecords')
             continue
         pass
     if '2' in options.hybrid:
-        train_inputs.append('/mnt/vision/PlaneNet/planes_matterport_train.tfrecords')
-        val_inputs.append('/mnt/vision/PlaneNet/planes_matterport_val.tfrecords')
+        train_inputs.append(options.rootFolder + '/planes_matterport_train.tfrecords')
+        val_inputs.append(options.rootFolder + '/planes_matterport_val.tfrecords')
         pass
     if '3' in options.hybrid:
-        train_inputs.append('/mnt/vision/PlaneNet/planes_scannet_train.tfrecords')
-        val_inputs.append('/mnt/vision/PlaneNet/planes_scannet_val.tfrecords')
+        train_inputs.append(options.rootFolder + '/planes_scannet_train.tfrecords')
+        val_inputs.append(options.rootFolder + '/planes_scannet_val.tfrecords')
         pass
     
     reader_train = RecordReaderAll()
@@ -450,7 +450,7 @@ def test(options):
     if options.dataset == 'SUNCG':
         filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_SUNCG_val.tfrecords'], num_epochs=10000)
     elif options.dataset == 'NYU_RGBD':
-        filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_nyu_rgbd_train.tfrecords'], num_epochs=1)
         options.deepSupervision = 0
         options.predictLocal = 0
     elif options.dataset == 'matterport':
@@ -643,7 +643,7 @@ def test(options):
                 pred_d = all_depths.reshape(-1, options.numOutputPlanes + 1)[np.arange(WIDTH * HEIGHT), segmentation.reshape(-1)].reshape(HEIGHT, WIDTH)
 
 
-                if True:
+                if False:
                     gt_s = global_gt['segmentation'][0]
                     all_segmentations = np.concatenate([gt_s, 1 - planeMask], axis=2)
                     gt_p = global_gt['plane'][0]
@@ -698,7 +698,7 @@ def test(options):
                 
                 if 'segmentation' in global_gt:
                     gt_s = global_gt['segmentation'][0]
-                    print(gt_s.shape)
+                    gt_s = sortSegmentations(gt_s, gt_p, pred_p)
                     cv2.imwrite(options.test_dir + '/' + str(index) + '_plane_mask_gt.png', drawMaskImage(planeMask))  
                     cv2.imwrite(options.test_dir + '/' + str(index) + '_segmentation_gt.png', drawSegmentationImage(np.concatenate([gt_s, 1 - planeMask], axis=2), blackIndex=options.numOutputPlanes)
 )
@@ -1170,6 +1170,9 @@ def parse_args():
     parser.add_argument('--hybrid', dest='hybrid',
                         help='hybrid training',
                         default='0', type=str)
+    parser.add_argument('--rootFolder', dest='rootFolder',
+                        help='root folder',
+                        default='/mnt/vision/PlaneNet/', type=str)
     
 
     args = parser.parse_args()

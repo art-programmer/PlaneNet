@@ -126,8 +126,8 @@ def writeRecordFile(split, dataset):
 
     
 if __name__=='__main__':
-    writeRecordFile('val', 'matterport')
+    #writeRecordFile('val', 'matterport')
     writeRecordFile('val', 'scannet')
-    writeRecordFile('train', 'matterport')    
-    writeRecordFile('train', 'scannet')    
+    # writeRecordFile('train', 'matterport')    
+    # writeRecordFile('train', 'scannet')    
 

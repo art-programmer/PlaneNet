@@ -587,6 +587,8 @@ def drawSegmentationImage(segmentations, randomColor=None, numColors=22, blackIn
     if segmentations.ndim == 3:
         #segmentation = (np.argmax(segmentations, 2) + 1) * (np.max(segmentations, 2) > 0.5)
         segmentation = np.argmax(segmentations, 2)
+    else:
+        segmentation = segmentations
         pass
     segmentation = segmentation.astype(np.int)
     return randomColor[segmentation.reshape(-1)].reshape((height, width, 3))
@@ -911,13 +913,13 @@ def get3DCamera():
 
 def getCameraFromInfo(info):
     camera = {}
-    camera['fx'] = info[3]
-    camera['fy'] = info[8]
-    camera['cx'] = info[5]
-    camera['cy'] = info[9]
-    camera['width'] = info[0]
-    camera['height'] = info[1]
-    camera['depth_shift'] = info[2]    
+    camera['fx'] = info[0]
+    camera['fy'] = info[5]
+    camera['cx'] = info[2]
+    camera['cy'] = info[6]
+    camera['width'] = info[16]
+    camera['height'] = info[17]
+    camera['depth_shift'] = info[18]    
     return camera
 
 def fitPlane(points):
@@ -926,12 +928,13 @@ def fitPlane(points):
     else:
         return np.linalg.lstsq(points, np.ones(points.shape[0]))[0]
 
-def fitPlanes(depth, camera, numPlanes=50, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=-1):
+def fitPlanes(depth, camera, info, numPlanes=50, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=-1):
     width = depth.shape[1]
     height = depth.shape[0]
 
     #camera = getNYURGBDCamera()
     #camera = getSUNCGCamera()
+
     urange = (np.arange(width, dtype=np.float32) / width * camera['width'] - camera['cx']) / camera['fx']
     urange = urange.reshape(1, -1).repeat(height, 0)
     vrange = (np.arange(height, dtype=np.float32) / height * camera['height'] - camera['cy']) / camera['fy']
@@ -989,7 +992,18 @@ def fitPlanes(depth, camera, numPlanes=50, planeAreaThreshold=3*4, numIterations
         if XYZ.shape[0] < planeAreaThreshold:
             break
         continue
+
     planes = np.array(planes)
+    if len(planes.shape) == 0:
+        planes = np.zeros((numPlanes, 3))
+        pass
+    if len(planes.shape) == 1:
+        if planes.shape[0] == 3:
+            planes = np.expand_dims(planes, 0)
+        else:
+            planes = np.zeros((numPlanes, 3))
+            pass
+        pass
     
     planeSegmentation = np.ones(depth.shape) * numPlanes
     for planeIndex, planePoints in enumerate(planePointsArray):
@@ -999,14 +1013,16 @@ def fitPlanes(depth, camera, numPlanes=50, planeAreaThreshold=3*4, numIterations
         planeSegmentation[v, u] = planeIndex
         continue
 
+
     planesD = 1 / np.linalg.norm(planes, 2, axis=1, keepdims=True)
     planes *= pow(planesD, 2)
 
     if planes.shape[0] < numPlanes:
+        #print(planes.shape)
         planes = np.concatenate([planes, np.zeros((numPlanes - planes.shape[0], 3))], axis=0)
         pass
 
-    planeDepths = calcPlaneDepths(planes, width, height)
+    planeDepths = calcPlaneDepths(planes, width, height, info)
     
     allDepths = np.concatenate([planeDepths, np.zeros((height, width, 1))], axis=2)
     depthPred = allDepths.reshape(-1, numPlanes + 1)[np.arange(width * height), planeSegmentation.astype(np.int32).reshape(-1)].reshape(height, width)
@@ -1014,7 +1030,7 @@ def fitPlanes(depth, camera, numPlanes=50, planeAreaThreshold=3*4, numIterations
     return planes, planeSegmentation, depthPred
 
 
-def fitPlanesSegmentation(depth, segmentation, camera, numPlanes=50, numPlanesPerSegment=3, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=-1):
+def fitPlanesSegmentation(depth, segmentation, camera, info, numPlanes=50, numPlanesPerSegment=3, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=-1):
     width = depth.shape[1]
     height = depth.shape[0]
 
@@ -1102,7 +1118,7 @@ def fitPlanesSegmentation(depth, segmentation, camera, numPlanes=50, numPlanesPe
         planes = np.concatenate([planes, np.zeros((numPlanes - planes.shape[0], 3))], axis=0)
         pass
 
-    planeDepths = calcPlaneDepths(planes, width, height)
+    planeDepths = calcPlaneDepths(planes, width, height, info)
 
     
     allDepths = np.concatenate([planeDepths, np.zeros((height, width, 1))], axis=2)
@@ -1595,3 +1611,17 @@ def transformPlanes(planes, transformation):
 def softmax(values):
     exp = np.exp(values - values.max())
     return exp / exp.sum(-1, keepdims=True)
+
+def one_hot(values):
+    results = np.zeros(values.shape)
+    maxInds = np.argmax(values, -1).reshape(-1)
+    results = results.reshape([maxInds.shape[0], -1])
+    results[np.arange(maxInds.shape[0]), maxInds] = 1
+    results = results.reshape(values.shape)
+    return results
+
+def sortSegmentations(segmentations, planes, planesTarget):
+    diff = np.linalg.norm(np.expand_dims(planes, 1) - np.expand_dims(planesTarget, 0), axis=2)
+    planeMap = one_hot(-diff)
+    segmentationsTarget = np.matmul(segmentations, planeMap)
+    return segmentationsTarget
