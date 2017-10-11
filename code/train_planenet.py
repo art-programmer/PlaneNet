@@ -292,7 +292,10 @@ def main(options):
     global_pred_dict, local_pred_dict, deep_pred_dicts = build_graph(img_inp_train, img_inp_val, training_flag, options)
     
     var_to_restore = [v for v in tf.global_variables()]
-
+    for v in var_to_restore:
+        print(v.name)
+        print(v.shape)
+        continue
     
     #loss, loss_dict, _ = build_loss(global_pred_dict, local_pred_dict, deep_pred_dicts, global_gt_dict_train, local_gt_dict_train, global_gt_dict_val, local_gt_dict_val, training_flag, options)
     #loss_rgbd, loss_dict_rgbd, _ = build_loss_rgbd(global_pred_dict, deep_pred_dicts, global_gt_dict_rgbd_train, global_gt_dict_rgbd_val, training_flag, options)
@@ -301,11 +304,11 @@ def main(options):
     #loss = tf.cond(tf.less(training_flag, 2), lambda: loss, lambda: tf.cond(tf.less(training_flag, 4), lambda: loss_rgbd, lambda: loss_3d))
 
     
-    train_writer = tf.summary.FileWriter(options.log_dir + '/train')
-    val_writer = tf.summary.FileWriter(options.log_dir + '/val')
-    train_writer_rgbd = tf.summary.FileWriter(options.log_dir + '/train_rgbd')
-    val_writer_rgbd = tf.summary.FileWriter(options.log_dir + '/val_rgbd')
-    writers = [train_writer, val_writer, train_writer_rgbd, val_writer_rgbd]
+    #train_writer = tf.summary.FileWriter(options.log_dir + '/train')
+    #val_writer = tf.summary.FileWriter(options.log_dir + '/val')
+    #train_writer_rgbd = tf.summary.FileWriter(options.log_dir + '/train_rgbd')
+    #val_writer_rgbd = tf.summary.FileWriter(options.log_dir + '/val_rgbd')
+    #writers = [train_writer, val_writer, train_writer_rgbd, val_writer_rgbd]
     
     tf.summary.scalar('loss', loss)
     summary_op = tf.summary.merge_all()
@@ -321,17 +324,13 @@ def main(options):
 
     
     config=tf.ConfigProto()
-    config.gpu_options.allow_growth=True
-    config.allow_soft_placement=True
+    config.allow_soft_placement=True    
+    #config.gpu_options.allow_growth=True
+    config.gpu_options.per_process_gpu_memory_fraction=0.9
     saver=tf.train.Saver()
 
     init_op = tf.group(tf.global_variables_initializer(),
                        tf.local_variables_initializer())
-
-    for v in var_to_restore:
-        print(v.name)
-        print(v.shape)
-        continue
     
     with tf.Session(config=config) as sess:
         sess.run(init_op)
@@ -394,7 +393,7 @@ def main(options):
                     pass
 
                 _, total_loss, losses, summary_str = sess.run([train_op, loss, loss_dict, summary_op], feed_dict = {training_flag: batchType == 0})
-                writers[batchType].add_summary(summary_str, bno)
+                #writers[batchType].add_summary(summary_str, bno)
                 ema[batchType] = ema[batchType] * MOVING_AVERAGE_DECAY + total_loss
                 ema_acc[batchType] = ema_acc[batchType] * MOVING_AVERAGE_DECAY + 1
 
