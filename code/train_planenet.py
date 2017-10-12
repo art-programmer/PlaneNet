@@ -366,7 +366,7 @@ def main(options):
             #     pass
             
             loader = tf.train.Saver(var_to_restore)
-            loader.restore(sess, '/mnt/vision/PlaneNet/checkpoint/planenet_hybrid' + options.hybrid + '_pb_pp/checkpoint.ckpt')
+            loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + options.hybrid + '_pb_pp/checkpoint.ckpt')
             #loader.restore(sess,"checkpoint/planenet/checkpoint.ckpt")
             sess.run(batchno.assign(1))
         elif options.restore == 4:
@@ -1227,7 +1227,7 @@ def parse_args():
         pass
 
     
-    args.checkpoint_dir = '/mnt/vision/PlaneNet/checkpoint/' + args.keyname
+    args.checkpoint_dir = args.rootFolder + '/checkpoint/' + args.keyname
     args.log_dir = 'log/' + args.keyname
     args.test_dir = 'test/' + args.keyname + '_' + args.dataset
     args.predict_dir = 'predict/' + args.keyname + '_' + args.dataset
