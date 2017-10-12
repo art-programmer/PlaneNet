@@ -230,7 +230,7 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
             pass
 
 
-        label_loss = tf.constant(0)
+        label_loss = tf.constant(0.0)
         if options.labelLoss == 1:
             label_loss = tf.reduce_mean(tf.reduce_max(all_segmentations_softmax, axis=[1, 2])) * 100
             pass

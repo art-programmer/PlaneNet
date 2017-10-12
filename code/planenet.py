@@ -524,7 +524,7 @@ class PlaneNet(Network):
                                layer+'_upsample3',
                                layer+'_upsample4')
                          .concat(axis=3, name=layer+'_segmentation_concat')
-                         .conv(3, 3, 512, 1, 1, biased=False, relu=False, name=layer+'_segmentation_conv1')
+                         .conv(1, 1, 512, 1, 1, biased=False, relu=False, name=layer+'_segmentation_conv1')
                          .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name=layer+'_segmentation_bn1')
                          .dropout(keep_prob=0.9, name=layer+'_segmentation_dropout')
                          .conv(1, 1, options.numOutputPlanes, 1, 1, relu=False, name=layer+'_segmentation_conv2')
@@ -562,7 +562,7 @@ class PlaneNet(Network):
                    'res5d_upsample3',
                    'res5d_upsample4')
              .concat(axis=3, name='segmentation_concat')
-             .conv(3, 3, 512, 1, 1, biased=False, relu=False, name='segmentation_conv1')
+             .conv(1, 1, 512, 1, 1, biased=False, relu=False, name='segmentation_conv1')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='segmentation_bn1')
              .dropout(keep_prob=0.9, name='segmentation_dropout')
              .conv(1, 1, options.numOutputPlanes, 1, 1, relu=False, name='segmentation_conv2')
