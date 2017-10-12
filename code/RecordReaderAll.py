@@ -74,9 +74,12 @@ class RecordReaderAll():
         planes = tf.reshape(planes, [numOutputPlanes, 3])
 
         
-        boundary = tf.decode_raw(features['boundary_raw'], tf.float64)
-        boundary = tf.reshape(boundary, (HEIGHT, WIDTH, 3))
-        boundary = tf.cast(tf.slice(boundary, [0, 0, 0], [HEIGHT, WIDTH, 2]), tf.float32)
+        boundary = tf.decode_raw(features['boundary_raw'], tf.uint8)
+        boundary = tf.cast(tf.reshape(boundary, (HEIGHT, WIDTH, 2)), tf.float32)
+
+        #boundary = tf.decode_raw(features['boundary_raw'], tf.float64)
+        #boundary = tf.cast(tf.reshape(boundary, (HEIGHT, WIDTH, 3)), tf.float32)        
+        #boundary = tf.slice(boundary, [0, 0, 0], [HEIGHT, WIDTH, 2])
 
         segmentation = tf.decode_raw(features['segmentation_raw'], tf.uint8)
         segmentation = tf.reshape(segmentation, [HEIGHT, WIDTH, 1])
