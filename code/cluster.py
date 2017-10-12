@@ -19,7 +19,7 @@ from modules import *
 from train_planenet import *
 from planenet import PlaneNet
 from RecordReaderAll import *
-from SegmentationRefinement import refineSegmentation
+#from SegmentationRefinement import refineSegmentation
 
 
 def clusterPlanes(options):
