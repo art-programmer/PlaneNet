@@ -61,11 +61,13 @@ def planeNormalsModule(plane_parameters, width, height):
     #plane_normals = tf.reshape(planesNormal, [1, 1, -1, 3])
     return planesNormal
 
-def gaussian(k=5, sig=1.):
+def gaussian(k=5, sig=0):
     """
     creates gaussian kernel with side length l and a sigma of sig
     """
-
+    if sig == 0:
+        sig = 0.3 * ((k - 1) * 0.5 - 1) + 0.8
+        pass
     ax = np.arange(-k // 2 + 1., k // 2 + 1.)
     xx, yy = np.meshgrid(ax, ax)
 
@@ -82,7 +84,7 @@ def meanfieldModuleLayer(layerSegmentations, planeDepths, numOutputPlanes = 20, 
     #P = planeSegmentations
     #S = tf.one_hot(tf.argmax(planeSegmentations, 3), depth=numOutputPlanes)
     kernel_size = 9
-    neighbor_kernel_array = gaussian(kernel_size, kernel_size)
+    neighbor_kernel_array = gaussian(kernel_size)
     neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 0
     neighbor_kernel_array /= neighbor_kernel_array.sum()
     neighbor_kernel = tf.constant(neighbor_kernel_array.reshape(-1), shape=neighbor_kernel_array.shape, dtype=tf.float32)
@@ -154,7 +156,7 @@ def meanfieldModule(planeSegmentations, planeDepths, numOutputPlanes = 20, coef 
     DS_diff = tf.exp(-tf.pow(1 - tf.clip_by_value(tf.abs(planeDepths - tf.reduce_sum(planeDepths * S, 3, keep_dims=True)), 0, 1), 2) / sigmaDepthDiff) - tf.exp(-1 / sigmaDepthDiff) * S
     
     kernel_size = 9
-    neighbor_kernel_array = gaussian(kernel_size, kernel_size)
+    neighbor_kernel_array = gaussian(kernel_size)
     neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 0
     neighbor_kernel_array /= neighbor_kernel_array.sum()
     neighbor_kernel = tf.constant(neighbor_kernel_array.reshape(-1), shape=neighbor_kernel_array.shape, dtype=tf.float32)
@@ -203,7 +205,7 @@ def meanfieldModuleBoundary(planeSegmentations, originalSegmentations, planeDept
     #+ (1 - S) * occlusionBoundary * 0.1
     
     kernel_size = 5
-    neighbor_kernel_array = gaussian(kernel_size, kernel_size)
+    neighbor_kernel_array = gaussian(kernel_size)
     neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 0
     neighbor_kernel_array /= neighbor_kernel_array.sum()
     neighbor_kernel = tf.constant(neighbor_kernel_array.reshape(-1), shape=neighbor_kernel_array.shape, dtype=tf.float32)
@@ -264,7 +266,7 @@ def planeFittingModule(depth, normal, numPlanes=50, numGlobalPlanes=20, planeAre
     planeMap = planeMapModule(depth, normal, ranges)
     
     kernel_size = 3
-    neighbor_kernel_array = gaussian(kernel_size, kernel_size)
+    neighbor_kernel_array = gaussian(kernel_size)
     neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 0
     neighbor_kernel_array /= neighbor_kernel_array.sum()
     neighbor_kernel = tf.constant(neighbor_kernel_array.reshape(-1), shape=neighbor_kernel_array.shape, dtype=tf.float32)
@@ -936,7 +938,7 @@ def depthToNormalModule(depth):
 
     kernel_size = 5
     padding = (kernel_size - 1) / 2
-    neighbor_kernel_array = gaussian(kernel_size, kernel_size)
+    neighbor_kernel_array = gaussian(kernel_size)
     #neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 0
     neighbor_kernel_array /= neighbor_kernel_array.sum()
     neighbor_kernel = tf.constant(neighbor_kernel_array.reshape(-1), shape=neighbor_kernel_array.shape, dtype=tf.float32)
@@ -949,7 +951,7 @@ def depthToNormalModule(depth):
 def findBoundaryModule(depth, normal, segmentation, plane_mask, max_depth_diff = 0.1, max_normal_diff = np.sqrt(2 * (1 - np.cos(np.deg2rad(20))))):
     kernel_size = 3
     padding = (kernel_size - 1) / 2
-    neighbor_kernel_array = gaussian(kernel_size, kernel_size)
+    neighbor_kernel_array = gaussian(kernel_size)
     neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 0
     neighbor_kernel_array /= neighbor_kernel_array.sum()
     neighbor_kernel_array *= -1
@@ -983,7 +985,7 @@ def findBoundaryModule(depth, normal, segmentation, plane_mask, max_depth_diff =
 def findBoundaryModuleSmooth(depth, segmentation, plane_mask, smooth_boundary, max_depth_diff = 0.1, max_normal_diff = np.sqrt(2 * (1 - np.cos(np.deg2rad(20))))):
     kernel_size = 3
     padding = (kernel_size - 1) / 2
-    neighbor_kernel_array = gaussian(kernel_size, kernel_size)
+    neighbor_kernel_array = gaussian(kernel_size)
     neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 0
     neighbor_kernel_array /= neighbor_kernel_array.sum()
     neighbor_kernel_array *= -1
