@@ -143,82 +143,84 @@ def evaluatePlanePrediction(options):
             cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_pred_' + str(method_index) + '.png', drawSegmentationImage(segmentation))
             continue
         continue
-    
-    if options.useCRF:
-        pred_dict = predictions[0]
-        predSegmentations = []
-        predDepths = []
-        for image_index in xrange(options.numImages):
-            #boundaries = pred_dict['boundary'][image_index]            
-            #cv2.imwrite(options.test_dir + '/' + str(image_index) + '_boundary.png', drawMaskImage(np.concatenate([boundaries, np.zeros((HEIGHT, WIDTH, 1))], axis=2)))
 
-            allSegmentations = np.concatenate([pred_dict['segmentation'][image_index], pred_dict['np_mask'][image_index]], axis=2)
-            planeDepths = calcPlaneDepths(pred_dict['plane'][image_index], WIDTH, HEIGHT, gt_dict['info'][image_index])
-            allDepths = np.concatenate([planeDepths, pred_dict['np_depth'][image_index]], axis=2)
-            #boundaries = np.concatenate([np.ones((allSegmentations.shape[0], allSegmentations.shape[1], 1)), -np.ones((allSegmentations.shape[0], allSegmentations.shape[1], 1))], axis=2)
-            if options.imageIndex >= 0:
-                boundaries = cv2.imread(options.test_dir + '/' + str(options.imageIndex) + '_boundary.png')                
-            else:
-                boundaries = cv2.imread(options.test_dir + '/' + str(image_index) + '_boundary.png')
-                pass
-            boundaries = (boundaries > 128).astype(np.float32)[:, :, :2]
-            
-            pred_s = refineSegmentation(allSegmentations, allDepths, boundaries, numOutputPlanes = 20, numIterations=20, numProposals=5)
-            pred_d = allDepths.reshape(-1, options.numOutputPlanes + 1)[np.arange(WIDTH * HEIGHT), pred_s.reshape(-1)].reshape(HEIGHT, WIDTH)
-            
-            predSegmentations.append(pred_s)
-            predDepths.append(pred_d)
-            
-            cv2.imwrite(options.test_dir + '/' + str(image_index) + '_depth_pred_' + str(4) + '.png', drawDepthImage(pred_d))            
-            cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_pred_' + str(4) + '.png', drawSegmentationImage(pred_s))
+    #post processing
+    for method_index, method in enumerate(options.methods):
+        if method[1] == 'crf':
+            pred_dict = predictions[method_index]
+            predSegmentations = []
+            predDepths = []
+            for image_index in xrange(options.numImages):
+                boundaries = pred_dict['boundary'][image_index]            
+                cv2.imwrite(options.test_dir + '/' + str(image_index) + '_boundary.png', drawMaskImage(np.concatenate([boundaries, np.zeros((HEIGHT, WIDTH, 1))], axis=2)))
 
-            cv2.imwrite(options.test_dir + '/mask_' + str(21) + '.png', drawDepthImage(pred_dict['np_depth'][0]))
-            for plane_index in xrange(options.numOutputPlanes + 1):
-                cv2.imwrite(options.test_dir + '/mask_' + str(plane_index) + '.png', drawMaskImage(pred_s == plane_index))
+                allSegmentations = np.concatenate([pred_dict['segmentation'][image_index], pred_dict['np_mask'][image_index]], axis=2)
+                planeDepths = calcPlaneDepths(pred_dict['plane'][image_index], WIDTH, HEIGHT, gt_dict['info'][image_index])
+                allDepths = np.concatenate([planeDepths, pred_dict['np_depth'][image_index]], axis=2)
+                #boundaries = np.concatenate([np.ones((allSegmentations.shape[0], allSegmentations.shape[1], 1)), -np.ones((allSegmentations.shape[0], allSegmentations.shape[1], 1))], axis=2)
+                #if options.imageIndex >= 0:
+                #boundaries = cv2.imread(options.test_dir + '/' + str(options.imageIndex) + '_boundary.png')                
+                #else:
+                #boundaries = cv2.imread(options.test_dir + '/' + str(image_index) + '_boundary.png')
+                #pass
+                #boundaries = (boundaries > 128).astype(np.float32)[:, :, :2]
+            
+                pred_s = refineSegmentation(allSegmentations, allDepths, boundaries, numOutputPlanes = 20, numIterations=20, numProposals=5)
+                pred_d = allDepths.reshape(-1, options.numOutputPlanes + 1)[np.arange(WIDTH * HEIGHT), pred_s.reshape(-1)].reshape(HEIGHT, WIDTH)
+            
+                predSegmentations.append(pred_s)
+                predDepths.append(pred_d)
+            
+                cv2.imwrite(options.test_dir + '/' + str(image_index) + '_depth_pred_' + str(method_index) + '.png', drawDepthImage(pred_d))            
+                cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_pred_' + str(method_index) + '.png', drawSegmentationImage(pred_s))
+
+                #cv2.imwrite(options.test_dir + '/mask_' + str(21) + '.png', drawDepthImage(pred_dict['np_depth'][0]))
+                #for plane_index in xrange(options.numOutputPlanes + 1):
+                #cv2.imwrite(options.test_dir + '/mask_' + str(plane_index) + '.png', drawMaskImage(pred_s == plane_index))
+                #continue
                 continue
-            continue
-        
-        new_pred_dict = {}
-        for key, value in pred_dict.iteritems():
-            new_pred_dict[key] = value
-            continue
-        new_pred_dict['segmentation'] = np.array(predSegmentations)
-        new_pred_dict['depth'] = np.array(predDepths)
-        predictions.append(new_pred_dict)
-        titles.append('planenet+CRF')
-        pass
+                
+            new_pred_dict = {}
+            for key, value in pred_dict.iteritems():
+                new_pred_dict[key] = value
+                continue
+            new_pred_dict['segmentation'] = np.array(predSegmentations)
+            new_pred_dict['depth'] = np.array(predDepths)
+            predictions[method_index] = new_pred_dict
+            pass
+        elif method[1] == 'semantics':
+            pred_dict = predictions[1]
+            predPlanes = []        
+            predSegmentations = []
+            predDepths = []        
+            for image_index in xrange(options.numImages):
+                depth = pred_dict['depth'][image_index]
+                semantics = cv2.imread(options.test_dir + '/' + str(image_index) + '_semantics.png', 0)
+                semantics = np.round(semantics.astype(np.float32) / 5)
+                if 'info' in gt_dict:
+                    options.camera = getCameraFromInfo(gt_dict['info'][0])
+                    pass
 
-    if options.useSemantics:
-        pred_dict = predictions[1]
-        predPlanes = []        
-        predSegmentations = []
-        predDepths = []        
-        for image_index in xrange(options.numImages):
-            depth = pred_dict['depth'][image_index]
-            semantics = cv2.imread(options.test_dir + '/' + str(image_index) + '_semantics.png', 0)
-            semantics = np.round(semantics.astype(np.float32) / 5)
-            if 'info' in gt_dict:
-                options.camera = getCameraFromInfo(gt_dict['info'][0])
-                pass
-            
-            pred_p, pred_s, pred_d = fitPlanesSegmentation(depth, semantics, options.camera, gt_dict['info'][0], numPlanes=20, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=0.2)
-            predPlanes.append(pred_p)
-            predSegmentations.append(pred_s)
-            predDepths.append(pred_d)
-            
-            cv2.imwrite(options.test_dir + '/' + str(image_index) + '_depth_pred_' + str(5) + '.png', drawDepthImage(pred_d))
-            cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_pred_' + str(5) + '.png', drawSegmentationImage(pred_s))
-            continue
-        new_pred_dict = {}
-        for key, value in pred_dict.iteritems():
-            new_pred_dict[key] = value
-            continue
-        new_pred_dict['segmentation'] = np.array(predSegmentations)
-        new_pred_dict['depth'] = np.array(predDepths)
-        new_pred_dict['plane'] = np.array(predPlanes)
-        predictions.append(new_pred_dict)
-        titles.append('pixelwise+semantics+RANSAC')
-        pass    
+                pred_p, pred_s, pred_d = fitPlanesSegmentation(depth, semantics, options.camera, gt_dict['info'][0], numPlanes=20, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=0.2)
+                predPlanes.append(pred_p)
+                predSegmentations.append(pred_s)
+                predDepths.append(pred_d)
+
+                cv2.imwrite(options.test_dir + '/' + str(image_index) + '_depth_pred_' + str(5) + '.png', drawDepthImage(pred_d))
+                cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_pred_' + str(5) + '.png', drawSegmentationImage(pred_s))
+                continue
+            new_pred_dict = {}
+            for key, value in pred_dict.iteritems():
+                new_pred_dict[key] = value
+                continue
+            new_pred_dict['segmentation'] = np.array(predSegmentations)
+            new_pred_dict['depth'] = np.array(predDepths)
+            new_pred_dict['plane'] = np.array(predPlanes)
+            predictions[method_index] = new_pred_dict
+            #titles.append('pixelwise+semantics+RANSAC')
+            pass                
+        continue
+
     
     #print(results)
 
@@ -258,14 +260,14 @@ def evaluatePlanePrediction(options):
     xs.append((np.arange(11) * 0.05).tolist())    
     xlabels = ['IOU', 'IOU', 'IOU', 'plane diff', 'plane diff', 'plane diff']
     curve_titles = ['plane diff 0.1', 'plane diff 0.3', 'plane diff 0.5', 'IOU 0.3', 'IOU 0.5', 'IOU 0.7']
-    #titles.remove('pixelwise')
+    curve_labels = [title for title in titles if title != 'pixelwise']
     for metric_index, curves in enumerate(pixel_metric_curves):
         filename = options.test_dir + '/curve_pixel_' + curve_titles[metric_index].replace(' ', '_') + '.png'
-        plotCurves(xs[metric_index], curves, filename = filename, xlabel=xlabels[metric_index], ylabel='pixel coverage', title=curve_titles[metric_index], labels=titles)
+        plotCurves(xs[metric_index], curves, filename = filename, xlabel=xlabels[metric_index], ylabel='pixel coverage', title=curve_titles[metric_index], labels=curve_labels)
         continue
     for metric_index, curves in enumerate(plane_metric_curves):
         filename = options.test_dir + '/curve_plane_' + curve_titles[metric_index].replace(' ', '_') + '.png'
-        plotCurves(xs[metric_index], curves, filename = filename, xlabel=xlabels[metric_index], ylabel='plane accuracy', title=curve_titles[metric_index], labels=titles)
+        plotCurves(xs[metric_index], curves, filename = filename, xlabel=xlabels[metric_index], ylabel='plane accuracy', title=curve_titles[metric_index], labels=curve_labels)
         continue
 
     writeHTML(options)
@@ -775,6 +777,4 @@ if __name__=='__main__':
         evaluatePlanePrediction(args)
     elif args.task == 'depth':
         evaluateDepthPrediction(args)
-        pass
-
         pass

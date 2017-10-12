@@ -229,19 +229,24 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
             boundary_loss += tf.reduce_mean(tf.losses.sigmoid_cross_entropy(logits=global_pred_dict['boundary'], multi_class_labels=global_gt_dict['boundary'], weights=tf.maximum(global_gt_dict['boundary'] * 3, 1))) * 1000
             pass
 
-          
+
+        label_loss = tf.constant(0)
+        if options.labelLoss == 1:
+            label_loss = tf.reduce_mean(tf.reduce_max(all_segmentations_softmax, axis=[1, 2])) * 100
+            pass
+        
         #regularization
         l2_losses = tf.add_n([options.l2Weight * tf.nn.l2_loss(v) for v in tf.trainable_variables() if 'weights' in v.name])
 
 
-        loss = plane_loss + segmentation_loss + depth_loss + normal_loss + plane_confidence_loss + diverse_loss + boundary_loss + local_score_loss + local_plane_loss + local_mask_loss + l2_losses
+        loss = plane_loss + segmentation_loss + depth_loss + normal_loss + plane_confidence_loss + diverse_loss + boundary_loss + local_score_loss + local_plane_loss + local_mask_loss + label_loss + l2_losses
 
         #if options.pixelwiseLoss:
         #normal_loss = tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_normal'], global_gt_dict['normal'])) * 1000
         #depth_loss = tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_depth'], global_gt_dict['depth']) * validDepthMask) * 1000
         #pass
 
-        loss_dict = {'plane': plane_loss, 'segmentation': segmentation_loss, 'depth': depth_loss, 'normal': normal_loss, 'boundary': boundary_loss, 'diverse': diverse_loss, 'confidence': plane_confidence_loss, 'local_score': local_score_loss, 'local_plane': local_plane_loss, 'local_mask': local_mask_loss}
+        loss_dict = {'plane': plane_loss, 'segmentation': segmentation_loss, 'depth': depth_loss, 'normal': normal_loss, 'boundary': boundary_loss, 'diverse': diverse_loss, 'confidence': plane_confidence_loss, 'local_score': local_score_loss, 'local_plane': local_plane_loss, 'local_mask': local_mask_loss, 'label': label_loss}
         pass
     debug_dict = {}
     return loss, loss_dict, debug_dict
@@ -353,20 +358,20 @@ def main(options):
             sess.run(batchno.assign(1))
         elif options.restore == 3:            
             #restore the same model from standard training
-            if options.predictBoundary == 1:
-                var_to_restore = [v for v in var_to_restore if 'boundary' not in v.name]
-                pass            
-            if options.predictConfidence == 1:
-                var_to_restore = [v for v in var_to_restore if 'confidence' not in v.name]
-                pass
+            # if options.predictBoundary == 1:
+            #     var_to_restore = [v for v in var_to_restore if 'boundary' not in v.name]
+            #     pass            
+            # if options.predictConfidence == 1:
+            #     var_to_restore = [v for v in var_to_restore if 'confidence' not in v.name]
+            #     pass
             
             loader = tf.train.Saver(var_to_restore)
-            loader.restore(sess,"/mnt/vision/PlaneNet/checkpoint/planenet_hybrid12_pb_pp/checkpoint.ckpt")
+            loader.restore(sess, '/mnt/vision/PlaneNet/checkpoint/planenet_hybrid' + options.hybrid + '_pb_pp/checkpoint.ckpt')
             #loader.restore(sess,"checkpoint/planenet/checkpoint.ckpt")
             sess.run(batchno.assign(1))
         elif options.restore == 4:
             #fine-tune another model
-            var_to_restore = [v for v in var_to_restore if 'res4b22_relu_non_plane' not in v.name]
+            #var_to_restore = [v for v in var_to_restore if 'res4b22_relu_non_plane' not in v.name]
             loader = tf.train.Saver(var_to_restore)
             loader.restore(sess, options.fineTuningCheckpoint)
             sess.run(batchno.assign(1))
@@ -1131,6 +1136,9 @@ def parse_args():
     parser.add_argument('--diverseLoss', dest='diverseLoss',
                         help='use diverse loss: [0, 1]',
                         default=1, type=int)
+    parser.add_argument('--labelLoss', dest='labelLoss',
+                        help='use label loss: [0, 1]',
+                        default=0, type=int)    
     parser.add_argument('--deepSupervision', dest='deepSupervision',
                         help='deep supervision level: [0, 1, 2]',
                         default=1, type=int)
@@ -1190,6 +1198,9 @@ def parse_args():
     if args.diverseLoss == 0:
         args.keyname += '_dl0'
         pass
+    if args.labelLoss == 1:
+        args.keyname += '_ll1'
+        pass    
     if args.deepSupervision != 1:
         args.keyname += '_ds' + str(args.deepSupervision)
         pass
@@ -1198,7 +1209,7 @@ def parse_args():
         pass
     if args.backwardLossWeight > 0:
         args.keyname += '_bw' + str(args.backwardLossWeight)
-        pass    
+        pass
     if args.predictBoundary == 1:
         args.keyname += '_pb'
         pass
