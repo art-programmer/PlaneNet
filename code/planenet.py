@@ -17,6 +17,9 @@ class PlaneNet(Network):
           options: contains network configuration parameters
         '''
 
+        nChannels_3 = 1024
+        nChannels_4 = 1024
+        nChannels_5 = 2048
         if False: # Dilated Residual Networks change the first few layers to deal with the gridding issue
             (self.feed('img_inp')
                  .conv(7, 7, 64, 2, 2, biased=False, relu=False, name='conv1')
@@ -153,7 +156,7 @@ class PlaneNet(Network):
                    'bn3b3_branch2c')
              .add(name='res3b3')
              .relu(name='res3b3_relu')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4a_branch1')
+             .conv(1, 1, nChannels_3, 1, 1, biased=False, relu=False, name='res4a_branch1')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4a_branch1'))
 
         (self.feed('res3b3_relu')
@@ -161,7 +164,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4a_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4a_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4a_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4a_branch2c')
+             .conv(1, 1, nChannels_3, 1, 1, biased=False, relu=False, name='res4a_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4a_branch2c'))
 
         (self.feed('bn4a_branch1', 
@@ -172,7 +175,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b1_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b1_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b1_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b1_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b1_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b1_branch2c'))
 
         (self.feed('res4a_relu', 
@@ -183,7 +186,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b2_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b2_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b2_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b2_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b2_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b2_branch2c'))
 
         (self.feed('res4b1_relu', 
@@ -194,7 +197,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b3_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b3_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b3_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b3_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b3_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b3_branch2c'))
 
         (self.feed('res4b2_relu', 
@@ -205,7 +208,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b4_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b4_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b4_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b4_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b4_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b4_branch2c'))
 
         (self.feed('res4b3_relu', 
@@ -216,7 +219,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b5_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b5_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b5_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b5_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b5_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b5_branch2c'))
 
         (self.feed('res4b4_relu', 
@@ -227,7 +230,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b6_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b6_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b6_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b6_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b6_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b6_branch2c'))
 
         (self.feed('res4b5_relu', 
@@ -238,7 +241,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b7_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b7_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b7_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b7_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b7_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b7_branch2c'))
 
         (self.feed('res4b6_relu', 
@@ -249,7 +252,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b8_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b8_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b8_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b8_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b8_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b8_branch2c'))
 
         (self.feed('res4b7_relu', 
@@ -260,7 +263,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b9_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b9_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b9_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b9_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b9_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b9_branch2c'))
 
         (self.feed('res4b8_relu', 
@@ -271,7 +274,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b10_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b10_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b10_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b10_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b10_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b10_branch2c'))
 
         (self.feed('res4b9_relu', 
@@ -282,7 +285,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b11_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b11_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b11_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b11_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b11_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b11_branch2c'))
 
         (self.feed('res4b10_relu', 
@@ -293,7 +296,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b12_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b12_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b12_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b12_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b12_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b12_branch2c'))
 
         (self.feed('res4b11_relu', 
@@ -304,7 +307,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b13_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b13_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b13_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b13_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b13_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b13_branch2c'))
 
         (self.feed('res4b12_relu', 
@@ -315,7 +318,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b14_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b14_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b14_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b14_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b14_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b14_branch2c'))
 
         (self.feed('res4b13_relu', 
@@ -326,7 +329,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b15_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b15_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b15_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b15_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b15_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b15_branch2c'))
 
         (self.feed('res4b14_relu', 
@@ -337,7 +340,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b16_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b16_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b16_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b16_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b16_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b16_branch2c'))
 
         (self.feed('res4b15_relu', 
@@ -348,7 +351,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b17_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b17_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b17_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b17_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b17_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b17_branch2c'))
 
         (self.feed('res4b16_relu', 
@@ -359,7 +362,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b18_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b18_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b18_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b18_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b18_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b18_branch2c'))
 
         (self.feed('res4b17_relu', 
@@ -370,7 +373,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b19_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b19_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b19_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b19_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b19_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b19_branch2c'))
 
         (self.feed('res4b18_relu', 
@@ -381,7 +384,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b20_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b20_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b20_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b20_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b20_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b20_branch2c'))
 
         (self.feed('res4b19_relu', 
@@ -392,7 +395,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b21_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b21_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b21_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b21_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b21_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b21_branch2c'))
 
         (self.feed('res4b20_relu', 
@@ -403,14 +406,14 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b22_branch2a')
              .atrous_conv(3, 3, 256, 2, padding='SAME', biased=False, relu=False, name='res4b22_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn4b22_branch2b')
-             .conv(1, 1, 1024, 1, 1, biased=False, relu=False, name='res4b22_branch2c')
+             .conv(1, 1, nChannels_4, 1, 1, biased=False, relu=False, name='res4b22_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn4b22_branch2c'))
 
         (self.feed('res4b21_relu', 
                    'bn4b22_branch2c')
              .add(name='res4b22')
              .relu(name='res4b22_relu')
-             .conv(1, 1, 2048, 1, 1, biased=False, relu=False, name='res5a_branch1')
+             .conv(1, 1, nChannels_5, 1, 1, biased=False, relu=False, name='res5a_branch1')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn5a_branch1'))
 
         (self.feed('res4b22_relu')
@@ -418,7 +421,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn5a_branch2a')
              .atrous_conv(3, 3, 512, 4, padding='SAME', biased=False, relu=False, name='res5a_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn5a_branch2b')
-             .conv(1, 1, 2048, 1, 1, biased=False, relu=False, name='res5a_branch2c')
+             .conv(1, 1, nChannels_5, 1, 1, biased=False, relu=False, name='res5a_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn5a_branch2c'))
 
         (self.feed('bn5a_branch1', 
@@ -429,7 +432,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn5b_branch2a')
              .atrous_conv(3, 3, 512, 4, padding='SAME', biased=False, relu=False, name='res5b_branch2b')
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn5b_branch2b')
-             .conv(1, 1, 2048, 1, 1, biased=False, relu=False, name='res5b_branch2c')
+             .conv(1, 1, nChannels_5, 1, 1, biased=False, relu=False, name='res5b_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn5b_branch2c'))
 
         (self.feed('res5a_relu', 
@@ -440,7 +443,7 @@ class PlaneNet(Network):
              .batch_normalization(is_training=is_training, activation_fn=tf.nn.relu, name='bn5c_branch2a')
              .atrous_conv(3, 3, 512, 4, padding='SAME', biased=False, relu=False, name='res5c_branch2b')
              .batch_normalization(activation_fn=tf.nn.relu, name='bn5c_branch2b', is_training=is_training)
-             .conv(1, 1, 2048, 1, 1, biased=False, relu=False, name='res5c_branch2c')
+             .conv(1, 1, nChannels_5, 1, 1, biased=False, relu=False, name='res5c_branch2c')
              .batch_normalization(is_training=is_training, activation_fn=None, name='bn5c_branch2c'))
 
         (self.feed('res5b_relu', 
@@ -505,7 +508,7 @@ class PlaneNet(Network):
 
                     
                     (self.feed(layer+'_pool1')
-                         .reshape(shape=[-1, 1024], name=layer+'_plane_reshape1')
+                         .reshape(shape=[-1, nChannels_4], name=layer+'_plane_reshape1')
                          .fc(num_out=options.numOutputPlanes * 3, name=layer+'_plane_fc', relu=False)
                          .reshape(shape=[-1, options.numOutputPlanes, 3], name=layer+'_plane_pred'))
 
@@ -543,7 +546,7 @@ class PlaneNet(Network):
 
 
         (self.feed('res5d_pool1')
-             .reshape(shape=[-1, 2048], name='plane_reshape1')
+             .reshape(shape=[-1, nChannels_5], name='plane_reshape1')
              .fc(num_out=options.numOutputPlanes * 3, name='plane_fc', relu=False)
              .reshape(shape=[-1, options.numOutputPlanes, 3], name='plane_pred'))
 
