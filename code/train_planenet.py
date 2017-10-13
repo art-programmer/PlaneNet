@@ -68,6 +68,18 @@ def build_graph(img_inp_train, img_inp_val, training_flag, options):
             #pass
             deep_pred_dicts.append(pred_dict)
             continue
+
+        
+        if options.anchorPlanes:
+            anchors_np = np.load('dump/anchors_' + options.hybrid + '.npy')
+            anchors = tf.reshape(tf.constant(anchors_np.reshape(-1)), anchors_np.shape)
+            anchors = tf.tile(tf.expand_dims(anchors, 0), [options.batchSize, 1, 1])
+            all_pred_dicts = deep_pred_dicts + [global_pred_dict]            
+            for pred_index, pred_dict in enumerate(all_pred_dicts):
+                all_pred_dicts[pred_index]['plane'] += anchors
+                continue
+            pass
+        
         pass
     
     return global_pred_dict, local_pred_dict, deep_pred_dicts
@@ -99,9 +111,10 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
         previous_plane_gt = None
         previous_plane_confidence_gt = None        
         previous_segmentation_gt = None
-        if options.useAnchors:
+        if options.anchorPlanes:
             anchors_np = np.load('dump/anchors_' + options.hybrid + '.npy')
             anchors = tf.reshape(tf.constant(anchors_np.reshape(-1)), anchors_np.shape)
+            anchors = tf.tile(tf.expand_dims(anchors, 0), [options.batchSize, 1, 1])
             dists_forward, map_forward, dists_backward, _ = tf_nndistance.nn_distance(global_gt_dict['plane'], anchors)
                             
             forward_map = tf.one_hot(map_forward, depth=options.numOutputPlanes, axis=-1)
@@ -111,18 +124,21 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
             num_matches = tf.transpose(tf.reduce_sum(forward_map, axis=1, keep_dims=True), [0, 2, 1])
             previous_plane_gt = tf.transpose(tf.matmul(global_gt_dict['plane'], forward_map, transpose_a=True), [0, 2, 1]) / tf.maximum(num_matches, 1e-4)
             previous_plane_confidence_gt = tf.cast(num_matches > 0.5, tf.float32)
+
+            segmentation_gt_shuffled = tf.reshape(tf.matmul(tf.reshape(global_gt_dict['segmentation'], [-1, HEIGHT * WIDTH, options.numOutputPlanes]), forward_map), [-1, HEIGHT, WIDTH, options.numOutputPlanes])
+            segmentation_gt_shuffled = tf.concat([segmentation_gt_shuffled, global_gt_dict['non_plane_mask']], axis=3)
+            previous_segmentation_gt = segmentation_gt_shuffled
             pass
         
         for pred_index, pred_dict in enumerate(all_pred_dicts):
-            if (options.sameMatching and pred_index > 0) or options.useAnchors:
+            if (options.sameMatching and pred_index > 0) or options.anchorPlanes:
                 #use matching from previous supervision and map ground truth planes based on the mapping
 
-                plane_loss += tf.reduce_mean(tf.squared_difference(pred_dict['plane'], plane_gt_shuffled) * plane_confidence_gt) * 10000
+                plane_loss += tf.reduce_mean(tf.squared_difference(pred_dict['plane'], previous_plane_gt) * previous_plane_confidence_gt) * 10000
                 
                 #all segmentations is the concatenation of plane segmentations and non plane mask
                 all_segmentations = tf.concat([pred_dict['segmentation'], pred_dict['non_plane_mask']], axis=3)
-                segmentation_gt_shuffled = previous_segmentation_gt
-                segmentation_loss += tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=all_segmentations, labels=segmentation_gt_shuffled)) * 1000
+                segmentation_loss += tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=all_segmentations, labels=previous_segmentation_gt)) * 1000
                 
             else:
                 #calculate new matching by finding nearest neighbors again
