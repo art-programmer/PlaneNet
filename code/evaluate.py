@@ -21,8 +21,8 @@ from planenet import PlaneNet
 from RecordReaderAll import *
 from SegmentationRefinement import refineSegmentation
 
-ALL_TITLES = ['planenet', 'pixelwise', 'pixelwise+RANSAC', 'depth observation+RANSAC', 'planenet+crf', 'pixelwise+semantics+RANSAC', 'gt']
-ALL_METHODS = [('pb_pp', ''), ('pb_pp', 'pixelwise_1'), ('pb_pp', 'pixelwise_2'), ('pb_pp', 'pixelwise_3'), ('pb_pp', 'crf'), ('pb_pp', 'pixelwise_4'), ('pb_pp', 'gt')]
+ALL_TITLES = ['planenet', 'planenet label loss', 'planenet anchor', 'pixelwise', 'pixelwise+RANSAC', 'depth observation+RANSAC', 'planenet+crf', 'pixelwise+semantics+RANSAC', 'gt']
+ALL_METHODS = [('pb_pp', ''), ('ll1_pb_pp', ''), ('ll1_pb_pp_ap1', ''), ('pb_pp', 'pixelwise_1'), ('pb_pp', 'pixelwise_2'), ('pb_pp', 'pixelwise_3'), ('pb_pp', 'crf'), ('pb_pp', 'pixelwise_4'), ('pb_pp', 'gt')]
 
 def writeHTML(options):
     from html import HTML
@@ -235,7 +235,7 @@ def evaluatePlanePrediction(options):
     pixel_metric_curves = [[], [], [], [], [], []]
     plane_metric_curves = [[], [], [], [], [], []]
     for method_index, pred_dict in enumerate(predictions):
-        if method_index == 1:
+        if titles[method_index] == 'pixelwise':
             continue
         segmentations = pred_dict['segmentation']
         if method_index == 0:
@@ -424,15 +424,22 @@ def getResults(options):
     gt_dict = getGroundTruth(options)
 
     
-    options.deepSupervisionLayers = ['res4b22_relu', ]
-    options.predictConfidence = 0
-    options.predictLocal = 0
-    options.predictPixelwise = 1
-    options.predictBoundary = 1
-
+    
     predictions = []
     for method_index, method in enumerate(methods):
-        options.checkpoint_dir = checkpoint_prefix + options.hybrid + '_' + method[0]
+
+        options.deepSupervisionLayers = ['res4b22_relu', ]
+        options.predictConfidence = 0
+        options.predictLocal = 0
+        options.predictPixelwise = 1
+        options.predictBoundary = 1
+        options.anchorPlanes = 0
+        
+        if 'ap1' in method[0]:
+            options.anchorPlanes = 1            
+            pass
+        
+        options.checkpoint_dir = checkpoint_prefix + 'hybrid' + options.hybrid + '_' + method[0]
         options.suffix = method[1]
 
         pred_dict = getPrediction(options)
@@ -752,8 +759,8 @@ if __name__=='__main__':
                         default='/mnt/vision/PlaneNet/', type=str)
     
     args = parser.parse_args()
-    args.hybrid = 'hybrid' + args.hybrid
-    args.test_dir = 'evaluate/' + args.task + '/' + args.dataset + '/' + args.hybrid + '/'
+    #args.hybrid = 'hybrid' + args.hybrid
+    args.test_dir = 'evaluate/' + args.task + '/' + args.dataset + '/hybrid' + args.hybrid + '/'
     args.visualizeImages = min(args.visualizeImages, args.numImages)
     if args.imageIndex >= 0:
         args.visualizeImages = 1

@@ -1510,7 +1510,8 @@ def evaluatePlaneSegmentation(predPlanes, predSegmentations, gtPlanes, gtSegment
     #print(gtPlanes[0])
     #print(predPlanes[0])
     #print(planeDiffs[0])
-    
+
+    planeAreas = np.sum(np.sum(gtSegmentations, axis=1), axis=1)
     intersection = np.sum((np.expand_dims(gtSegmentations, -1) * np.expand_dims(predSegmentations, 3) > 0.5).astype(np.float32), axis=(1, 2))
     union = np.sum((np.expand_dims(gtSegmentations, -1) + np.expand_dims(predSegmentations, 3) > 0.5).astype(np.float32), axis=(1, 2))
     planeIOUs = intersection / np.maximum(union, 1e-4)
@@ -1535,7 +1536,7 @@ def evaluatePlaneSegmentation(predPlanes, predSegmentations, gtPlanes, gtSegment
         pixelRecalls = []
         for step in xrange(int(1 / stride + 1)):
             IOU = step * stride
-            pixelRecalls.append((intersection * (planeIOUs >= IOU).astype(np.float32) * diffMask).sum() / totalNumPixels)
+            pixelRecalls.append(np.minimum((intersection * (planeIOUs >= IOU).astype(np.float32) * diffMask).sum(2), planeAreas).sum() / totalNumPixels)
             planeRecalls.append(float(((maxIOU >= IOU) * planeMask).sum()) / totalNumPlanes)            
             continue
 
@@ -1559,7 +1560,7 @@ def evaluatePlaneSegmentation(predPlanes, predSegmentations, gtPlanes, gtSegment
         pixelRecalls = []
         for step in xrange(int(0.5 / stride + 1)):
             diff = step * stride
-            pixelRecalls.append((intersection * (planeDiffs <= diff).astype(np.float32) * IOUMask).sum() / totalNumPixels)
+            pixelRecalls.append(np.minimum((intersection * (planeDiffs <= diff).astype(np.float32) * IOUMask).sum(1), planeAreas).sum() / totalNumPixels)
             planeRecalls.append(float(((minDiff <= diff) * planeMask).sum()) / totalNumPlanes)
             continue
         
