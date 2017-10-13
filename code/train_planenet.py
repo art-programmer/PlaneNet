@@ -96,21 +96,28 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
         diverse_loss = tf.constant(0.0)
         
         #keep forward map (segmentation gt) from previous supervision so that we can have same matching for all supervisions (options.sameMatching = 1)
-        previous_forward_map = None
+        previous_plane_gt = None
+        previous_plane_confidence_gt = None        
         previous_segmentation_gt = None
+        if options.useAnchors:
+            anchors_np = np.load('dump/anchors_' + options.hybrid + '.npy')
+            anchors = tf.reshape(tf.constant(anchors_np.reshape(-1)), anchors_np.shape)
+            dists_forward, map_forward, dists_backward, _ = tf_nndistance.nn_distance(global_gt_dict['plane'], anchors)
+                            
+            forward_map = tf.one_hot(map_forward, depth=options.numOutputPlanes, axis=-1)
+            forward_map *= tf.expand_dims(validPlaneMask, -1)
+                
+            #number of ground truth mapped for each prediction
+            num_matches = tf.transpose(tf.reduce_sum(forward_map, axis=1, keep_dims=True), [0, 2, 1])
+            previous_plane_gt = tf.transpose(tf.matmul(global_gt_dict['plane'], forward_map, transpose_a=True), [0, 2, 1]) / tf.maximum(num_matches, 1e-4)
+            previous_plane_confidence_gt = tf.cast(num_matches > 0.5, tf.float32)
+            pass
+        
         for pred_index, pred_dict in enumerate(all_pred_dicts):
-            if options.sameMatching and pred_index > 0:
+            if (options.sameMatching and pred_index > 0) or options.useAnchors:
                 #use matching from previous supervision and map ground truth planes based on the mapping
-                forward_map = previous_forward_map
 
-                #number of ground truth mapped for each prediction
-                num_matches = tf.transpose(tf.reduce_sum(forward_map, axis=1, keep_dims=True), [0, 2, 1])
-
-
-                plane_gt_shuffled = tf.transpose(tf.matmul(global_gt_dict['plane'], forward_map, transpose_a=True), [0, 2, 1]) / tf.maximum(num_matches, 1e-4)
-                plane_confidence_gt = tf.cast(num_matches > 0.5, tf.float32)
                 plane_loss += tf.reduce_mean(tf.squared_difference(pred_dict['plane'], plane_gt_shuffled) * plane_confidence_gt) * 10000
-
                 
                 #all segmentations is the concatenation of plane segmentations and non plane mask
                 all_segmentations = tf.concat([pred_dict['segmentation'], pred_dict['non_plane_mask']], axis=3)
@@ -129,7 +136,11 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
                 forward_map = tf.one_hot(map_forward, depth=options.numOutputPlanes, axis=-1)
                 forward_map *= tf.expand_dims(validPlaneMask, -1)
                 
-                previous_forward_map = forward_map
+                #number of ground truth mapped for each prediction
+                num_matches = tf.transpose(tf.reduce_sum(forward_map, axis=1, keep_dims=True), [0, 2, 1])
+                previous_plane_gt = tf.transpose(tf.matmul(global_gt_dict['plane'], forward_map, transpose_a=True), [0, 2, 1]) / tf.maximum(num_matches, 1e-4)
+                previous_plane_confidence_gt = tf.cast(num_matches > 0.5, tf.float32)
+                
                                               
                 segmentation_gt_shuffled = tf.reshape(tf.matmul(tf.reshape(global_gt_dict['segmentation'], [-1, HEIGHT * WIDTH, options.numOutputPlanes]), forward_map), [-1, HEIGHT, WIDTH, options.numOutputPlanes])
                 segmentation_gt_shuffled = tf.concat([segmentation_gt_shuffled, global_gt_dict['non_plane_mask']], axis=3)
@@ -1143,8 +1154,11 @@ def parse_args():
                         help='deep supervision level: [0, 1, 2]',
                         default=1, type=int)
     parser.add_argument('--sameMatching', dest='sameMatching',
-                        help='use the matching for all deep supervision layers and the final prediction: [0, 1]',
+                        help='use the same matching for all deep supervision layers and the final prediction: [0, 1]',
                         default=1, type=int)    
+    parser.add_argument('--anchorPlanes', dest='anchorPlanes',
+                        help='use anchor planes for all deep supervision layers and the final prediction: [0, 1]',
+                        default=0, type=int) 
     parser.add_argument('--crf', dest='crf',
                         help='the number of CRF iterations',
                         default=0, type=int)
@@ -1224,6 +1238,9 @@ def parse_args():
         pass    
     if args.sameMatching == 0:
         args.keyname += '_sm0'
+        pass
+    if args.anchorPlanes == 1:
+        args.keyname += '_ap1'
         pass
 
     

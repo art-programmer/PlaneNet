@@ -21,8 +21,8 @@ from planenet import PlaneNet
 from RecordReaderAll import *
 from SegmentationRefinement import refineSegmentation
 
-ALL_TITLES = ['planenet', 'pixelwise', 'pixelwise+RANSAC', 'depth observation+RANSAC', 'planenet+crf', 'pixelwise+semantics+RANSAC', 'gt']
-ALL_METHODS = [('pb_pp', ''), ('pb_pp', 'pixelwise_1'), ('pb_pp', 'pixelwise_2'), ('pb_pp', 'pixelwise_3'), ('pb_pp', 'crf'), ('pb_pp', 'pixelwise_4'), ('pb_pp', 'gt')]
+ALL_TITLES = ['planenet', 'planenet label loss', 'pixelwise', 'pixelwise+RANSAC', 'depth observation+RANSAC', 'planenet+crf', 'pixelwise+semantics+RANSAC', 'gt']
+ALL_METHODS = [('pb_pp', ''), ('ll1_pb_pp', ''), ('pb_pp', 'pixelwise_1'), ('pb_pp', 'pixelwise_2'), ('pb_pp', 'pixelwise_3'), ('pb_pp', 'crf'), ('pb_pp', 'pixelwise_4'), ('pb_pp', 'gt')]
 
 def writeHTML(options):
     from html import HTML
@@ -235,7 +235,7 @@ def evaluatePlanePrediction(options):
     pixel_metric_curves = [[], [], [], [], [], []]
     plane_metric_curves = [[], [], [], [], [], []]
     for method_index, pred_dict in enumerate(predictions):
-        if method_index == 1:
+        if titles[method_index] == 'pixelwise':
             continue
         segmentations = pred_dict['segmentation']
         if method_index == 0:
