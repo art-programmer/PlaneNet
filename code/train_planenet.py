@@ -364,7 +364,7 @@ def main(options):
             # if options.predictConfidence == 1:
             #     var_to_restore = [v for v in var_to_restore if 'confidence' not in v.name]
             #     pass
-            
+            var_to_restore = [v for v in var_to_restore if 'segmentation_conv1' not in v.name]
             loader = tf.train.Saver(var_to_restore)
             loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + options.hybrid + '_pb_pp/checkpoint.ckpt')
             #loader.restore(sess,"checkpoint/planenet/checkpoint.ckpt")
