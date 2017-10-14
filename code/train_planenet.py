@@ -79,14 +79,14 @@ def build_graph(img_inp_train, img_inp_val, training_flag, options):
                 all_pred_dicts[pred_index]['plane'] += anchors
                 continue
             pass
-        
+
         pass
     
     return global_pred_dict, local_pred_dict, deep_pred_dicts
 
 
 def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_gt_dict_val, training_flag, options):
-    with tf.device('/gpu:%d'%options.gpu_id):
+    with tf.device('/gpu:%d'%options.gpu_id):        
         global_gt_dict = {}
         for name in global_gt_dict_train.keys():
             global_gt_dict[name] = tf.cond(training_flag, lambda: global_gt_dict_train[name], lambda: global_gt_dict_val[name])
@@ -95,6 +95,14 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
         # for name in local_gt_dict_train.keys():
         #     local_gt_dict[name] = tf.cond(tf.equal(training_flag % 2, 0), lambda: local_gt_dict_train[name], lambda: local_gt_dict_val[name])
         #     continue
+
+        plane_parameters = tf.reshape(global_pred_dict['plane'], (-1, 3))
+        info = global_gt_dict['info'][0]
+        plane_depths = planeDepthsModule(plane_parameters, WIDTH, HEIGHT, info)
+        plane_depths = tf.transpose(tf.reshape(plane_depths, [HEIGHT, WIDTH, -1, options.numOutputPlanes]), [2, 0, 1, 3])
+
+        non_plane_depth = global_pred_dict['non_plane_depth']
+        all_depths = tf.concat([plane_depths, non_plane_depth], axis=3)
 
         
         validPlaneMask = tf.cast(tf.less(tf.tile(tf.expand_dims(tf.range(options.numOutputPlanes), 0), [options.batchSize, 1]), tf.expand_dims(global_gt_dict['num_planes'], -1)), tf.float32)        
@@ -138,6 +146,16 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
                 
                 #all segmentations is the concatenation of plane segmentations and non plane mask
                 all_segmentations = tf.concat([pred_dict['segmentation'], pred_dict['non_plane_mask']], axis=3)
+
+                
+                if options.crf > 0:
+                    all_segmentations = tf.nn.softmax(all_segmentations)
+                    with tf.variable_scope('crf'):
+                        all_segmentations = segmentationRefinementModule(all_segmentations, all_depths, numIterations=options.crf, numOutputPlanes=21)
+                        pass
+                    pass
+        
+                
                 segmentation_loss += tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=all_segmentations, labels=previous_segmentation_gt)) * 1000
                 
             else:
@@ -178,14 +196,7 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
 
 
         #depth loss
-        plane_parameters = tf.reshape(global_pred_dict['plane'], (-1, 3))
-        info = global_gt_dict['info'][0]
-        plane_depths = planeDepthsModule(plane_parameters, WIDTH, HEIGHT, info)
-        plane_depths = tf.transpose(tf.reshape(plane_depths, [HEIGHT, WIDTH, -1, options.numOutputPlanes]), [2, 0, 1, 3])
-
         all_segmentations_softmax = tf.nn.softmax(all_segmentations)
-        non_plane_depth = global_pred_dict['non_plane_depth']
-        all_depths = tf.concat([plane_depths, non_plane_depth], axis=3)
         validDepthMask = tf.cast(tf.greater(global_gt_dict['depth'], 1e-4), tf.float32)
         depth_loss = tf.reduce_mean(tf.reduce_sum(tf.squared_difference(all_depths, global_gt_dict['depth']) * all_segmentations_softmax, axis=3, keep_dims=True) * validDepthMask) * 1000
 
@@ -325,10 +336,6 @@ def main(options):
     global_pred_dict, local_pred_dict, deep_pred_dicts = build_graph(img_inp_train, img_inp_val, training_flag, options)
     
     var_to_restore = [v for v in tf.global_variables()]
-    for v in var_to_restore:
-        print(v.name)
-        print(v.shape)
-        continue
     
     #loss, loss_dict, _ = build_loss(global_pred_dict, local_pred_dict, deep_pred_dicts, global_gt_dict_train, local_gt_dict_train, global_gt_dict_val, local_gt_dict_val, training_flag, options)
     #loss_rgbd, loss_dict_rgbd, _ = build_loss_rgbd(global_pred_dict, deep_pred_dicts, global_gt_dict_rgbd_train, global_gt_dict_rgbd_val, training_flag, options)

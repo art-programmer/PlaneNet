@@ -1525,6 +1525,17 @@ def evaluatePlaneSegmentation(predPlanes, predSegmentations, gtPlanes, gtSegment
     totalNumPlanes = gtNumPlanes.sum()
     totalNumPixels = width * height * predPlanes.shape[0]
 
+
+    # planeDistanceThreshold = 0.5
+    # diffMask = (planeDiffs < planeDistanceThreshold).astype(np.float32)
+    # maxIOU = np.max(planeIOUs * diffMask, axis=2)
+    # IOU = 0.5
+    # print(maxIOU[0])
+    # print(planeMask[0])
+    # print(((maxIOU >= IOU) * planeMask).sum(1).astype(np.float32))
+    # print(gtNumPlanes)
+    # print(float(((maxIOU >= IOU) * planeMask).sum()) / totalNumPlanes)
+    # exit(1)
     
     pixel_curves = []
     plane_curves = []
@@ -1539,14 +1550,6 @@ def evaluatePlaneSegmentation(predPlanes, predSegmentations, gtPlanes, gtSegment
             pixelRecalls.append(np.minimum((intersection * (planeIOUs >= IOU).astype(np.float32) * diffMask).sum(2), planeAreas).sum() / totalNumPixels)
             planeRecalls.append(float(((maxIOU >= IOU) * planeMask).sum()) / totalNumPlanes)            
             continue
-
-        # if planeDistanceThreshold == 0.5:
-        #     print(intersection.shape)
-        #     print(intersection.sum(2).sum(1))
-        #     print(height * width)
-        #     print(planeIOUs)
-        #     print(pixelRecalls)
-        #     pass
         
         pixel_curves.append(pixelRecalls)
         plane_curves.append(planeRecalls)
@@ -1560,13 +1563,13 @@ def evaluatePlaneSegmentation(predPlanes, predSegmentations, gtPlanes, gtSegment
         pixelRecalls = []
         for step in xrange(int(0.5 / stride + 1)):
             diff = step * stride
-            pixelRecalls.append(np.minimum((intersection * (planeDiffs <= diff).astype(np.float32) * IOUMask).sum(1), planeAreas).sum() / totalNumPixels)
+            pixelRecalls.append(np.minimum((intersection * (planeDiffs <= diff).astype(np.float32) * IOUMask).sum(2), planeAreas).sum() / totalNumPixels)
             planeRecalls.append(float(((minDiff <= diff) * planeMask).sum()) / totalNumPlanes)
             continue
-        
         pixel_curves.append(pixelRecalls)
         plane_curves.append(planeRecalls)
         pass
+
     
     if prefix == '':
         return pixel_curves, plane_curves
