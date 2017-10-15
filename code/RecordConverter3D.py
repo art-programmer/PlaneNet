@@ -90,15 +90,29 @@ def writeRecordFile(split, dataset):
                         pass
                     info = np.concatenate([info[3:], info[:3], np.ones(1) * datasetIndex])
 
-                    # cv2.imwrite('test/segmentation_' + str(batchIndex) + '.png', drawSegmentationImage(segmentation, planeMask = segmentation < 20, black=True))
+                    depthFilename = global_gt['image_path'][batchIndex].replace('color.jpg', 'depth.pgm')
+                    depth = np.array(PIL.Image.open(depthFilename)).astype(np.float32) / info[2]
+                    invalidMask = (depth < 1e-4).astype(np.float32)
+                    invalidMask = (cv2.resize(invalidMask, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR) > 1e-4).astype(np.bool)
+                    depth = cv2.resize(depth, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)
+                    #cv2.imwrite('test/depth_ori_' + str(batchIndex) + '.png', drawDepthImage(depth))
+                    depth[invalidMask] = 0
+
+
+                    semanticsFilename = global_gt['image_path'][batchIndex].replace('color.jpg', 'segmentation.png').replace('frames', 'annotation/semantics')
+                    semantics = cv2.imread(semanticsFilename, -1)
+                    semantics = cv2.resize(semantics, (WIDTH, HEIGHT), interpolation=cv2.INTER_NEAREST)
+                    #cv2.imwrite('test/segmentation_' + str(batchIndex) + '.png', drawSegmentationImage(semantics, blackIndex=0))
+                    #cv2.imwrite('test/depth_' + str(batchIndex) + '.png', drawDepthImage(depth))
                     # cv2.imwrite('test/boundary_' + str(batchIndex) + '.png', drawMaskImage(boundary))
                     # cv2.imwrite('test/image_' + str(batchIndex) + '.png', image)               
-                    
+
                     example = tf.train.Example(features=tf.train.Features(feature={
                         'image_path': _bytes_feature(global_gt['image_path'][batchIndex]),
                         'image_raw': _bytes_feature(image.tostring()),
-                        'depth': _float_feature(global_gt['depth'][batchIndex].reshape(-1)),
+                        'depth': _float_feature(depth.reshape(-1)),
                         'normal': _float_feature(np.zeros((HEIGHT * WIDTH * 3))),
+                        'semantics_raw': _bytes_feature(semantics.tostring()),
                         'plane': _float_feature(global_gt['plane'][batchIndex].reshape(-1)),
                         'num_planes': _int64_feature([global_gt['num_planes'][batchIndex]]),
                         'segmentation_raw': _bytes_feature(segmentation.tostring()),        

@@ -1,5 +1,6 @@
 import numpy as np
 from pystruct.inference import get_installed, inference_ogm, inference_dispatch
+from utils import *
 
 def findProposals(segmentations, numProposals = 5):
     height = segmentations.shape[0]
@@ -99,3 +100,116 @@ def refineSegmentation(allSegmentations, allDepths, boundaries, numOutputPlanes 
     print(refined_segmentation[y][x])
     return refined_segmentation
     #return proposals.reshape([height, width])
+
+
+def getSegmentationsGraphCut(planes, image, depth, normal, info, numPlanes):
+    numOutputPlanes = planes.shape[0]
+    height = depth.shape[0]
+    width = depth.shape[1]
+
+    #print(info)
+    camera = getCameraFromInfo(info)    
+    urange = (np.arange(width, dtype=np.float32) / (width) * (camera['width']) - camera['cx']) / camera['fx']
+    urange = urange.reshape(1, -1).repeat(height, 0)
+    vrange = (np.arange(height, dtype=np.float32) / (height) * (camera['height']) - camera['cy']) / camera['fy']
+    vrange = vrange.reshape(-1, 1).repeat(width, 1)
+    
+    X = depth * urange
+    Y = depth
+    Z = -depth * vrange
+
+    points = np.stack([X, Y, Z], axis=2)
+    planesD = np.linalg.norm(planes, axis=1, keepdims=True)
+    planeNormals = planes / np.maximum(planesD, 1e-4)
+
+    distanceCostThreshold = 0.05
+
+    distanceCost = 1 - np.exp(-np.abs(np.tensordot(points, planeNormals, axes=([2, 1])) - np.reshape(planesD, [1, 1, -1])) / distanceCostThreshold)
+    distanceCost[:, :, numPlanes:] = 10000
+    distanceCost = np.concatenate([distanceCost, np.ones((height, width, 1)) * (1 - np.exp(-1))], axis=2)
+    normalCost = 0
+    if info[19] <= 1:
+        normalCostThreshold = 1 - np.cos(20)        
+        normalCost = (1 - np.tensordot(normal, planeNormals, axes=([2, 1]))) / normalCostThreshold
+        normalCost[:, :, numPlanes:] = 10000
+        normalCost = np.concatenate([normalCost, np.ones((height, width, 1))], axis=2)
+        pass
+
+    unaryCost = distanceCost + normalCost
+    unaryCost *= np.expand_dims((depth > 1e-4).astype(np.float32), -1)
+    unaries = -unaryCost.reshape((-1, numOutputPlanes + 1))
+
+    # print(distanceCost[60][150])
+    # print(unaryCost[60][150])
+    # print(np.argmax(-unaryCost[60][150]))
+
+    #cv2.imwrite('test/segmentation.png', drawSegmentationImage(-unaryCost, blackIndex=numOutputPlanes))
+    #exit(1)
+
+
+    nodes = np.arange(height * width).reshape((height, width))
+
+    image = image.astype(np.float32)
+    colors = image.reshape((-1, 3))
+    #deltas = [(0, 1), (1, 0), (-1, 1), (1, 1), (1, 1), (1, -1), (-1, 1), (-1, -1)]
+    # intensityDifference = np.zeros((height * width))
+    # for delta in deltas:
+    #     deltaX = delta[0]
+    #     deltaY = delta[1]
+    #     partial_nodes = nodes[max(-deltaY, 0):min(height - deltaY, height), max(-deltaX, 0):min(width - deltaX, width)].reshape(-1)
+    #     intensityDifference[partial_nodes] += np.sum(pow(colors[partial_nodes] - colors[partial_nodes + (deltaY * width + deltaX)], 2), axis=1)
+    #     continue
+
+    # intensityDifference = intensityDifference.reshape((height, width))
+    # intensityDifference[1:height - 1, 1:width - 1] /= 8
+    # intensityDifference[1:height - 1, 0] /= 5
+    # intensityDifference[1:height - 1, width - 1] /= 5
+    # intensityDifference[0, 1:width - 1] /= 5
+    # intensityDifference[height - 1, 1:width - 1] /= 5    
+    # intensityDifference[0][0] /= 3
+    # intensityDifference[0][width - 1] /= 3
+    # intensityDifference[height - 1][0] /= 3
+    # intensityDifference[height - 1][width - 1] /= 3
+    # intensityDifference = intensityDifference.reshape(-1)
+    
+
+    deltas = [(0, 1), (1, 0), (-1, 1), (1, 1)]    
+    
+    intensityDifferenceSum = 0.0
+    intensityDifferenceCount = 0
+    for delta in deltas:
+        deltaX = delta[0]
+        deltaY = delta[1]
+        partial_nodes = nodes[max(-deltaY, 0):min(height - deltaY, height), max(-deltaX, 0):min(width - deltaX, width)].reshape(-1)
+        intensityDifferenceSum += np.sum(pow(colors[partial_nodes] - colors[partial_nodes + (deltaY * width + deltaX)], 2))
+        intensityDifferenceCount += partial_nodes.shape[0]
+        continue
+    intensityDifference = intensityDifferenceSum / intensityDifferenceCount
+
+    
+    edges = []
+    edges_features = []
+    pairwise_matrix = 1 - np.diag(np.ones(numOutputPlanes + 1))
+
+    for delta in deltas:
+        deltaX = delta[0]
+        deltaY = delta[1]
+        partial_nodes = nodes[max(-deltaY, 0):min(height - deltaY, height), max(-deltaX, 0):min(width - deltaX, width)].reshape(-1)
+        edges.append(np.stack([partial_nodes, partial_nodes + (deltaY * width + deltaX)], axis=1))
+
+        colorDiff = np.sum(pow(colors[partial_nodes] - colors[partial_nodes + (deltaY * width + deltaX)], 2), axis=1)
+        pairwise_cost = np.expand_dims(pairwise_matrix, 0) * np.reshape(1 + 45 * np.exp(-colorDiff / intensityDifference), [-1, 1, 1])
+        #pairwise_cost = np.expand_dims(pairwise_matrix, 0) * np.ones(np.reshape(1 + 45 * np.exp(-colorDiff / np.maximum(intensityDifference[partial_nodes], 1e-4)), [-1, 1, 1]).shape)
+        edges_features.append(-pairwise_cost)
+        continue
+
+    edges = np.concatenate(edges, axis=0)
+    edges_features = np.concatenate(edges_features, axis=0)
+
+    refined_segmentation = inference_ogm(unaries * 50, edges_features, edges, return_energy=False, alg='alphaexp')
+    #print(pairwise_matrix)
+    #refined_segmentation = inference_ogm(unaries * 5, -pairwise_matrix, edges, return_energy=False, alg='alphaexp')
+
+    refined_segmentation = refined_segmentation.reshape([height, width])
+
+    return refined_segmentation    

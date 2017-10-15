@@ -214,7 +214,7 @@ if __name__=='__main__':
                 imagePaths = imagePaths[:70000]
                 pass
                 
-            writeRecordFile('/mnt/vision/planes_' + dataset + '_' + split + '.tfrecords', imagePaths)
+            writeRecordFile('/mnt/vision/PlaneNet/planes_' + dataset + '_' + split + '.tfrecords', imagePaths)
             continue
         continue
 

@@ -928,7 +928,8 @@ def fitPlane(points):
     else:
         return np.linalg.lstsq(points, np.ones(points.shape[0]))[0]
 
-def fitPlanes(depth, camera, info, numPlanes=50, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=-1):
+def fitPlanes(depth, info, numPlanes=50, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=-1):
+    camera = getCameraFromInfo(info)
     width = depth.shape[1]
     height = depth.shape[0]
 
@@ -1030,7 +1031,9 @@ def fitPlanes(depth, camera, info, numPlanes=50, planeAreaThreshold=3*4, numIter
     return planes, planeSegmentation, depthPred
 
 
-def fitPlanesSegmentation(depth, segmentation, camera, info, numPlanes=50, numPlanesPerSegment=3, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=-1):
+def fitPlanesSegmentation(depth, segmentation, info, numPlanes=50, numPlanesPerSegment=3, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=-1):
+    
+    camera = getCameraFromInfo(info)
     width = depth.shape[1]
     height = depth.shape[0]
 
@@ -1623,6 +1626,9 @@ def one_hot(values):
     results[np.arange(maxInds.shape[0]), maxInds] = 1
     results = results.reshape(values.shape)
     return results
+
+def sigmoid(values):
+    return 1 / (1 + np.exp(-values))
 
 def sortSegmentations(segmentations, planes, planesTarget):
     diff = np.linalg.norm(np.expand_dims(planes, 1) - np.expand_dims(planesTarget, 0), axis=2)
