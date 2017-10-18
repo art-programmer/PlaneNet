@@ -306,7 +306,7 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
             #depth_diff_1 += layer_segmentations_empty_mask_1 * 0.1
             
             depth_diff = tf.clip_by_value(tf.pow(tf.concat([depth_diff_0, depth_diff_1], axis=3) * normalY / maxDepthDiff, 2), 0, 1) 
-            depth_diff = tf.concat([depth_diff, 1 - tf.slice(S, [0, 0, 0, options.numOutputPlanes], [options.batchSize, HEIGHT, WIDTH, 1])], axis=3)
+            depth_diff = tf.concat([depth_diff, 1 - tf.slice(all_segmentations_one_hot, [0, 0, 0, options.numOutputPlanes], [options.batchSize, HEIGHT, WIDTH, 1])], axis=3)
             DS_diff = (1 + labelDiffWeight) - tf.exp(-depth_diff) - all_segmentations_one_hot * labelDiffWeight
             
             #DS_0 = tf.nn.depthwise_conv2d(DS_diff_0, tf.tile(neighbor_kernel, [1, 1, options.numOutputPlanes_0, 1]), strides=[1, 1, 1, 1], padding='SAME')                        

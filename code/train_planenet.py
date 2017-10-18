@@ -214,7 +214,7 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
         #normal_loss = tf.constant(0.0)
 
         if options.predictSemantics:
-            semantics_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=global_pred_dict['semantics'], labels=global_pred_dict['semantics'])) * 1000
+            semantics_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=global_pred_dict['semantics'], labels=global_gt_dict['semantics'])) * 1000
         else:
             semantics_loss = tf.constant(0.0)
             pass
@@ -326,7 +326,7 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
         #depth_loss = tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_depth'], global_gt_dict['depth']) * validDepthMask) * 1000
         #pass
 
-        loss_dict = {'plane': plane_loss, 'segmentation': segmentation_loss, 'depth': depth_loss, 'normal': normal_loss, 'boundary': boundary_loss, 'diverse': diverse_loss, 'confidence': plane_confidence_loss, 'local_score': local_score_loss, 'local_plane': local_plane_loss, 'local_mask': local_mask_loss, 'label': label_loss}
+        loss_dict = {'plane': plane_loss, 'segmentation': segmentation_loss, 'depth': depth_loss, 'normal': normal_loss, 'boundary': boundary_loss, 'diverse': diverse_loss, 'confidence': plane_confidence_loss, 'local_score': local_score_loss, 'local_plane': local_plane_loss, 'local_mask': local_mask_loss, 'label': label_loss, 'semantics': semantics_loss}
         pass
     return loss, loss_dict, debug_dict
 
@@ -439,7 +439,7 @@ def main(options):
             # if options.predictConfidence == 1:
             #     var_to_restore = [v for v in var_to_restore if 'confidence' not in v.name]
             #     pass
-            
+            var_to_restore = [v for v in var_to_restore if 'semantics' not in v.name]
             loader = tf.train.Saver(var_to_restore)
             loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + options.hybrid + '_ll1_bw0.5_pb_pp_sm0/checkpoint.ckpt')
             #loader.restore(sess,"checkpoint/planenet/checkpoint.ckpt")
