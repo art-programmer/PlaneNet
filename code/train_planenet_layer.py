@@ -280,25 +280,46 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
             neighbor_kernel = tf.constant(neighbor_kernel_array.reshape(-1), shape=neighbor_kernel_array.shape, dtype=tf.float32)
             neighbor_kernel = tf.reshape(neighbor_kernel, [kernel_size, kernel_size, 1, 1])
 
-            sigmaDepthDiff = 0.5
+            #sigmaDepthDiff = 0.5
+            maxDepthDiff = 0.1
+            labelDiffWeight = 0.05
+            
+            planesY = tf.slice(global_pred_dict['plane'], [0, 0, 1], [options.batchSize, options.numOutputPlanes, 1])
+            planesD = tf.maximum(tf.norm(global_pred_dict['plane'], axis=-1, keep_dims=True), 1e-4)
+            planesY /= planesD
+            planesY = tf.concat([planesY, tf.ones((options.batchSize, 1, 1)) * 100], axis=1)
+            all_segmentations_one_hot = tf.one_hot(tf.argmax(all_segmentations, 3), depth=options.numOutputPlanes + 1)            
+            normalY = tf.reduce_sum(all_segmentations_one_hot * tf.reshape(planesY, [options.batchSize, 1, 1, -1]), axis=3, keep_dims=True)
             
             layer_depths_0 = tf.slice(all_depths, [0, 0, 0, 0], [options.batchSize, HEIGHT, WIDTH, options.numOutputPlanes_0])
             layer_segmentations_one_hot_0 = tf.one_hot(tf.argmax(layer_segmentations_0, 3), depth=options.numOutputPlanes_0)
-            DS_diff_0 = tf.exp(-tf.pow(1 - tf.clip_by_value(tf.abs(layer_depths_0 - tf.reduce_sum(layer_depths_0 * layer_segmentations_one_hot_0, 3, keep_dims=True)), 0, 1), 2) / sigmaDepthDiff) - tf.exp(-1 / sigmaDepthDiff) * layer_segmentations_one_hot_0
+            #DS_diff_0 = tf.exp(-tf.pow(1 - tf.clip_by_value(tf.abs(layer_depths_0 - tf.reduce_sum(layer_depths_0 * layer_segmentations_one_hot_0, 3, keep_dims=True)), 0, 1), 2) / sigmaDepthDiff) - tf.exp(-1 / sigmaDepthDiff) * layer_segmentations_one_hot_0
+            depth_diff = tf.clip_by_value(tf.pow((plane_depths - depth_one_hot) * normalY / maxDepthDiff, 2), 0, 1)
+            depth_diff_0 = layer_depths_0 - tf.reduce_sum(layer_depths_0 * layer_segmentations_one_hot_0, 3, keep_dims=True)
+            
+            depth_diff_1 = tf.slice(all_depths - tf.reduce_sum(all_depths * all_segmentations_one_hot, 3, keep_dims=True), [0, 0, 0, options.numOutputPlanes_0], [options.batchSize, HEIGHT, WIDTH, options.numOutputPlanes - options.numOutputPlanes_0])
+            layer_segmentations_empty_mask_1 = tf.reduce_sum(tf.slice(all_segmentations_softmax, [0, 0, 0, 0], [options.batchSize, HEIGHT, WIDTH, options.numOutputPlanes_0]), axis=-1, keep_dims=True)
+            depth_diff_1 = depth_diff_1 * (1 - layer_segmentations_empty_mask_1)
+            #depth_diff_1 += layer_segmentations_empty_mask_1 * 0.1
+            
+            depth_diff = tf.clip_by_value(tf.pow(tf.concat([depth_diff_0, depth_diff_1], axis=3) * normalY / maxDepthDiff, 2), 0, 1) 
+            depth_diff = tf.concat([depth_diff, 1 - tf.slice(S, [0, 0, 0, options.numOutputPlanes], [options.batchSize, HEIGHT, WIDTH, 1])], axis=3)
+            DS_diff = (1 + labelDiffWeight) - tf.exp(-depth_diff) - all_segmentations_one_hot * labelDiffWeight
+            
             #DS_0 = tf.nn.depthwise_conv2d(DS_diff_0, tf.tile(neighbor_kernel, [1, 1, options.numOutputPlanes_0, 1]), strides=[1, 1, 1, 1], padding='SAME')                        
 
             
             #layer_depths_1 = tf.slice(all_depths, [0, 0, 0, options.numOutputPlanes_0], [options.batchSize, HEIGHT, WIDTH, options.numOutputPlanes + 1 - options.numOutputPlanes_0])
             #layer_segmentations_one_hot_1 = tf.one_hot(tf.argmax(layer_segmentations_1, 3), depth=options.numOutputPlanes + 1 - options.numOutputPlanes_0)
             #DS_diff_1 = tf.exp(-tf.pow(1 - tf.clip_by_value(tf.abs(layer_depths_1 - tf.reduce_sum(layer_depths_1 * layer_segmentations_one_hot_1, 3, keep_dims=True)), 0, 1), 2) / sigmaDepthDiff) - tf.exp(-1 / sigmaDepthDiff) * layer_segmentations_one_hot_1
-            all_segmentations_one_hot = tf.one_hot(tf.argmax(all_segmentations, 3), depth=options.numOutputPlanes + 1)
-            DS_diff_1 = tf.exp(-tf.pow(1 - tf.clip_by_value(tf.abs(all_depths - tf.reduce_sum(all_depths * all_segmentations_one_hot, 3, keep_dims=True)), 0, 1), 2) / sigmaDepthDiff) - tf.exp(-1 / sigmaDepthDiff) * all_segmentations_one_hot
-            DS_diff_1 = tf.slice(DS_diff_1, [0, 0, 0, options.numOutputPlanes_0], [options.batchSize, HEIGHT, WIDTH, options.numOutputPlanes + 1 - options.numOutputPlanes_0])
-            layer_segmentations_empty_mask_1 = tf.reduce_sum(tf.slice(all_segmentations_softmax, [0, 0, 0, 0], [options.batchSize, HEIGHT, WIDTH, options.numOutputPlanes_0]), axis=-1, keep_dims=True)
-            DS_diff_1 = DS_diff_1 * (1 - layer_segmentations_empty_mask_1) + layer_segmentations_empty_mask_1 * 0.1
+
+            #DS_diff_1 = tf.exp(-tf.pow(1 - tf.clip_by_value(tf.abs(all_depths - tf.reduce_sum(all_depths * all_segmentations_one_hot, 3, keep_dims=True)), 0, 1), 2) / sigmaDepthDiff) - tf.exp(-1 / sigmaDepthDiff) * all_segmentations_one_hot
+            #DS_diff_1 = tf.slice(DS_diff_1, [0, 0, 0, options.numOutputPlanes_0], [options.batchSize, HEIGHT, WIDTH, options.numOutputPlanes + 1 - options.numOutputPlanes_0])
+            #layer_segmentations_empty_mask_1 = tf.reduce_sum(tf.slice(all_segmentations_softmax, [0, 0, 0, 0], [options.batchSize, HEIGHT, WIDTH, options.numOutputPlanes_0]), axis=-1, keep_dims=True)
+            #DS_diff_1 = DS_diff_1 * (1 - layer_segmentations_empty_mask_1) + layer_segmentations_empty_mask_1 * 0.1
             #DS_1 = tf.nn.depthwise_conv2d(DS_diff_1, tf.tile(neighbor_kernel, [1, 1, options.numOutputPlanes + 1 - options.numOutputPlanes_0, 1]), strides=[1, 1, 1, 1], padding='SAME')
 
-            DS_diff = tf.concat([DS_diff_0, DS_diff_1], axis=3)
+            #DS_diff = tf.concat([DS_diff_0, DS_diff_1], axis=3)
             DS = tf.nn.depthwise_conv2d(DS_diff, tf.tile(neighbor_kernel, [1, 1, options.numOutputPlanes + 1, 1]), strides=[1, 1, 1, 1], padding='SAME')
 
             #layer_segmentations_softmax_1 = tf.slice(all_segmentations_softmax, [0, 0, 0, options.numOutputPlanes_0], [options.batchSize, HEIGHT, WIDTH, options.numOutputPlanes + 1 - options.numOutputPlanes_0])
@@ -801,11 +822,11 @@ def test(options):
                 if 'cost_mask' in debug:
                    cv2.imwrite(options.test_dir + '/' + str(index) + '_cost_mask.png', drawMaskImage(debug['cost_mask'][0]))
 
-                   for planeIndex in xrange(options.numOutputPlanes + 1):
-                       cv2.imwrite(options.test_dir + '/' + str(index) + '_segmentation_pred_' + str(planeIndex) + '.png', drawMaskImage(all_segmentations_softmax[:, :, planeIndex]))
-                       continue
-                   cv2.imwrite(options.test_dir + '/' + str(index) + '_empty_mask_pred.png', drawMaskImage(all_segmentations_softmax[:, :, :options.numOutputPlanes_0].sum(2)))
-                   exit(1)
+                   # for planeIndex in xrange(options.numOutputPlanes + 1):
+                   #     cv2.imwrite(options.test_dir + '/' + str(index) + '_segmentation_pred_' + str(planeIndex) + '.png', drawMaskImage(all_segmentations_softmax[:, :, planeIndex]))
+                   #     continue
+                   # cv2.imwrite(options.test_dir + '/' + str(index) + '_empty_mask_pred.png', drawMaskImage(all_segmentations_softmax[:, :, :options.numOutputPlanes_0].sum(2)))
+                   #exit(1)
                    pass
 
                 if 'normal' in global_gt:

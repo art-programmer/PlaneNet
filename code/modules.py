@@ -53,8 +53,8 @@ def planeDepthsModule(plane_parameters, width, height, info):
     return plane_depths
 
 def planeNormalsModule(plane_parameters, width, height):
-    planesD = tf.norm(plane_parameters, axis=1, keep_dims=True)
-    planesD = tf.clip_by_value(planesD, 1e-5, 10)
+    planesD = tf.norm(plane_parameters, axis=-1, keep_dims=True)
+    planesD = tf.clip_by_value(planesD, 1e-4, 10)
     planesNormal = tf.div(tf.negative(plane_parameters), planesD)
 
     #plane_normals = tf.tile(tf.reshape(planesNormal, [1, 1, -1, 3]), [height, width, 1, 1])
