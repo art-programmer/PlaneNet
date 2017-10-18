@@ -288,12 +288,15 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
             planesD = tf.maximum(tf.norm(global_pred_dict['plane'], axis=-1, keep_dims=True), 1e-4)
             planesY /= planesD
             planesY = tf.concat([planesY, tf.ones((options.batchSize, 1, 1)) * 100], axis=1)
-            all_segmentations_one_hot = tf.one_hot(tf.argmax(all_segmentations, 3), depth=options.numOutputPlanes + 1)            
+            all_segmentations_one_hot = tf.one_hot(tf.argmax(all_segmentations, 3), depth=options.numOutputPlanes + 1)
+            depth_one_hot = tf.reduce_sum(all_depths * all_segmentations_one_hot, 3, keep_dims=True)
+            
             normalY = tf.reduce_sum(all_segmentations_one_hot * tf.reshape(planesY, [options.batchSize, 1, 1, -1]), axis=3, keep_dims=True)
             
             layer_depths_0 = tf.slice(all_depths, [0, 0, 0, 0], [options.batchSize, HEIGHT, WIDTH, options.numOutputPlanes_0])
             layer_segmentations_one_hot_0 = tf.one_hot(tf.argmax(layer_segmentations_0, 3), depth=options.numOutputPlanes_0)
             #DS_diff_0 = tf.exp(-tf.pow(1 - tf.clip_by_value(tf.abs(layer_depths_0 - tf.reduce_sum(layer_depths_0 * layer_segmentations_one_hot_0, 3, keep_dims=True)), 0, 1), 2) / sigmaDepthDiff) - tf.exp(-1 / sigmaDepthDiff) * layer_segmentations_one_hot_0
+
             depth_diff = tf.clip_by_value(tf.pow((plane_depths - depth_one_hot) * normalY / maxDepthDiff, 2), 0, 1)
             depth_diff_0 = layer_depths_0 - tf.reduce_sum(layer_depths_0 * layer_segmentations_one_hot_0, 3, keep_dims=True)
             
