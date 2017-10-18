@@ -99,7 +99,8 @@ def writeRecordFile(split):
                         'normal': _float_feature(normal.reshape(-1)),
                         'plane': _float_feature(planes.reshape(-1)),
                         'num_planes': _int64_feature([global_gt['num_planes'][batchIndex]]),
-                        'segmentation_raw': _bytes_feature(segmentation.tostring()),        
+                        'segmentation_raw': _bytes_feature(segmentation.tostring()),
+                        'semantics_raw': _bytes_feature(np.zeros((HEIGHT, WIDTH), np.uint8).tostring()),                
                         'boundary_raw': _bytes_feature(boundary.tostring()),
                         #'plane_relation': _float_feature(planeRelations.reshape(-1)),
                         'info': _float_feature(info),
@@ -124,4 +125,4 @@ def writeRecordFile(split):
     
 if __name__=='__main__':
     writeRecordFile('train')
-    writeRecordFile('val')
+    #writeRecordFile('val')

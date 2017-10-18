@@ -105,5 +105,5 @@ class RecordReaderAll():
         else:
             image_inp, plane_inp, depth_gt, normal_gt, semantics_gt, plane_masks_gt, boundary_gt, num_planes_gt, non_plane_mask_gt, image_path, info = tf.train.batch([image, planes, depth, normal, semantics, plane_masks, boundary, numPlanes, non_plane_mask, features['image_path'], features['info']], batch_size=batchSize, capacity=(NUM_THREADS + 2) * batchSize, num_threads=1)
             pass
-        global_gt_dict = {'plane': plane_inp, 'depth': depth_gt, 'normal': normal_gt, 'semantics': semantics_gt, 'segmentation': plane_masks_gt, 'boundary': boundary_gt, 'num_planes': num_planes_gt, 'non_plane_mask': non_plane_mask_gt, 'path': image_path, 'info': info}
+        global_gt_dict = {'plane': plane_inp, 'depth': depth_gt, 'normal': normal_gt, 'semantics': semantics_gt, 'segmentation': plane_masks_gt, 'boundary': boundary_gt, 'num_planes': num_planes_gt, 'non_plane_mask': non_plane_mask_gt, 'image_path': image_path, 'info': info}
         return image_inp, global_gt_dict, {}

@@ -10,6 +10,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from modules import *
 from utils import *
 from RecordReader3D import *
+from SegmentationRefinement import *
 
 HEIGHT=192
 WIDTH=256
@@ -91,7 +92,8 @@ def writeRecordFile(split, dataset):
                     info = np.concatenate([info[3:], info[:3], np.ones(1) * datasetIndex])
 
                     depthFilename = global_gt['image_path'][batchIndex].replace('color.jpg', 'depth.pgm')
-                    depth = np.array(PIL.Image.open(depthFilename)).astype(np.float32) / info[2]
+                    
+                    depth = np.array(PIL.Image.open(depthFilename)).astype(np.float32) / info[18]
                     invalidMask = (depth < 1e-4).astype(np.float32)
                     invalidMask = (cv2.resize(invalidMask, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR) > 1e-4).astype(np.bool)
                     depth = cv2.resize(depth, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)
@@ -107,15 +109,17 @@ def writeRecordFile(split, dataset):
                     # cv2.imwrite('test/boundary_' + str(batchIndex) + '.png', drawMaskImage(boundary))
                     # cv2.imwrite('test/image_' + str(batchIndex) + '.png', image)               
 
+                    planes, segmentation, numPlanes = removeSmallSegments(global_gt['plane'][batchIndex], image, depth, np.zeros((HEIGHT * WIDTH * 3)), segmentation, semantics, info, global_gt['num_planes'][batchIndex])
+                    
                     example = tf.train.Example(features=tf.train.Features(feature={
                         'image_path': _bytes_feature(global_gt['image_path'][batchIndex]),
                         'image_raw': _bytes_feature(image.tostring()),
                         'depth': _float_feature(depth.reshape(-1)),
                         'normal': _float_feature(np.zeros((HEIGHT * WIDTH * 3))),
                         'semantics_raw': _bytes_feature(semantics.tostring()),
-                        'plane': _float_feature(global_gt['plane'][batchIndex].reshape(-1)),
-                        'num_planes': _int64_feature([global_gt['num_planes'][batchIndex]]),
-                        'segmentation_raw': _bytes_feature(segmentation.tostring()),        
+                        'plane': _float_feature(planes.reshape(-1)),
+                        'num_planes': _int64_feature([numPlanes]),
+                        'segmentation_raw': _bytes_feature(segmentation.tostring()),
                         'boundary_raw': _bytes_feature(boundary.tostring()),
                         #'plane_relation': _float_feature(planeRelations.reshape(-1)),
                         'info': _float_feature(info),
@@ -123,7 +127,6 @@ def writeRecordFile(split, dataset):
                     
                     writer.write(example.SerializeToString())
                     continue
-                #exit(1)
                 continue
             pass
         except tf.errors.OutOfRangeError:

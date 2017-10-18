@@ -1619,12 +1619,11 @@ def softmax(values):
     exp = np.exp(values - values.max())
     return exp / exp.sum(-1, keepdims=True)
 
-def one_hot(values):
-    results = np.zeros(values.shape)
-    maxInds = np.argmax(values, -1).reshape(-1)
-    results = results.reshape([maxInds.shape[0], -1])
+def one_hot(values, depth):
+    maxInds = values.reshape(-1)
+    results = np.zeros([maxInds.shape[0], depth])
     results[np.arange(maxInds.shape[0]), maxInds] = 1
-    results = results.reshape(values.shape)
+    results = results.reshape(list(values.shape) + [depth])
     return results
 
 def sigmoid(values):
@@ -1632,6 +1631,6 @@ def sigmoid(values):
 
 def sortSegmentations(segmentations, planes, planesTarget):
     diff = np.linalg.norm(np.expand_dims(planes, 1) - np.expand_dims(planesTarget, 0), axis=2)
-    planeMap = one_hot(-diff)
+    planeMap = one_hot(np.argmax(-diff, axis=-1), depth=diff.shape[-1])
     segmentationsTarget = np.matmul(segmentations, planeMap)
     return segmentationsTarget
