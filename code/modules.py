@@ -124,16 +124,32 @@ def meanfieldModuleLayer(layerSegmentations, planeDepths, numOutputPlanes = 20, 
     confidence = P * tf.exp(-coef[1] * DS)
     refined_segmentation = tf.nn.softmax(tf.log(confidence))
     return refined_segmentation
-  
-def meanfieldModule(planeSegmentations, planeDepths, numOutputPlanes = 20, coef = [1, 1, 1], beta = 1, iteration = 0, sigmaDepthDiff = 0.5):
+
+def calcImageDiff(images, kernel_size = 9):
+    neighbor_kernel_array = gaussian(kernel_size)
+    neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 0
+    neighbor_kernel_array /= neighbor_kernel_array.sum()
+    neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = -1
+    neighbor_kernel = tf.constant(neighbor_kernel_array.reshape(-1), shape=neighbor_kernel_array.shape, dtype=tf.float32)
+    neighbor_kernel = tf.reshape(neighbor_kernel, [kernel_size, kernel_size, 1, 1])
+
+    image_diff = tf.nn.depthwise_conv2d(images, tf.tile(neighbor_kernel, [1, 1, 3, 1]), strides=[1, 1, 1, 1], padding='SAME')
+    image_diff = tf.pow(image_diff, 2)
+    image_diff = tf.reduce_sum(image_diff, axis=3, keep_dims=True)
+    image_diff = image_diff / (tf.reduce_mean(image_diff, axis=[1, 2, 3], keep_dims=True) * 2)
+    image_diff = tf.exp(-image_diff)
+    #image_diff = tf.nn.max_pool(image_diff, ksize=[1, 3, 3, 1], strides=[1, 1, 1, 1], padding='SAME')
+    return image_diff
+    
+def meanfieldModule(planeSegmentations, planeDepths, planesY, imageDiff, numOutputPlanes = 20, coef = [1, 1, 1], beta = 1, iteration = 0, maxDepthDiff = 0.2, varDepthDiff = 0.5, kernel_size = 9):
     batchSize = int(planeSegmentations.shape[0])
     height = int(planeSegmentations.shape[1])
     width = int(planeSegmentations.shape[2])
 
-    minDepthDiff = 0.1
     P = planeSegmentations
 
-    
+
+    #minDepthDiff = 0.1
     #normalDotThreshold = np.cos(np.deg2rad(30))
     #N_diff = tf.matmul(planeNormals, planeNormals, transpose_b=True)
     #N_diff_mask = tf.cast((N_diff < normalDotThreshold), tf.float) + tf.diag(tf.ones(numOutputPlanes))
@@ -153,15 +169,25 @@ def meanfieldModule(planeSegmentations, planeDepths, numOutputPlanes = 20, coef 
     # DS_weight = tf.exp(-tf.pow(tf.clip_by_value(1 - D_diff / maxDepthDiff, 0, 1), 2) / sigmaDepthDiff)
     # DS_diff = tf.reduce_sum(DS_weight * tf.expand_dims(S, 3), axis=4) - tf.exp(-1 / sigmaDepthDiff) * S
 
-    DS_diff = tf.exp(-tf.pow(1 - tf.clip_by_value(tf.abs(planeDepths - tf.reduce_sum(planeDepths * S, 3, keep_dims=True)), 0, 1), 2) / sigmaDepthDiff) - tf.exp(-1 / sigmaDepthDiff) * S
     
-    kernel_size = 9
+    
+    
+    depthWeight = 50.0
+    colorWeight = 50.0
+    normalY = tf.reduce_sum(S * tf.reshape(planesY, [-1, 1, 1, numOutputPlanes]), axis=3, keep_dims=True)
+    depth_diff = (planeDepths - tf.reduce_sum(planeDepths * S, 3, keep_dims=True)) * normalY
+    depth_diff = tf.concat([depth_diff[:, :, :, :numOutputPlanes - 1], (1 - S[:, :, :, numOutputPlanes - 1:numOutputPlanes])], axis=3)
+    DS_diff = (1 - tf.exp(-tf.pow(tf.minimum(depth_diff, maxDepthDiff), 2) / varDepthDiff)) + (1 - S) * (1 / depthWeight + (colorWeight / depthWeight) * imageDiff)
+
+
+    #DS_diff = tf.exp(-tf.pow(1 - tf.clip_by_value(tf.abs(planeDepths - tf.reduce_sum(planeDepths * S, 3, keep_dims=True)), 0, 1), 2) / 0.5) - tf.exp(-1 / 0.5) * S
+
     neighbor_kernel_array = gaussian(kernel_size)
     neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 0
     neighbor_kernel_array /= neighbor_kernel_array.sum()
     neighbor_kernel = tf.constant(neighbor_kernel_array.reshape(-1), shape=neighbor_kernel_array.shape, dtype=tf.float32)
     neighbor_kernel = tf.reshape(neighbor_kernel, [kernel_size, kernel_size, 1, 1])
-
+    
     DS = tf.nn.depthwise_conv2d(DS_diff, tf.tile(neighbor_kernel, [1, 1, numOutputPlanes, 1]), strides=[1, 1, 1, 1], padding='SAME')
     
 
@@ -171,20 +197,30 @@ def meanfieldModule(planeSegmentations, planeDepths, numOutputPlanes = 20, coef 
     #confidence[:, :, :, numOutputPlanes] = 1e-4
     #confidence = tf.clip(confidence, 1e-4, 1)
     refined_segmentation = tf.nn.softmax(tf.log(confidence))
-    return refined_segmentation
+    return refined_segmentation, {'diff': DS}
 
 
-def segmentationRefinementModule(planeSegmentations, planeDepths, numOutputPlanes = 20, numIterations=20):
+def segmentationRefinementModule(planeSegmentations, planeDepths, planesY, imageDiff, numOutputPlanes = 20, numIterations=20, kernel_size = 9):
+
+    # kernel_size = 9
+    # neighbor_kernel_array = gaussian(kernel_size)
+    # neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 0
+    # neighbor_kernel_array /= neighbor_kernel_array.sum()
+    # neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = -1
+    # neighbor_kernel = tf.constant(neighbor_kernel_array.reshape(-1), shape=neighbor_kernel_array.shape, dtype=tf.float32)
+    # neighbor_kernel = tf.reshape(neighbor_kernel, [kernel_size, kernel_size, 1, 1])
+
     #maxDepthDiff = tf.Variable(0.3)
     #sigmaDepthDiff = tf.Variable(0.5)
-    maxDepthDiff = 0.3
-    sigmaDepthDiff = 0.5
-
+    maxDepthDiff = 0.2
+    varDepthDiff = pow(0.2, 2)
+    
+    
     refined_segmentation = planeSegmentations
     for _ in xrange(numIterations):
-        refined_segmentation = meanfieldModule(refined_segmentation, planeDepths, numOutputPlanes=numOutputPlanes, sigmaDepthDiff=sigmaDepthDiff)
+        refined_segmentation, _ = meanfieldModule(refined_segmentation, planeDepths, planesY, imageDiff, numOutputPlanes=numOutputPlanes, maxDepthDiff=maxDepthDiff, varDepthDiff=varDepthDiff, kernel_size = kernel_size)
         continue
-    return refined_segmentation
+    return refined_segmentation, {}
 
 
 def meanfieldModuleBoundary(planeSegmentations, originalSegmentations, planeDepths, occlusionBoundary = 0, smoothBoundary = 0, numOutputPlanes = 20, coef = [1, 10, 1], beta = 1, iteration = 0, sigmaDepthDiff = 0.5):
@@ -1012,7 +1048,7 @@ def findBoundaryModuleSmooth(depth, segmentation, plane_mask, smooth_boundary, m
     return boundary_gt
 
 
-def crfModule(segmentations, planes, non_plane_depth, info, numOutputPlanes=20, numIterations=20):
+def crfModule(segmentations, planes, non_plane_depth, info, numOutputPlanes=20, numIterations=20, kernel_size = 9):
     width = int(segmentations.shape[2])
     height = int(segmentations.shape[1])
     
@@ -1028,7 +1064,7 @@ def crfModule(segmentations, planes, non_plane_depth, info, numOutputPlanes=20, 
     
     refined_segmentation = segmentations
     for _ in xrange(numIterations):
-        refined_segmentation = meanfieldModule(refined_segmentation, all_depths, numOutputPlanes=numOutputPlanes + 1, sigmaDepthDiff=sigmaDepthDiff)
+        refined_segmentation = meanfieldModule(refined_segmentation, all_depths, numOutputPlanes=numOutputPlanes + 1, sigmaDepthDiff=sigmaDepthDiff, kernel_size = kernel_size)
         continue
     return refined_segmentation
 

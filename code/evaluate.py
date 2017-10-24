@@ -21,11 +21,11 @@ from planenet import PlaneNet
 from RecordReaderAll import *
 from SegmentationRefinement import *
 
-ALL_TITLES = ['planenet', 'pixelwise', 'pixelwise+RANSAC', 'depth observation+RANSAC', 'pixelwise+semantics+RANSAC', 'gt']
-ALL_METHODS = [('bl2_ll1_bw0.5_pb_pp_sm0', ''), ('pb_pp', 'pixelwise_1'), ('pb_pp', 'pixelwise_2'), ('pb_pp', 'pixelwise_3'), ('pb_pp', 'semantics'), ('pb_pp', 'gt')]
+#ALL_TITLES = ['planenet', 'pixelwise', 'pixelwise+RANSAC', 'depth observation+RANSAC', 'pixelwise+semantics+RANSAC', 'gt']
+#ALL_METHODS = [('bl2_ll1_bw0.5_pb_pp_sm0', ''), ('pb_pp', 'pixelwise_1'), ('pb_pp', 'pixelwise_2'), ('pb_pp', 'pixelwise_3'), ('pb_pp', 'semantics'), ('pb_pp', 'gt')]
 
-#ALL_TITLES = ['planenet label loss', 'planenet crf', 'planenet label backward', 'planenet different matching']
-#ALL_METHODS = [('ll1_pb_pp', ''), ('crf1_pb_pp', ''), ('ll1_bw0.5_pb_pp_sm0', ''), ('bl2_ll1_bw0.5_pb_pp_sm0', '')]
+ALL_TITLES = ['planenet label loss', 'planenet crf', 'planenet label backward', 'planenet different matching']
+ALL_METHODS = [('ll1_pb_pp', ''), ('crf1_pb_pp', ''), ('ll1_pb_pp', '+crf'), ('ll1_bw0.5_pb_pp_sm0', '')]
 
 #ALL_TITLES = ['crf', 'different matching']
 #ALL_METHODS = [('pb_pp_sm0', 'crf'), ('pb_pp_sm0', '')]
@@ -147,6 +147,12 @@ def evaluatePlanePrediction(options):
         cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_gt.png', drawSegmentationImage(np.concatenate([gt_dict['segmentation'][image_index], 1 - np.expand_dims(gt_dict['plane_mask'][image_index], -1)], axis=2), blackIndex=options.numOutputPlanes))
         cv2.imwrite(options.test_dir + '/' + str(image_index) + '_semantics_gt.png', drawSegmentationImage(gt_dict['semantics'][image_index], blackIndex=0))
 
+        
+        # plane_depths = calcPlaneDepths(gt_dict['plane'][image_index], WIDTH, HEIGHT, gt_dict['info'][image_index])
+        # all_depths = np.concatenate([plane_depths, np.expand_dims(gt_dict['depth'][image_index], -1)], axis=2)
+        # depth = np.sum(all_depths * np.concatenate([gt_dict['segmentation'][image_index], 1 - np.expand_dims(gt_dict['plane_mask'][image_index], -1)], axis=2), axis=2)
+        # cv2.imwrite(options.test_dir + '/' + str(image_index) + '_depth_gt_plane.png', drawDepthImage(depth))
+        
         for method_index, pred_dict in enumerate(predictions):
             cv2.imwrite(options.test_dir + '/' + str(image_index) + '_depth_pred_' + str(method_index) + '.png', drawDepthImage(pred_dict['depth'][image_index]))
 
@@ -196,13 +202,30 @@ def evaluatePlanePrediction(options):
             pred_dict = predictions[method_index]
             predSegmentations = []
             predDepths = []
-            
+
+            image_inp = tf.placeholder(tf.float32, shape=[1, HEIGHT, WIDTH, 3], name='image')
             segmentation_inp = tf.placeholder(tf.float32, shape=[1, HEIGHT, WIDTH, options.numOutputPlanes + 1], name='segmentation')
             plane_inp = tf.placeholder(tf.float32, shape=[1, options.numOutputPlanes, 3], name='plane')
             non_plane_depth_inp = tf.placeholder(tf.float32, shape=[1, HEIGHT, WIDTH, 1], name='non_plane_depth')
             info_inp = tf.placeholder(tf.float32, shape=[20], name='info')
-            refined_segmentation = crfModule(segmentation_inp, plane_inp, non_plane_depth_inp, info_inp, numOutputPlanes = options.numOutputPlanes, numIterations=5)
 
+            
+            plane_parameters = tf.reshape(plane_inp, (-1, 3))
+            plane_depths = planeDepthsModule(plane_parameters, WIDTH, HEIGHT, info_inp)
+            plane_depths = tf.transpose(tf.reshape(plane_depths, [HEIGHT, WIDTH, -1, options.numOutputPlanes]), [2, 0, 1, 3])
+            all_depths = tf.concat([plane_depths, non_plane_depth_inp], axis=3)
+
+            planesY = plane_inp[:, :, 1]
+            planesD = tf.maximum(tf.norm(plane_inp, axis=-1), 1e-4)
+            planesY /= planesD
+            planesY = tf.concat([planesY, tf.ones((1, 1))], axis=1)
+
+            #refined_segmentation = crfModule(segmentation_inp, plane_inp, non_plane_depth_inp, info_inp, numOutputPlanes = options.numOutputPlanes, numIterations=5)
+
+            imageDiff = calcImageDiff(image_inp)
+            #refined_segmentation, debug_dict = segmentationRefinementModule(segmentation_inp, all_depths, planesY, imageDiff, numOutputPlanes = options.numOutputPlanes + 1, numIterations=5)
+            refined_segmentation, debug_dict = meanfieldModule(segmentation_inp, all_depths, planesY, imageDiff, numOutputPlanes = options.numOutputPlanes + 1, maxDepthDiff=0.2, varDepthDiff=pow(0.2, 2))
+            
             config=tf.ConfigProto()
             config.gpu_options.allow_growth=True
             config.allow_soft_placement=True
@@ -212,13 +235,14 @@ def evaluatePlanePrediction(options):
             with tf.Session(config=config) as sess:
                 sess.run(init_op)
                 for image_index in xrange(options.numImages):
+                    #if image_index != 1:
+                    #continue
                     print('crf tf ' + str(image_index))
                     allSegmentations = np.concatenate([pred_dict['segmentation'][image_index], pred_dict['np_mask'][image_index]], axis=2)
                     allSegmentations = softmax(allSegmentations)
-                    pred_s = sess.run(refined_segmentation, feed_dict={segmentation_inp: np.expand_dims(allSegmentations, 0), plane_inp: np.expand_dims(pred_dict['plane'][image_index], 0), non_plane_depth_inp: np.expand_dims(pred_dict['np_depth'][image_index], 0), info_inp: gt_dict['info'][image_index]})
+                    pred_s, debug = sess.run([refined_segmentation, debug_dict], feed_dict={segmentation_inp: np.expand_dims(allSegmentations, 0), plane_inp: np.expand_dims(pred_dict['plane'][image_index], 0), non_plane_depth_inp: np.expand_dims(pred_dict['np_depth'][image_index], 0), info_inp: gt_dict['info'][image_index], image_inp: gt_dict['image'][image_index:image_index + 1]})
 
                     pred_s = pred_s[0]
-                    
                     planeDepths = calcPlaneDepths(pred_dict['plane'][image_index], WIDTH, HEIGHT, gt_dict['info'][image_index])
                     allDepths = np.concatenate([planeDepths, pred_dict['np_depth'][image_index]], axis=2)
                     pred_d = np.sum(allDepths * pred_s, axis=-1)
@@ -229,17 +253,27 @@ def evaluatePlanePrediction(options):
                     cv2.imwrite(options.test_dir + '/' + str(image_index) + '_depth_pred_' + str(method_index) + '.png', drawDepthImage(pred_d))            
                     cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_pred_' + str(method_index) + '.png', drawSegmentationImage(pred_s, blackIndex=options.numOutputPlanes))
 
-                    #segmentation = np.argmax(allSegmentations, axis=-1)
-                    for planeIndex in xrange(options.numOutputPlanes + 1):
-                        cv2.imwrite('test/mask_' + str(planeIndex) + '.png', drawMaskImage(allSegmentations[:, :, planeIndex]))
-                        continue
+                    if 'diff' in debug:
+                        segmentation = np.argmax(allSegmentations, axis=-1)
+                        for planeIndex in xrange(options.numOutputPlanes + 1):
+                            cv2.imwrite('test/mask_' + str(planeIndex) + '.png', drawMaskImage(allSegmentations[:, :, planeIndex]))
+                            continue
+                    
+                        for planeIndex in xrange(debug['diff'].shape[-1]):
+                            cv2.imwrite('test/cost_mask_' + str(planeIndex) + '.png', drawMaskImage(debug['diff'][0, :, :, planeIndex] / 2))
+                            continue
+                        exit(1)                        
+                        pass
                     continue
                 pass
             new_pred_dict = {}
             for key, value in pred_dict.iteritems():
                 new_pred_dict[key] = value
                 continue
-            new_pred_dict['segmentation'] = np.array(predSegmentations)
+            segmentations = np.array(predSegmentations)
+            new_pred_dict['segmentation'] = segmentations[:, :, :, :options.numOutputPlanes]
+            new_pred_dict['non_plane_mask'] = segmentations[:, :, :, options.numOutputPlanes:options.numOutputPlanes + 1]
+            #new_pred_dict['non_plane_mask'] = segmentations[:, :, :, :options.numOutputPlanes]
             new_pred_dict['depth'] = np.array(predDepths)
             predictions[method_index] = new_pred_dict
             pass
@@ -440,6 +474,7 @@ def evaluateDepthPrediction(options):
             predSegmentations = []
             predDepths = []
             for image_index in xrange(options.numImages):
+                print('+crf')
                 boundaries = pred_dict['boundary'][image_index]
                 boundaries = sigmoid(boundaries)
                 cv2.imwrite(options.test_dir + '/' + str(image_index) + '_boundary.png', drawMaskImage(np.concatenate([boundaries, np.zeros((HEIGHT, WIDTH, 1))], axis=2)))
@@ -550,6 +585,8 @@ def getResults(options):
             pass
         
         options.checkpoint_dir = checkpoint_prefix + 'hybrid' + options.hybrid + '_' + method[0]
+        print(options.checkpoint_dir)
+        
         options.suffix = method[1]
 
         pred_dict = getPrediction(options)
@@ -602,6 +639,8 @@ def getPrediction(options):
     init_op = tf.group(tf.global_variables_initializer(),
                        tf.local_variables_initializer())
 
+    print(options)
+    
     pred_dict = {}
     with tf.Session(config=config) as sess:
         sess.run(init_op)
@@ -737,7 +776,7 @@ def getGroundTruth(options):
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
         reader = RecordReaderAll()
-        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val_temp.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
         pass
     
     img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)

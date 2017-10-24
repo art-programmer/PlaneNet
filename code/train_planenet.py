@@ -87,10 +87,11 @@ def build_graph(img_inp_train, img_inp_val, training_flag, options):
     return global_pred_dict, local_pred_dict, deep_pred_dicts
 
 
-def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_gt_dict_val, training_flag, options):
+def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_gt_dict_val, training_flag, options):
     with tf.device('/gpu:%d'%options.gpu_id):
         debug_dict = {}
-        
+
+        img_inp = tf.cond(training_flag, lambda: img_inp_train, lambda: img_inp_val)        
         global_gt_dict = {}
         for name in global_gt_dict_train.keys():
             global_gt_dict[name] = tf.cond(training_flag, lambda: global_gt_dict_train[name], lambda: global_gt_dict_val[name])
@@ -152,10 +153,16 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
                 all_segmentations = tf.concat([pred_dict['segmentation'], pred_dict['non_plane_mask']], axis=3)
 
                 if options.crf > 0:
-                    all_segmentations_softmax = tf.nn.softmax(all_segmentations_softmax)          
+                    all_segmentations_softmax = tf.nn.softmax(all_segmentations)          
                     with tf.variable_scope('crf'):
-                        all_segmentations_softmax = segmentationRefinementModule(all_segmentations_softmax, all_depths, numIterations=options.crf, numOutputPlanes=21)
-                        segmentation_loss += tf.reduce_mean(-tf.reduce_sum(previous_segmentation_gt, tf.log(all_segmentations), axis=-1))
+                        planesY = global_pred_dict['plane'][:, :, 1]
+                        planesD = tf.maximum(tf.norm(global_pred_dict['plane'], axis=-1), 1e-4)
+                        planesY /= planesD
+                        planesY = tf.concat([planesY, tf.ones((options.batchSize, 1)) * 100], axis=1)
+
+                        imageDiff = calcImageDiff(img_inp)
+                        all_segmentations_softmax, _ = segmentationRefinementModule(all_segmentations_softmax, all_depths, planesY, imageDiff, numIterations=options.crf, numOutputPlanes=21)
+                        segmentation_loss += tf.reduce_mean(-tf.reduce_sum(previous_segmentation_gt* tf.log(tf.maximum(all_segmentations_softmax, 1e-31)), axis=-1)) * 1000
                         pass
                     pass
                 else:
@@ -381,7 +388,7 @@ def main(options):
     
     #loss, loss_dict, _ = build_loss(global_pred_dict, local_pred_dict, deep_pred_dicts, global_gt_dict_train, local_gt_dict_train, global_gt_dict_val, local_gt_dict_val, training_flag, options)
     #loss_rgbd, loss_dict_rgbd, _ = build_loss_rgbd(global_pred_dict, deep_pred_dicts, global_gt_dict_rgbd_train, global_gt_dict_rgbd_val, training_flag, options)
-    loss, loss_dict, _ = build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_gt_dict_val, training_flag, options)    
+    loss, loss_dict, _ = build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_gt_dict_val, training_flag, options)    
         
     #loss = tf.cond(tf.less(training_flag, 2), lambda: loss, lambda: tf.cond(tf.less(training_flag, 4), lambda: loss_rgbd, lambda: loss_3d))
 
@@ -500,7 +507,7 @@ def main(options):
                 ema_acc[batchType] = ema_acc[batchType] * MOVING_AVERAGE_DECAY + 1
 
                 bno = sess.run(batchno)
-                if time.time()-last_snapshot_time > 900:
+                if time.time()-last_snapshot_time > options.saveInterval:
                     print('save snapshot')
                     saver.save(sess,'%s/checkpoint.ckpt'%options.checkpoint_dir)
                     last_snapshot_time = time.time()
@@ -566,7 +573,7 @@ def test(options):
     global_pred_dict, local_pred_dict, deep_pred_dicts = build_graph(img_inp, img_inp, training_flag, options)
     var_to_restore = tf.global_variables()
 
-    loss, loss_dict, debug_dict = build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict, global_gt_dict, training_flag, options)
+    loss, loss_dict, debug_dict = build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, global_gt_dict, global_gt_dict, training_flag, options)
     
 
     config=tf.ConfigProto()
@@ -1303,6 +1310,9 @@ def parse_args():
     parser.add_argument('--rootFolder', dest='rootFolder',
                         help='root folder',
                         default='/mnt/vision/PlaneNet/', type=str)
+    parser.add_argument('--saveInterval', dest='saveInterval',
+                        help='save interval',
+                        default=900, type=int)
     
 
     args = parser.parse_args()
