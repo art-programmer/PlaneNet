@@ -507,7 +507,7 @@ def main(options):
                 ema_acc[batchType] = ema_acc[batchType] * MOVING_AVERAGE_DECAY + 1
 
                 bno = sess.run(batchno)
-                if time.time()-last_snapshot_time > 900:
+                if time.time()-last_snapshot_time > options.saveInterval:
                     print('save snapshot')
                     saver.save(sess,'%s/checkpoint.ckpt'%options.checkpoint_dir)
                     last_snapshot_time = time.time()
@@ -1310,6 +1310,9 @@ def parse_args():
     parser.add_argument('--rootFolder', dest='rootFolder',
                         help='root folder',
                         default='/mnt/vision/PlaneNet/', type=str)
+    parser.add_argument('--saveInterval', dest='saveInterval',
+                        help='save interval',
+                        default=900, type=int)
     
 
     args = parser.parse_args()
