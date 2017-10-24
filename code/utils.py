@@ -1129,6 +1129,101 @@ def fitPlanesSegmentation(depth, segmentation, info, numPlanes=50, numPlanesPerS
 
     return planes, planeSegmentation, depthPred
 
+
+def fitPlanesNYU(image, depth, normal, semantics, info, numPlanes=20, planeAreaThreshold=500, distanceThreshold=0.05, local=-1):
+    camera = getCameraFromInfo(info)
+    width = depth.shape[1]
+    height = depth.shape[0]
+
+    #camera = getNYURGBDCamera()
+    #camera = getSUNCGCamera()
+
+    urange = (np.arange(width, dtype=np.float32) / width * camera['width'] - camera['cx']) / camera['fx']
+    urange = urange.reshape(1, -1).repeat(height, 0)
+    vrange = (np.arange(height, dtype=np.float32) / height * camera['height'] - camera['cy']) / camera['fy']
+    vrange = vrange.reshape(-1, 1).repeat(width, 1)
+    X = depth * urange
+    Y = depth
+    Z = -depth * vrange
+
+    # print(depth[:10, :10])
+    # print(X[:10, :10])
+    # print(Z[:10, :10])
+    # print(urange[:10, :10])
+    # print(vrange[:10, :10])
+    # exit(1)
+    XYZ = np.stack([X, Y, Z], axis=2).reshape(-1, 3)
+    #XYZ = XYZ[depth.reshape(-1) != 0]
+    planes = []
+    planeMasks = []
+    invalidDepthMask = depth < 1e-4
+    for y in xrange(5, 10, height):
+        for x in xrange(5, 10, width):
+            if invalidDepthMask[y][x]:
+                continue
+            sampledPoint = XYZ[y * width + x]
+            sampledPoints = XYZ[np.linalg.norm(XYZ - sampledPoint, 2, 1) < local]
+            if sampledPoints.shape[0] < 3:
+                continue
+            sampledPoints = sampledPoints[np.random.choice(np.arange(sampledPoints.shape[0]), size=(3))]
+            try:
+                plane = fitPlane(sampledPoints)
+                pass
+            except:
+                continue
+            
+            diff = np.abs(np.matmul(XYZ, plane) - np.ones(XYZ.shape[0])) / np.linalg.norm(plane)
+            inlierIndices = diff < distanceThreshold
+            if np.sum(inlierIndices) < planeAreaThreshold:
+                continue
+            
+            planes.append(plane)
+            planeMasks.append(inlierIndices.reshape((height, width)))
+            continue
+        continue
+    
+    planes = np.array(planes)
+
+    planeList = zip(planes, planeMasks)
+    planeList = sorted(planeList, key=lambda x:-x[1].sum())
+    planes, planeMasks = zip(*planeList)
+
+    availableMask = np.ones((height, width), np.bool)
+    validPlanes = []
+    validPlaneMasks = []
+    
+    for planeIndex, plane in enumerate(planes):
+        planeMask = planeMasks[planeIndex]
+        validMask = np.logical_and(planeMask, availableMask)
+        if validMask.sum() < planeMask.sum() * 0.5:
+            continue
+        validPlanes.append(plane)
+        validPlaneMasks.append(planeMask)
+        availableMask -= planeMask
+        continue
+    planes = np.array(validPlanes)
+    planesD = 1 / np.maximum(np.linalg.norm(planes, 2, 1, keepdims=True), 1e-4)
+    planes *= pow(planesD, 2)
+    
+    planeMasks = np.stack(validPlaneMasks, axis=2)
+    print('number of planes: ' + str(planes.shape[0]))
+    
+    planeSegmentation = getSegmentationsGraphCut(planes, image, depth, normal, info)
+
+    planeSegmentation[planeSegmentation == planes.shape[0]] = numPlanes
+
+    if planes.shape[0] < numPlanes:
+        planes = np.concatenate([planes, np.zeros((numPlanes - planes.shape[0], 3))], axis=0)
+        pass
+
+    planeDepths = calcPlaneDepths(planes, width, height, info)
+    
+    allDepths = np.concatenate([planeDepths, depth], axis=2)
+    depthPred = allDepths.reshape([height * width, numPlanes + 1])[np.arange(width * height), planeSegmentation.astype(np.int32).reshape(-1)].reshape(height, width)
+    
+    return planes, planeSegmentation, depthPred
+
+
 def fitPlanesPoints(points, segmentation, groupSegments, numPlanes=50, numPlanesPerSegment=3, numPlanesPerGroup=8, segmentRatio=0.1, planeAreaThreshold=100, numIterations=100, distanceThreshold=0.05, local=-1):
     allXYZ = points.reshape(-1, 3)
 
@@ -1631,6 +1726,7 @@ def sigmoid(values):
 
 def sortSegmentations(segmentations, planes, planesTarget):
     diff = np.linalg.norm(np.expand_dims(planes, 1) - np.expand_dims(planesTarget, 0), axis=2)
-    planeMap = one_hot(np.argmax(-diff, axis=-1), depth=diff.shape[-1])
+    planeMap = one_hot(np.argmin(diff, axis=-1), depth=diff.shape[-1])
+    print(planeMap)
     segmentationsTarget = np.matmul(segmentations, planeMap)
-    return segmentationsTarget
+    return segmentationsTarget, np.matmul(planes.transpose(), planeMap).transpose()

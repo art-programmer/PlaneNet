@@ -43,9 +43,8 @@ def build_graph(img_inp_train, img_inp_val, training_flag, options):
         non_plane_depth_pred = net.layers['non_plane_depth_pred']
         non_plane_normal_pred = net.layers['non_plane_normal_pred']
         
-        semantics_pred = net.layers['non_plane_normal_pred']
         
-        global_pred_dict = {'plane': plane_pred, 'segmentation': segmentation_pred, 'non_plane_mask': non_plane_mask_pred, 'non_plane_depth': non_plane_depth_pred, 'non_plane_normal': non_plane_normal_pred, 'semantics': semantics_pred}
+        global_pred_dict = {'plane': plane_pred, 'segmentation': segmentation_pred, 'non_plane_mask': non_plane_mask_pred, 'non_plane_depth': non_plane_depth_pred, 'non_plane_normal': non_plane_normal_pred}
 
         if options.predictBoundary:
             global_pred_dict['boundary'] = net.layers['boundary_pred']
@@ -214,7 +213,9 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
         #normal_loss = tf.constant(0.0)
 
         if options.predictSemantics:
+            semantics_pred = net.layers['semantics_pred']
             semantics_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=global_pred_dict['semantics'], labels=global_gt_dict['semantics'])) * 1000
+            global_pred_dict['semantics'] = semantics_pred
         else:
             semantics_loss = tf.constant(0.0)
             pass
@@ -297,7 +298,7 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
             neighbor_kernel = tf.reshape(neighbor_kernel, [kernel_size, kernel_size, 1, 1])
 
             DS = tf.nn.depthwise_conv2d(DS_diff, tf.tile(neighbor_kernel, [1, 1, options.numOutputPlanes + 1, 1]), strides=[1, 1, 1, 1], padding='SAME')
-            boundary_loss += tf.reduce_mean(DS * all_segmentations_softmax)
+            boundary_loss += tf.reduce_mean(DS * all_segmentations_softmax) * 100000
 
             debug_dict['cost_mask'] = tf.reduce_sum(DS * all_segmentations_softmax, axis=3)
             #debug_dict['cost_mask'] = DS * all_segmentations_softmax
@@ -312,7 +313,7 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
 
         label_loss = tf.constant(0.0)
         if options.labelLoss == 1:
-            label_loss = tf.reduce_mean(tf.reduce_max(all_segmentations_softmax, axis=[1, 2])) * 100
+            label_loss = tf.reduce_mean(tf.reduce_max(all_segmentations_softmax, axis=[1, 2])) * 1000
             pass
         
         #regularization
@@ -359,8 +360,8 @@ def main(options):
         val_inputs.append(options.rootFolder + '/planes_matterport_val.tfrecords')
         pass
     if '3' in options.hybrid:
-        train_inputs.append(options.rootFolder + '/planes_scannet_train_temp.tfrecords')
-        val_inputs.append(options.rootFolder + '/planes_scannet_val_temp.tfrecords')
+        train_inputs.append(options.rootFolder + '/planes_scannet_train.tfrecords')
+        val_inputs.append(options.rootFolder + '/planes_scannet_val.tfrecords')
         pass
     
     reader_train = RecordReaderAll()
@@ -469,29 +470,31 @@ def main(options):
                 if batchIndexPeriod < len(options.hybrid):
                     #batchType = int(options.hybrid[batchIndexPeriod]) * 2 + 1
                     batchType = 1
+                    _, total_loss, losses, summary_str, gt_dict = sess.run([batchnoinc, loss, loss_dict, summary_op, global_pred_dict], feed_dict = {training_flag: batchType == 0})
+                    
                 else:
                     batchType = 0
+                    _, total_loss, losses, summary_str, gt_dict = sess.run([train_op, loss, loss_dict, summary_op, global_pred_dict], feed_dict = {training_flag: batchType == 0})
                     pass
 
-                _, total_loss, losses, summary_str, global_gt = sess.run([train_op, loss, loss_dict, summary_op, global_gt_dict_train], feed_dict = {training_flag: batchType == 0})
-                for batchIndex in xrange(options.batchSize):
-                    if np.isnan(global_gt['plane'][batchIndex]).any():
-                        #print(losses)
-                        #print(global_gt['plane'][batchIndex])
-                        print(global_gt['num_planes'][batchIndex])
-                        for planeIndex in xrange(global_gt['num_planes'][batchIndex]):
-                            cv2.imwrite('test/mask_' + str(planeIndex) + '.png', drawMaskImage(global_gt['segmentation'][batchIndex, :, :, planeIndex]))
-                            continue
-                        np.save('temp/plane.npy', global_gt['plane'][batchIndex])                        
-                        np.save('temp/depth.npy', global_gt['depth'][batchIndex])
-                        np.save('temp/segmentation.npy', global_gt['segmentation'][batchIndex])
-                        np.save('temp/info.npy', global_gt['info'][batchIndex])
-                        np.save('temp/num_planes.npy', global_gt['num_planes'][batchIndex])
-                        planes, segmentation, numPlanes = removeSmallSegments(global_gt['plane'][batchIndex], np.zeros((HEIGHT, WIDTH, 3)), global_gt['depth'][batchIndex].squeeze(), np.zeros((HEIGHT, WIDTH, 3)), np.argmax(global_gt['segmentation'][batchIndex], axis=-1), global_gt['semantics'][batchIndex], global_gt['info'][batchIndex], global_gt['num_planes'][batchIndex])
-                        print(planes)
-                        exit(1)
-                        pass
-                    continue
+                # for batchIndex in xrange(options.batchSize):
+                #     if np.isnan(global_gt['plane'][batchIndex]).any():
+                #         #print(losses)
+                #         #print(global_gt['plane'][batchIndex])
+                #         print(global_gt['num_planes'][batchIndex])
+                #         for planeIndex in xrange(global_gt['num_planes'][batchIndex]):
+                #             cv2.imwrite('test/mask_' + str(planeIndex) + '.png', drawMaskImage(global_gt['segmentation'][batchIndex, :, :, planeIndex]))
+                #             continue
+                #         np.save('temp/plane.npy', global_gt['plane'][batchIndex])                        
+                #         np.save('temp/depth.npy', global_gt['depth'][batchIndex])
+                #         np.save('temp/segmentation.npy', global_gt['segmentation'][batchIndex])
+                #         np.save('temp/info.npy', global_gt['info'][batchIndex])
+                #         np.save('temp/num_planes.npy', global_gt['num_planes'][batchIndex])
+                #         planes, segmentation, numPlanes = removeSmallSegments(global_gt['plane'][batchIndex], np.zeros((HEIGHT, WIDTH, 3)), global_gt['depth'][batchIndex].squeeze(), np.zeros((HEIGHT, WIDTH, 3)), np.argmax(global_gt['segmentation'][batchIndex], axis=-1), global_gt['semantics'][batchIndex], global_gt['info'][batchIndex], global_gt['num_planes'][batchIndex])
+                #         print(planes)
+                #         exit(1)
+                #         pass
+                #     continue
                 #writers[batchType].add_summary(summary_str, bno)
                 ema[batchType] = ema[batchType] * MOVING_AVERAGE_DECAY + total_loss
                 ema_acc[batchType] = ema_acc[batchType] * MOVING_AVERAGE_DECAY + 1
@@ -787,6 +790,12 @@ def test(options):
                 if index >= 10:
                     continue
 
+
+                if options.predictSemantics:
+                    cv2.imwrite(options.test_dir + '/' + str(index) + '_semantics_pred.png', drawSegmentationImage(global_pred['semantics'][0], blackIndex=0))
+                    cv2.imwrite(options.test_dir + '/' + str(index) + '_semantics_gt.png', drawSegmentationImage(global_gt['semantics'][0], blackIndex=0))
+                    pass
+                    
                 if 'cost_mask' in debug:
                     cv2.imwrite(options.test_dir + '/' + str(index) + '_cost_mask.png', drawMaskImage(np.sum(debug['cost_mask'][0], axis=-1)))
                     #continue

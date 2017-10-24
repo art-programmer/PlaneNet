@@ -158,32 +158,33 @@ def refineSegmentation(image, allSegmentations, allDepths, boundaries, numOutput
     #return proposals.reshape([height, width])
 
 
-def getSegmentationsGraphCut(planes, image, depth, normal, segmentation, semantics, info, numPlanes):
-    numOutputPlanes = planes.shape[0]
+def getSegmentationsGraphCut(planes, image, depth, normal, info):
+
     height = depth.shape[0]
     width = depth.shape[1]
 
-    planeMap = []
-    planeMasks = []
-    for planeIndex in xrange(numPlanes):
-        planeMask = segmentation == planeIndex
-        if planeMask.sum() < 6 * 8:
-            continue
-        planeMap.append(planeIndex)
-        semantic = np.bincount(semantics[planeMask]).argmax()
-        for _ in xrange(2):
-            planeMask = cv2.dilate(planeMask.astype(np.float32), np.ones((3, 3), dtype=np.float32))
-            continue        
-        planeMask = np.logical_and(np.logical_or(semantics == semantic, semantics == 0), planeMask).astype(np.float32)
-        for _ in xrange(1):
-            planeMask = cv2.dilate(planeMask, np.ones((3, 3), dtype=np.float32))
-            continue
-        planeMasks.append(planeMask)
-        continue
-    planeMap = one_hot(np.array(planeMap), depth=planes.shape[0])
-    planes = np.matmul(planeMap, planes)
+    # planeMap = []
+    # planeMasks = []
+    # for planeIndex in xrange(numPlanes):
+    #     planeMask = segmentation == planeIndex
+    #     if planeMask.sum() < 6 * 8:
+    #         continue
+    #     planeMap.append(planeIndex)
+    #     semantic = np.bincount(semantics[planeMask]).argmax()
+    #     for _ in xrange(2):
+    #         planeMask = cv2.dilate(planeMask.astype(np.float32), np.ones((3, 3), dtype=np.float32))
+    #         continue        
+    #     planeMask = np.logical_and(np.logical_or(semantics == semantic, semantics == 0), planeMask).astype(np.float32)
+    #     for _ in xrange(1):
+    #         planeMask = cv2.dilate(planeMask, np.ones((3, 3), dtype=np.float32))
+    #         continue
+    #     planeMasks.append(planeMask)
+    #     continue
+    # planeMap = one_hot(np.array(planeMap), depth=planes.shape[0])
+    #planes = np.matmul(planeMap, planes)
+    #planeMasks = np.stack(planeMasks, 2).reshape((-1, numPlanes))
+
     numPlanes = planes.shape[0]
-    planeMasks = np.stack(planeMasks, 2).reshape((-1, numPlanes))
     
     #if numPlanes < numOutputPlanes:
     #planeMasks = np.concatenate([planeMasks, np.zeros((height, width, numOutputPlanes - numPlanes))], axis=2)
@@ -226,7 +227,8 @@ def getSegmentationsGraphCut(planes, image, depth, normal, segmentation, semanti
     unaryCost *= np.expand_dims((depth > 1e-4).astype(np.float32), -1)
     unaries = -unaryCost.reshape((-1, numPlanes + 1))
 
-    unaries[:, :numPlanes] -= (1 - planeMasks) * 10000
+    #unaries[:, :numPlanes] -= (1 - planeMasks) * 10000
+    
     #print(planes)
     #print(distanceCost[150][200])
     #print(unaryCost[150][200])
@@ -302,7 +304,6 @@ def getSegmentationsGraphCut(planes, image, depth, normal, segmentation, semanti
     #print(pairwise_matrix)
     #refined_segmentation = inference_ogm(unaries * 5, -pairwise_matrix, edges, return_energy=False, alg='alphaexp')
     refined_segmentation = refined_segmentation.reshape([height, width])
-    refined_segmentation[refined_segmentation == numPlanes] = numOutputPlanes
     
     return refined_segmentation
 

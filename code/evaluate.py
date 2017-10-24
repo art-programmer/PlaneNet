@@ -21,11 +21,11 @@ from planenet import PlaneNet
 from RecordReaderAll import *
 from SegmentationRefinement import *
 
-#ALL_TITLES = ['planenet', 'planenet label loss', 'planenet anchor', 'planenet crf', 'planenet same matching', 'pixelwise', 'pixelwise+RANSAC', 'depth observation+RANSAC', 'planenet+crf', 'pixelwise+semantics+RANSAC', 'gt']
-#ALL_METHODS = [('pb_pp', ''), ('ll1_pb_pp', ''), ('pb_pp_ap1', ''), ('crf1_pb_pp', ''), ('pb_pp_sm0', ''), ('pb_pp', 'pixelwise_1'), ('pb_pp', 'pixelwise_2'), ('pb_pp', 'pixelwise_3'), ('pb_pp', 'crf'), ('pb_pp', 'pixelwise_4'), ('pb_pp', 'gt')]
+ALL_TITLES = ['planenet', 'pixelwise', 'pixelwise+RANSAC', 'depth observation+RANSAC', 'pixelwise+semantics+RANSAC', 'gt']
+ALL_METHODS = [('bl2_ll1_bw0.5_pb_pp_sm0', ''), ('pb_pp', 'pixelwise_1'), ('pb_pp', 'pixelwise_2'), ('pb_pp', 'pixelwise_3'), ('pb_pp', 'semantics'), ('pb_pp', 'gt')]
 
-ALL_TITLES = ['planenet label loss', 'planenet crf', 'planenet label backward', 'planenet different matching']
-ALL_METHODS = [('ll1_pb_pp', ''), ('crf1_pb_pp', ''), ('ll1_bw0.5_pb_pp_sm0', ''), ('bl2_ll1_bw0.5_pb_pp_sm0', '')]
+#ALL_TITLES = ['planenet label loss', 'planenet crf', 'planenet label backward', 'planenet different matching']
+#ALL_METHODS = [('ll1_pb_pp', ''), ('crf1_pb_pp', ''), ('ll1_bw0.5_pb_pp_sm0', ''), ('bl2_ll1_bw0.5_pb_pp_sm0', '')]
 
 #ALL_TITLES = ['crf', 'different matching']
 #ALL_METHODS = [('pb_pp_sm0', 'crf'), ('pb_pp_sm0', '')]
@@ -135,11 +135,8 @@ def evaluatePlanePrediction(options):
 
 
 
-
-
             
     #predictions[2] = predictions[3]
-
 
 
             
@@ -546,6 +543,7 @@ def getResults(options):
         options.predictPixelwise = 1
         options.predictBoundary = 1
         options.anchorPlanes = 0
+        options.predictSemantics = 0
         
         if 'ap1' in method[0]:
             options.anchorPlanes = 1            
@@ -643,8 +641,16 @@ def getPrediction(options):
                         continue
                     elif '_2' in options.suffix:
                         #print(pred_d.shape)
+                        #pred_p, pred_s, pred_d = fitPlanes((img[0] + 0.5) * 255, pred_d, global_pred['normal'][0], global_pred['semantics'][0], global_gt['info'][0], numPlanes=20, planeAreaThreshold=100, distanceThreshold=0.05, local=0.2)
                         pred_p, pred_s, pred_d = fitPlanes(pred_d, global_gt['info'][0], numPlanes=20, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=0.2)
                     elif '_3' in options.suffix:
+                        # pred_p, pred_s, pred_d = fitPlanesNYU((img[0] + 0.5) * 255, global_gt['depth'].squeeze(), global_gt['normal'][0], global_gt['semantics'][0], global_gt['info'][0], numPlanes=20, planeAreaThreshold=100, distanceThreshold=0.05, local=0.2)
+
+                        # cv2.imwrite('test/fitting_image.png', global_gt['image'][0])
+                        # cv2.imwrite('test/fitting_depth.png', drawDepthImage(global_gt['depth'][0]))
+                        # cv2.imwrite('test/fitting_segmentation.png', drawSegmentationImage(pred_s, blackIndex=options.numOutputPlanes))
+                        # cv2.imwrite('test/semantics.png', drawSegmentationImage(global_gt['semantics'][0], blackIndex=0))
+                        # exit(1)
                         pred_p, pred_s, pred_d = fitPlanes(global_gt['depth'].squeeze(), global_gt['info'][0], numPlanes=20, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=0.2)
                     else:
                         pred_p = np.zeros((options.numOutputPlanes, 3))

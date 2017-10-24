@@ -1031,3 +1031,42 @@ def crfModule(segmentations, planes, non_plane_depth, info, numOutputPlanes=20, 
         refined_segmentation = meanfieldModule(refined_segmentation, all_depths, numOutputPlanes=numOutputPlanes + 1, sigmaDepthDiff=sigmaDepthDiff)
         continue
     return refined_segmentation
+
+def divideLayers(segmentations, planes, non_plane_mask, info, num_planes, numOutputPlanes_0=5, validAreaRatio=0.95, distanceThreshold=0.05):
+    batchSize = int(planes.shape[0])    
+    numOutputPlanes = int(planes.shape[1])
+    width = int(segmentations.shape[2])
+    height = int(segmentations.shape[1])
+    
+    plane_parameters = tf.reshape(planes, (-1, 3))
+    plane_depths = planeDepthsModule(plane_parameters, width, height, info)
+    plane_depths = tf.transpose(tf.reshape(plane_depths, [height, width, -1, numOutputPlanes]), [2, 0, 1, 3])
+    depth = tf.reduce_sum(plane_depths * segmentations[:, :, :, :numOutputPlanes], axis=3, keep_dims=True)
+    #non_plane_mask = segmentations[:, :, :, numOutputPlanes:numOutputPlanes+1]
+    
+    background_mask = tf.logical_or(tf.logical_or(tf.less(plane_depths, 1e-4), tf.greater(plane_depths, depth - distanceThreshold)), tf.cast(non_plane_mask, tf.bool))
+    background_planes = tf.greater(tf.reduce_mean(tf.cast(background_mask, tf.float32), axis=[1, 2]), validAreaRatio)
+    validPlaneMask = tf.less(tf.tile(tf.expand_dims(tf.range(numOutputPlanes), 0), [batchSize, 1]), tf.expand_dims(num_planes, -1))
+    background_planes = tf.logical_and(background_planes, validPlaneMask)
+    background_planes = tf.cast(background_planes, tf.float32)
+    plane_areas = tf.reduce_sum(segmentations[:, :, :, :numOutputPlanes], axis=[1, 2])
+    
+    layer_plane_areas_0 = plane_areas * background_planes    
+    areas, sortInds = tf.nn.top_k(layer_plane_areas_0, k=numOutputPlanes_0)
+    sortMap = tf.one_hot(sortInds, depth=numOutputPlanes, axis=1)
+    validMask = tf.cast(tf.greater(areas, 1e-4), tf.float32)
+    sortMap *= tf.expand_dims(validMask, 1)
+    layer_segmentations_0 = tf.reshape(tf.matmul(tf.reshape(segmentations, [batchSize, height * width, -1]), sortMap), [batchSize, height, width, -1])
+    layer_planes_0 = tf.transpose(tf.matmul(planes, sortMap, transpose_a=True), [0, 2, 1])
+
+
+    layer_plane_areas_1 = plane_areas * (1 - background_planes)
+    areas, sortInds = tf.nn.top_k(layer_plane_areas_1, k=numOutputPlanes - numOutputPlanes_0)
+    sortMap = tf.one_hot(sortInds, depth=numOutputPlanes, axis=1)
+    validMask = tf.cast(tf.greater(areas, 1e-4), tf.float32)
+    sortMap *= tf.expand_dims(validMask, 1)
+    layer_segmentations_1 = tf.reshape(tf.matmul(tf.reshape(segmentations, [batchSize, height * width, -1]), sortMap), [batchSize, height, width, -1])
+    layer_planes_1 = tf.transpose(tf.matmul(planes, sortMap, transpose_a=True), [0, 2, 1])
+    
+    
+    return tf.concat([layer_segmentations_0, layer_segmentations_1], axis=3), tf.concat([layer_planes_0, layer_planes_1], axis=1)
