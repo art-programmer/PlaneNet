@@ -561,7 +561,7 @@ def evaluateDepths(predDepths, gtDepths, validMasks, planeMasks=True, printInfo=
 
 def drawDepthImage(depth):
     #return cv2.applyColorMap(np.clip(depth / 10 * 255, 0, 255).astype(np.uint8), cv2.COLORMAP_JET)
-    return 255 - np.clip(depth / 10 * 255, 0, 255).astype(np.uint8)
+    return 255 - np.clip(depth / 5 * 255, 0, 255).astype(np.uint8)
 
 def drawDepthImageOverlay(image, depth):
     #return cv2.applyColorMap(np.clip(depth / 10 * 255, 0, 255).astype(np.uint8), cv2.COLORMAP_JET)
@@ -594,7 +594,7 @@ def drawSegmentationImage(segmentations, randomColor=None, numColors=22, blackIn
     return randomColor[segmentation.reshape(-1)].reshape((height, width, 3))
 
 def drawMaskImage(mask):
-    return (mask * 255).astype(np.uint8)
+    return (np.clip(mask * 255, 0, 255)).astype(np.uint8)
 
 def drawDiffImage(values_1, values_2, threshold):
     #return cv2.applyColorMap(np.clip(np.abs(values_1 - values_2) / threshold * 255, 0, 255).astype(np.uint8), cv2.COLORMAP_JET)

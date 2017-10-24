@@ -102,6 +102,10 @@ def build_graph(img_inp_train, img_inp_val, training_flag, options):
             segmentation_pred = tf.concat([positive, tf.tile(negative, [1, 1, 1, 4]), segmentation_pred[:, :, :, 5:7], mask_7, segmentation_pred[:, :, :, 8:]], axis=3)
             plane_pred = tf.concat([plane_pred[:, 7:8, :], plane_pred[:, 1:7, :], plane_pred[:, 0:1, :], plane_pred[:, 8:, :]], axis=1)
             pass
+
+        if False:
+            segmentation_pred = tf.concat([segmentation_pred[:, :, :, 0:1], tf.minimum(segmentation_pred[:, :, :, 1:2], segmentation_pred[:, :, :, 3:4]), segmentation_pred[:, :, :, 2:3], tf.maximum(segmentation_pred[:, :, :, 1:2], segmentation_pred[:, :, :, 3:4]), segmentation_pred[:, :, :, 4:]], axis=3)
+            pass
         
         #segmentation_pred = tf.concat([np.ones((options.batchSize, HEIGHT, WIDTH, 1)) * 100, np.zeros((options.batchSize, HEIGHT, WIDTH, 4)), segmentation_pred[:, :, :, 5:]], axis=3)
 
@@ -309,6 +313,9 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
         validDepthMask = tf.cast(tf.greater(global_gt_dict['depth'], 1e-4), tf.float32)
         depth_loss = tf.reduce_mean(tf.reduce_sum(tf.squared_difference(all_depths, global_gt_dict['depth']) * all_segmentations_softmax, axis=3, keep_dims=True) * validDepthMask) * 10000
 
+        debug_dict['depth'] = tf.squared_difference(all_depths, global_gt_dict['depth']) * all_segmentations_softmax
+
+        
         #if options.predictPixelwise == 1:
         depth_loss += tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_depth'], global_gt_dict['depth']) * validDepthMask) * 1000
 
@@ -353,11 +360,12 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
 
         if True:
             kernel_size = 9
-            neighbor_kernel_array = gaussian(kernel_size)
-            neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 0
-            neighbor_kernel_array /= neighbor_kernel_array.sum()
-            neighbor_kernel = tf.constant(neighbor_kernel_array.reshape(-1), shape=neighbor_kernel_array.shape, dtype=tf.float32)
-            neighbor_kernel = tf.reshape(neighbor_kernel, [kernel_size, kernel_size, 1, 1])
+            # neighbor_kernel_array = gaussian(kernel_size)
+            # neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 0
+            # neighbor_kernel_array /= neighbor_kernel_array.sum()
+            # neighbor_kernel = tf.constant(neighbor_kernel_array.reshape(-1), shape=neighbor_kernel_array.shape, dtype=tf.float32)
+            # neighbor_kernel = tf.reshape(neighbor_kernel, [kernel_size, kernel_size, 1, 1])
+            neighbor_kernel = tf.ones([kernel_size, kernel_size, 1, 1])
 
             #sigmaDepthDiff = 0.5
             #maxDepthDiff = 0.1
@@ -402,7 +410,7 @@ def build_loss(global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_g
             #layer_segmentations_softmax_1 = tf.concat([empty_mask_softmax, all_segmentations_softmax[:, :, :, options.numOutputPlanes_0:]], axis=3)
             layer_segmentations_softmax_1 = all_segmentations_softmax[:, :, :, options.numOutputPlanes_0:]
             
-            boundary_loss += tf.reduce_mean(tf.concat([DS_0 * layer_segmentations_softmax_0 * 10, DS_1 * layer_segmentations_softmax_1], axis=3)) * 100000
+            boundary_loss += tf.reduce_mean(tf.concat([DS_0 * layer_segmentations_softmax_0 * 10, DS_1 * layer_segmentations_softmax_1], axis=3)) * 5000
 
             
             debug_dict['cost_mask'] = tf.concat([DS_0 * layer_segmentations_softmax_0, DS_1 * layer_segmentations_softmax_1], axis=3)
@@ -488,11 +496,11 @@ def main(options):
         pass
     
     reader_train = RecordReaderAll()
-    filename_queue_train = tf.train.string_input_producer(train_inputs, num_epochs=100000)    
+    filename_queue_train = tf.train.string_input_producer(train_inputs, num_epochs=1000000)    
     img_inp_train, global_gt_dict_train, local_gt_dict_train = reader_train.getBatch(filename_queue_train, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
 
     reader_val = RecordReaderAll()
-    filename_queue_val = tf.train.string_input_producer(val_inputs, num_epochs=100000)
+    filename_queue_val = tf.train.string_input_producer(val_inputs, num_epochs=1000000)
     img_inp_val, global_gt_dict_val, local_gt_dict_val = reader_val.getBatch(filename_queue_val, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
     
     training_flag = tf.placeholder(tf.bool, shape=[], name='training_flag')
@@ -1039,6 +1047,11 @@ def test(options):
                     cv2.imwrite(options.test_dir + '/' + str(index) + '_cost_mask.png', drawMaskImage(debug['cost_mask'][0].sum(2)))
 
 
+                    for planeIndex in xrange(debug['depth'].shape[-1]):
+                        cv2.imwrite(options.test_dir + '/' + str(index) + '_cost_depth_' + str(planeIndex) + '.png', drawMaskImage(debug['depth'][0, :, :, planeIndex]))
+                        print(planeIndex, debug['depth'][0, :, :, planeIndex].mean())
+                        continue
+                        
                     total_loss = 0
                     for planeIndex in xrange(debug['cost_mask'].shape[-1]):
                         print((planeIndex, debug['cost_mask'][0, :, :, planeIndex].max(), debug['cost_mask'][0, :, :, planeIndex].min(), debug['cost_mask'][0, :, :, planeIndex].mean() * 200000. / 22))
