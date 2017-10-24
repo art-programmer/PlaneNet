@@ -124,5 +124,5 @@ def writeRecordFile(split):
 
     
 if __name__=='__main__':
-    writeRecordFile('train')
+    writeRecordFile('val')
     #writeRecordFile('val')

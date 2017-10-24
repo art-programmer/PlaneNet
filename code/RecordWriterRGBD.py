@@ -48,8 +48,12 @@ def writeExample(writer, imagePath):
     
     normal = cv2.imread(imagePath['normal']).astype(np.float32) / (255 / 2) - 1
     normal = cv2.resize(normal, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)    
+
+    try:
+        plane_data = sio.loadmat(imagePath['plane'])['planeData']
+    except:
+        return
     
-    plane_data = sio.loadmat(imagePath['plane'])['planeData']
     segmentation = (plane_data[0][0][0] - 1).astype(np.int32)
     
     segmentation = cv2.resize(segmentation, (WIDTH, HEIGHT), interpolation=cv2.INTER_NEAREST)
@@ -97,8 +101,9 @@ def writeExample(writer, imagePath):
 def writeRecordFile(tfrecords_filename, imagePaths):
     writer = tf.python_io.TFRecordWriter(tfrecords_filename)
     for index, imagePath in enumerate(imagePaths):
-        print(index)
+        #print(imagePath['plane'])
         if index % 100 == 0:
+            print(index)
             pass
         writeExample(writer, imagePath)
         #cv2.imwrite('test/image_' + str(index) + '.png', img)
@@ -111,7 +116,7 @@ def writeRecordFile(tfrecords_filename, imagePaths):
 
 
 if __name__=='__main__':
-    imagePaths = glob.glob('/mnt/vision2/NYU_RGBD/train/color_*.png')
+    imagePaths = glob.glob('/mnt/md0/NYU_RGBD/val/color_*.png')
     imagePaths = [{'image': imagePath, 'depth': imagePath.replace('color', 'depth'), 'normal': imagePath.replace('color', 'normal'), 'plane': imagePath.replace('color', 'plane').replace('png', 'mat')} for imagePath in imagePaths]
     
     # splits = sio.loadmat('/mnt/vision/NYU_RGBD/splits.mat')
@@ -125,7 +130,7 @@ if __name__=='__main__':
     print(len(imagePaths))
     # #exit(1)
     random.shuffle(imagePaths)
-    writeRecordFile('../planes_nyu_rgbd_train.tfrecords', imagePaths)
+    writeRecordFile('../planes_nyu_rgbd_val.tfrecords', imagePaths)
     #exit(1)
     
     # testInds = splits['testNdxs'].reshape(-1).tolist()
