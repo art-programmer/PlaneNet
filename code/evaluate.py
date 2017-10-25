@@ -25,7 +25,7 @@ from SegmentationRefinement import *
 #ALL_METHODS = [('bl2_ll1_bw0.5_pb_pp_sm0', ''), ('pb_pp', 'pixelwise_1'), ('pb_pp', 'pixelwise_2'), ('pb_pp', 'pixelwise_3'), ('pb_pp', 'semantics'), ('pb_pp', 'gt')]
 
 ALL_TITLES = ['planenet label loss', 'planenet crf', 'planenet label backward', 'planenet different matching']
-ALL_METHODS = [('ll1_pb_pp', ''), ('crf1_pb_pp', ''), ('ll1_pb_pp', '+crf'), ('ll1_bw0.5_pb_pp_sm0', '')]
+ALL_METHODS = [('ll1_pb_pp', ''), ('crf1_pb_pp', ''), ('ll1_pb_pp', ''), ('ll1_bw0.5_pb_pp_sm0', '')]
 
 #ALL_TITLES = ['crf', 'different matching']
 #ALL_METHODS = [('pb_pp_sm0', 'crf'), ('pb_pp_sm0', '')]
