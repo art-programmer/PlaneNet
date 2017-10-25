@@ -223,7 +223,8 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
         #normal_loss = tf.constant(0.0)
 
         if options.predictSemantics:
-            semantics_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=global_pred_dict['semantics'], labels=global_gt_dict['semantics'])) * 1000
+            valid_semantics_mask = tf.squeeze(tf.cast(tf.not_equal(tf.slice(global_gt_dict['info'], [0, 19], [options.batchSize, 1]), 1), tf.float32))
+            semantics_loss = tf.reduce_mean(tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=global_pred_dict['semantics'], labels=global_gt_dict['semantics']), axis=[1, 2]) * valid_semantics_mask) * 1000
         else:
             semantics_loss = tf.constant(0.0)
             pass
