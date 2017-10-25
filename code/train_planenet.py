@@ -22,7 +22,7 @@ from RecordReader import *
 from RecordReaderRGBD import *
 from RecordReader3D import *
 from RecordReaderAll import *
-#from SegmentationRefinement import *
+from SegmentationRefinement import *
 
 #training_flag: toggle dropout and batch normalization mode
 #it's true for training and false for validation, testing, prediction
@@ -459,12 +459,9 @@ def main(options):
             # if options.predictConfidence == 1:
             #     var_to_restore = [v for v in var_to_restore if 'confidence' not in v.name]
             #     pass
-            #var_to_restore = [v for v in var_to_restore if 'segmentation_conv1' not in v.name]
             var_to_restore = [v for v in var_to_restore if 'semantics' not in v.name]
-
             loader = tf.train.Saver(var_to_restore)
-            #loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + options.hybrid + '_ll1_bw0.5_pb_pp_sm0/checkpoint.ckpt')
-            loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid3_ll1_bw0.5_pb_pp_sm0/checkpoint.ckpt')
+            loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid3_bl0_ll1_bw0.5_pb_pp_ps_sm0/checkpoint.ckpt')
             #loader.restore(sess,"checkpoint/planenet/checkpoint.ckpt")
             sess.run(batchno.assign(1))
         elif options.restore == 4:
