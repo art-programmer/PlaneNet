@@ -1106,3 +1106,19 @@ def divideLayers(segmentations, planes, non_plane_mask, info, num_planes, numOut
     
     
     return tf.concat([layer_segmentations_0, layer_segmentations_1], axis=3), tf.concat([layer_planes_0, layer_planes_1], axis=1)
+
+
+
+def calcMessages(planeSegmentations, planeDepths, planesY, imageDiff, varImageDiff, numOutputPlanes = 20, coef = [1, 1, 1], beta = 1, iteration = 0, maxDepthDiff = 0.2, varDepthDiff = 0.5, kernel_size = 9):
+    batchSize = int(planeSegmentations.shape[0])
+    height = int(planeSegmentations.shape[1])
+    width = int(planeSegmentations.shape[2])
+
+
+    n2 = tf.pow(tf.reshape(planesY, [batchSize, 1, 1, -1]), 2)
+    d2n2s = tf.reduce_sum(tf.pow(planeDepths, 2) * n2 * planeSegmentations, axis=-1, keep_dims=True)
+    dnsd = tf.reduce_sum(planeDepths * n2 * planeSegmentations, axis=-1, keep_dims=True) * planeDepths
+    n2sd2 = tf.reduce_sum(n2 * planeSegmentations, axis=-1, keep_dims=True) * tf.pow(planeDepths, 2)
+    message = d2n2s - 2 * dnsd + n2sd2
+    
+    return refined_segmentation, {'diff': DS}
