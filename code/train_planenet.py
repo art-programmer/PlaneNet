@@ -1267,19 +1267,19 @@ def parse_args():
                         default=100, type=int)
     parser.add_argument('--boundaryLoss', dest='boundaryLoss',
                         help='use boundary loss: [0, 1]',
-                        default=1, type=int)
+                        default=0, type=int)
     parser.add_argument('--diverseLoss', dest='diverseLoss',
                         help='use diverse loss: [0, 1]',
                         default=1, type=int)
     parser.add_argument('--labelLoss', dest='labelLoss',
                         help='use label loss: [0, 1]',
-                        default=0, type=int)    
+                        default=1, type=int)    
     parser.add_argument('--deepSupervision', dest='deepSupervision',
                         help='deep supervision level: [0, 1, 2]',
                         default=1, type=int)
     parser.add_argument('--sameMatching', dest='sameMatching',
                         help='use the same matching for all deep supervision layers and the final prediction: [0, 1]',
-                        default=1, type=int)    
+                        default=0, type=int)    
     parser.add_argument('--anchorPlanes', dest='anchorPlanes',
                         help='use anchor planes for all deep supervision layers and the final prediction: [0, 1]',
                         default=0, type=int) 
@@ -1288,13 +1288,13 @@ def parse_args():
                         default=0, type=int)
     parser.add_argument('--backwardLossWeight', dest='backwardLossWeight',
                         help='backward matching loss',
-                        default=0, type=float)
+                        default=0.5, type=float)
     parser.add_argument('--predictBoundary', dest='predictBoundary',
                         help='whether predict boundary or not: [0, 1]',
-                        default=0, type=int)
+                        default=1, type=int)
     parser.add_argument('--predictSemantics', dest='predictSemantics',
                         help='whether predict semantics or not: [0, 1]',
-                        default=0, type=int)    
+                        default=1, type=int)    
     parser.add_argument('--predictLocal', dest='predictLocal',
                         help='whether predict local planes or not: [0, 1]',
                         default=0, type=int)
@@ -1303,7 +1303,7 @@ def parse_args():
                         default=0, type=int)
     parser.add_argument('--predictPixelwise', dest='predictPixelwise',
                         help='whether predict pixelwise depth or not: [0, 1]',
-                        default=0, type=int)    
+                        default=1, type=int)    
     parser.add_argument('--fineTuningCheckpoint', dest='fineTuningCheckpoint',
                         help='specify the model for fine-tuning',
                         default='../PlaneSetGeneration/dump_planenet_diverse/train_planenet_diverse.ckpt', type=str)
