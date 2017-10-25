@@ -22,7 +22,7 @@ from RecordReader import *
 from RecordReaderRGBD import *
 from RecordReader3D import *
 from RecordReaderAll import *
-from SegmentationRefinement import *
+#from SegmentationRefinement import *
 
 #training_flag: toggle dropout and batch normalization mode
 #it's true for training and false for validation, testing, prediction
@@ -332,7 +332,7 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
 
         label_loss = tf.constant(0.0)
         if options.labelLoss == 1:
-            label_loss = tf.reduce_mean(tf.reduce_max(all_segmentations_softmax, axis=[1, 2])) * 10000
+            label_loss = tf.reduce_mean(tf.reduce_max(all_segmentations_softmax, axis=[1, 2])) * 1000
             pass
         
         #regularization
