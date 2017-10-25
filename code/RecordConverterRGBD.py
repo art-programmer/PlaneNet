@@ -76,6 +76,9 @@ def writeRecordFile(split):
                 print(_)
                 img, global_gt = sess.run([img_inp, global_gt_dict])
                 for batchIndex in xrange(batchSize):
+                    if global_gt['num_planes'][batchIndex] == 0:
+                        print('no plane')
+                        continue
                     image = ((img[batchIndex] + 0.5) * 255).astype(np.uint8)
                     segmentation = global_gt['segmentation'][batchIndex].astype(np.uint8).squeeze()
                     boundary = global_gt['boundary'][batchIndex].astype(np.uint8)
