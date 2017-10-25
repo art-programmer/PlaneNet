@@ -332,7 +332,7 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
 
         label_loss = tf.constant(0.0)
         if options.labelLoss == 1:
-            label_loss = tf.reduce_mean(tf.reduce_max(all_segmentations_softmax, axis=[1, 2])) * 1000
+            label_loss = tf.reduce_mean(tf.reduce_max(all_segmentations_softmax, axis=[1, 2])) * 10000
             pass
         
         #regularization
@@ -1270,7 +1270,7 @@ def parse_args():
                         default=1, type=int)
     parser.add_argument('--diverseLoss', dest='diverseLoss',
                         help='use diverse loss: [0, 1]',
-                        default=0, type=int)
+                        default=1, type=int)
     parser.add_argument('--labelLoss', dest='labelLoss',
                         help='use label loss: [0, 1]',
                         default=0, type=int)    
@@ -1339,8 +1339,8 @@ def parse_args():
     if args.boundaryLoss != 1:
         args.keyname += '_bl' + str(args.boundaryLoss)
         pass
-    if args.diverseLoss == 1:
-        args.keyname += '_dl1'
+    if args.diverseLoss == 0:
+        args.keyname += '_dl0'
         pass
     if args.labelLoss == 1:
         args.keyname += '_ll1'
