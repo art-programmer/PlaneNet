@@ -579,11 +579,9 @@ class PlaneNet(Network):
              .conv(1, 1, 3, 1, 1, relu=False, name='non_plane_normal_conv2')
              .resize_bilinear(size=[192, 256], name='non_plane_normal_pred'))
 
-        if options.predictSemantics == 1:
-            (self.feed('segmentation_dropout')
-                 .conv(1, 1, 41, 1, 1, relu=False, name='semantics_conv2')
-                 .resize_bilinear(size=[192, 256], name='semantics_pred'))
-            pass
+        (self.feed('segmentation_dropout')
+             .conv(1, 1, 1, 1, 1, relu=False, name='empty_mask_conv2')
+             .resize_bilinear(size=[192, 256], name='empty_mask_pred'))
         
 
         #boundary prediction

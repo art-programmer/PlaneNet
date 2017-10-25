@@ -41,7 +41,8 @@ class RecordReaderAll():
                 #'plane_relation': tf.FixedLenFeature([NUM_PLANES * NUM_PLANES], tf.float32),
                 'segmentation_raw': tf.FixedLenFeature([], tf.string),
                 'depth': tf.FixedLenFeature([HEIGHT * WIDTH], tf.float32),
-                'normal': tf.FixedLenFeature([HEIGHT * WIDTH * 3], tf.float32),                
+                'normal': tf.FixedLenFeature([HEIGHT * WIDTH * 3], tf.float32),
+                'semantics_raw': tf.FixedLenFeature([], tf.string),                
                 'boundary_raw': tf.FixedLenFeature([], tf.string),
                 'info': tf.FixedLenFeature([4 * 4 + 4], tf.float32),                
             })
@@ -52,6 +53,7 @@ class RecordReaderAll():
         image = tf.decode_raw(features['image_raw'], tf.uint8)
         image = tf.cast(image, tf.float32) * (1. / 255) - 0.5
         image = tf.reshape(image, [HEIGHT, WIDTH, 3])
+
         
         depth = features['depth']
         depth = tf.reshape(depth, [HEIGHT, WIDTH, 1])
@@ -59,6 +61,9 @@ class RecordReaderAll():
         normal = features['normal']
         normal = tf.reshape(normal, [HEIGHT, WIDTH, 3])        
 
+        semantics = tf.decode_raw(features['semantics_raw'], tf.uint8)
+        semantics = tf.cast(tf.reshape(semantics, [HEIGHT, WIDTH]), tf.int32)
+        
         numPlanes = tf.minimum(tf.cast(features['num_planes'], tf.int32), numOutputPlanes)
         
         planes = features['plane']
@@ -96,9 +101,9 @@ class RecordReaderAll():
 
         
         if random:
-            image_inp, plane_inp, depth_gt, normal_gt, plane_masks_gt, boundary_gt, num_planes_gt, non_plane_mask_gt, image_path, info = tf.train.shuffle_batch([image, planes, depth, normal, plane_masks, boundary, numPlanes, non_plane_mask, features['image_path'], features['info']], batch_size=batchSize, capacity=min_after_dequeue + (NUM_THREADS + 2) * batchSize, num_threads=NUM_THREADS, min_after_dequeue=min_after_dequeue)
+            image_inp, plane_inp, depth_gt, normal_gt, semantics_gt, plane_masks_gt, boundary_gt, num_planes_gt, non_plane_mask_gt, image_path, info = tf.train.shuffle_batch([image, planes, depth, normal, semantics, plane_masks, boundary, numPlanes, non_plane_mask, features['image_path'], features['info']], batch_size=batchSize, capacity=min_after_dequeue + (NUM_THREADS + 2) * batchSize, num_threads=NUM_THREADS, min_after_dequeue=min_after_dequeue)
         else:
-            image_inp, plane_inp, depth_gt, normal_gt, plane_masks_gt, boundary_gt, num_planes_gt, non_plane_mask_gt, image_path, info = tf.train.batch([image, planes, depth, normal, plane_masks, boundary, numPlanes, non_plane_mask, features['image_path'], features['info']], batch_size=batchSize, capacity=(NUM_THREADS + 2) * batchSize, num_threads=1)
+            image_inp, plane_inp, depth_gt, normal_gt, semantics_gt, plane_masks_gt, boundary_gt, num_planes_gt, non_plane_mask_gt, image_path, info = tf.train.batch([image, planes, depth, normal, semantics, plane_masks, boundary, numPlanes, non_plane_mask, features['image_path'], features['info']], batch_size=batchSize, capacity=(NUM_THREADS + 2) * batchSize, num_threads=1)
             pass
-        global_gt_dict = {'plane': plane_inp, 'depth': depth_gt, 'normal': normal_gt, 'segmentation': plane_masks_gt, 'boundary': boundary_gt, 'num_planes': num_planes_gt, 'non_plane_mask': non_plane_mask_gt, 'path': image_path, 'info': info}
+        global_gt_dict = {'plane': plane_inp, 'depth': depth_gt, 'normal': normal_gt, 'semantics': semantics_gt, 'segmentation': plane_masks_gt, 'boundary': boundary_gt, 'num_planes': num_planes_gt, 'non_plane_mask': non_plane_mask_gt, 'image_path': image_path, 'info': info}
         return image_inp, global_gt_dict, {}

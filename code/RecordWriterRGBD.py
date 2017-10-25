@@ -23,24 +23,37 @@ def _float_feature(value):
 def writeExample(writer, imagePath):
     #img = np.array(Image.open(imagePath['image']))
     #img = cv2.imread(imagePath['image'])
-    img = sio.loadmat(imagePath['image'])['imgRgb']
-    img = cv2.resize(img, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)
 
+
+    #img = sio.loadmat(imagePath['image'])['imgRgb']
+    #img = cv2.resize(img, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)    
+    #depth = sio.loadmat(imagePath['depth'])['imgDepth']
+    #depth = cv2.resize(depth, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)
+    #normal = sio.loadmat(imagePath['normal'])['imgNormals']
+    #normal = cv2.resize(normal, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)
+
+
+    img = cv2.imread(imagePath['image'])
+    img = cv2.resize(img, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)    
+    
     height = img.shape[0]
     width = img.shape[1]
     img_raw = img.tostring()
-
-    depth = sio.loadmat(imagePath['depth'])['imgDepth']
-    depth = cv2.resize(depth, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)
     
-    normal = sio.loadmat(imagePath['normal'])['imgNormals']
-    normal = cv2.resize(normal, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)
+    depth = cv2.imread(imagePath['depth'], -1).astype(np.float32) / 255 * 10
+    invalidMask = (depth < 1e-4).astype(np.float32)
+    invalidMask = (cv2.resize(invalidMask, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR) > 1e-4).astype(np.bool)
+    depth = cv2.resize(depth, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)
+    depth[invalidMask] = 0
+    
+    normal = cv2.imread(imagePath['normal']).astype(np.float32) / (255 / 2) - 1
+    normal = cv2.resize(normal, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)    
     
     plane_data = sio.loadmat(imagePath['plane'])['planeData']
     segmentation = (plane_data[0][0][0] - 1).astype(np.int32)
-    print(segmentation.shape)
+    
     segmentation = cv2.resize(segmentation, (WIDTH, HEIGHT), interpolation=cv2.INTER_NEAREST)
-    print(segmentation.shape)
+    #print(segmentation.shape)
     planes = plane_data[0][0][1]
     planes = planes[:, :3] * planes[:, 3:4]
     numPlanes = planes.shape[0]
@@ -51,6 +64,20 @@ def writeExample(writer, imagePath):
         segmentation[segmentation == numPlanes] = NUM_PLANES
         planes = np.concatenate([planes, np.zeros((NUM_PLANES - numPlanes, 3))], axis=0)
         pass
+
+
+    info = np.zeros(20)
+    info[0] = 5.1885790117450188e+02
+    info[2] = 3.2558244941119034e+02 - 40
+    info[5] = 5.1946961112127485e+02
+    info[6] = 2.5373616633400465e+02 - 44
+    info[10] = 1
+    info[15] = 1
+    info[16] = 561
+    info[17] = 427
+    info[18] = 1000
+    info[19] = 1
+    
     #print(segmentation.shape)
     #exit(1)
     example = tf.train.Example(features=tf.train.Features(feature={
@@ -61,7 +88,7 @@ def writeExample(writer, imagePath):
         'plane': _float_feature(planes.reshape(-1)),
         'num_planes': _int64_feature([numPlanes]),
         'segmentation_raw': _bytes_feature(segmentation.tostring()),
-        'dataset': _int64_feature([1]),
+        'info': _float_feature(info),
     }))
     writer.write(example.SerializeToString())
     return
@@ -84,32 +111,36 @@ def writeRecordFile(tfrecords_filename, imagePaths):
 
 
 if __name__=='__main__':
-    splits = sio.loadmat('/mnt/vision/NYU_RGBD/splits.mat')
-    trainInds = splits['trainNdxs'].reshape(-1).tolist()
-    imagePaths = []
-    for index in trainInds:
-        imagePath = '/mnt/vision/NYU_RGBD/images_rgb/rgb_%06d.mat' % (index)
-        imagePaths.append({'image': imagePath, 'depth': imagePath.replace('rgb', 'depth'), 'normal': imagePath.replace('images_rgb', 'surface_normals').replace('rgb', 'surface_normals'), 'plane': imagePath.replace('images_rgb', 'planes').replace('rgb', 'plane_data')})
-        continue
-        
-    print(len(imagePaths))
-    #exit(1)
-    random.shuffle(imagePaths)
-    writeRecordFile('../planes_nyu_rgbd_temp.tfrecords', imagePaths)
-    exit(1)
+    imagePaths = glob.glob('/mnt/vision2/NYU_RGBD/train/color_*.png')
+    imagePaths = [{'image': imagePath, 'depth': imagePath.replace('color', 'depth'), 'normal': imagePath.replace('color', 'normal'), 'plane': imagePath.replace('color', 'plane').replace('png', 'mat')} for imagePath in imagePaths]
     
-    testInds = splits['testNdxs'].reshape(-1).tolist()
-    imagePaths = []
-    for index in testInds:
-        imagePath = '/mnt/vision/NYU_RGBD/images_rgb/rgb_%06d.mat' % (index)
-        imagePaths.append({'image': imagePath, 'depth': imagePath.replace('rgb', 'depth'), 'normal': imagePath.replace('images_rgb', 'surface_normals').replace('rgb', 'surface_normals'), 'plane': imagePath.replace('images_rgb', 'planes').replace('rgb', 'plane_data')})
-        continue
+    # splits = sio.loadmat('/mnt/vision/NYU_RGBD/splits.mat')
+    # trainInds = splits['trainNdxs'].reshape(-1).tolist()
+    # imagePaths = []
+    # for index in trainInds:
+    #     imagePath = '/mnt/vision/NYU_RGBD/images_rgb/rgb_%06d.mat' % (index)
+    #     imagePaths.append({'image': imagePath, 'depth': imagePath.replace('rgb', 'depth'), 'normal': imagePath.replace('images_rgb', 'surface_normals').replace('rgb', 'surface_normals'), 'plane': imagePath.replace('images_rgb', 'planes').replace('rgb', 'plane_data')})
+    #     continue
         
     print(len(imagePaths))
-    #exit(1)
+    # #exit(1)
     random.shuffle(imagePaths)
-    writeRecordFile('../planes_nyu_rgbd_val.tfrecords', imagePaths)
+    writeRecordFile('../planes_nyu_rgbd_train.tfrecords', imagePaths)
+    #exit(1)
+    
+    # testInds = splits['testNdxs'].reshape(-1).tolist()
+    # imagePaths = []
+    # for index in testInds:
+    #     imagePath = '/mnt/vision/NYU_RGBD/images_rgb/rgb_%06d.mat' % (index)
+    #     imagePaths.append({'image': imagePath, 'depth': imagePath.replace('rgb', 'depth'), 'normal': imagePath.replace('images_rgb', 'surface_normals').replace('rgb', 'surface_normals'), 'plane': imagePath.replace('images_rgb', 'planes').replace('rgb', 'plane_data')})
+    #     continue
+        
+    # print(len(imagePaths))
+    # #exit(1)
+    # random.shuffle(imagePaths)
+    # writeRecordFile('../planes_nyu_rgbd_val.tfrecords', imagePaths)
 
+    
     
     #reader.readRecordFile()
 

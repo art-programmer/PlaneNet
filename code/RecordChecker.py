@@ -9,7 +9,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from modules import *
 from utils import *
-from RecordReader3D import *
+from RecordReaderAll import *
 from SegmentationRefinement import *
 
 HEIGHT=192
@@ -31,16 +31,16 @@ def writeRecordFile(split, dataset):
     batchSize = 8
     numOutputPlanes = 20
     if split == 'train':
-        reader = RecordReader3D()
-        filename_queue = tf.train.string_input_producer(['../planes_' + dataset + '_train.tfrecords'], num_epochs=1)
+        reader = RecordReaderAll()
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_' + dataset + '_train.tfrecords'], num_epochs=1)
         img_inp, global_gt_dict, _ = reader.getBatch(filename_queue, numOutputPlanes=numOutputPlanes, batchSize=batchSize, random=False, getLocal=True)
-        writer = tf.python_io.TFRecordWriter('/mnt/vision/PlaneNet/planes_' + dataset + '_train.tfrecords')
+        writer = tf.python_io.TFRecordWriter('/mnt/vision/PlaneNet/planes_' + dataset + '_train_temp.tfrecords')
         numImages = 50000
     else:
-        reader = RecordReader3D()
-        filename_queue = tf.train.string_input_producer(['../planes_' + dataset + '_val.tfrecords'], num_epochs=1)
+        reader = RecordReaderAll()
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_' + dataset + '_val.tfrecords'], num_epochs=1)
         img_inp, global_gt_dict, _ = reader.getBatch(filename_queue, numOutputPlanes=numOutputPlanes, batchSize=batchSize, random=False, getLocal=True)
-        writer = tf.python_io.TFRecordWriter('/mnt/vision/PlaneNet/planes_' + dataset + '_val.tfrecords')
+        writer = tf.python_io.TFRecordWriter('/mnt/vision/PlaneNet/planes_' + dataset + '_val_temp.tfrecords')
         numImages = 1000
         pass
     
@@ -51,9 +51,9 @@ def writeRecordFile(split, dataset):
     #segmentation_gt, plane_mask = fitPlaneMasksModule(global_gt_dict['plane'], global_gt_dict['depth'], global_gt_dict['normal'], width=WIDTH, height=HEIGHT, normalDotThreshold=np.cos(np.deg2rad(5)), distanceThreshold=0.05, closing=True, one_hot=True)
     #global_gt_dict['segmentation'] = tf.argmax(tf.concat([segmentation_gt, 1 - plane_mask], axis=3), axis=3)
 
-    segmentation_gt = tf.cast(tf.equal(global_gt_dict['segmentation'], tf.reshape(tf.range(NUM_PLANES), (1, 1, 1, -1))), tf.float32)
-    plane_mask = tf.cast(tf.less(global_gt_dict['segmentation'], NUM_PLANES), tf.float32)
-    global_gt_dict['boundary'] = findBoundaryModuleSmooth(global_gt_dict['depth'], segmentation_gt, plane_mask, global_gt_dict['smooth_boundary'], max_depth_diff = 0.1, max_normal_diff = np.sqrt(2 * (1 - np.cos(np.deg2rad(20)))))
+    #segmentation_gt = tf.cast(tf.equal(global_gt_dict['segmentation'], tf.reshape(tf.range(NUM_PLANES), (1, 1, 1, -1))), tf.float32)
+    #plane_mask = tf.cast(tf.less(global_gt_dict['segmentation'], NUM_PLANES), tf.float32)
+    #global_gt_dict['boundary'] = findBoundaryModuleSmooth(global_gt_dict['depth'], segmentation_gt, plane_mask, global_gt_dict['smooth_boundary'], max_depth_diff = 0.1, max_normal_diff = np.sqrt(2 * (1 - np.cos(np.deg2rad(20)))))
     
     
     # info = np.zeros(20)
@@ -75,46 +75,40 @@ def writeRecordFile(split, dataset):
         try:
             for _ in xrange(numImages / batchSize):
                 print(_)
-                img, global_gt = sess.run([img_inp, global_gt_dict])
+                try:
+                    img, global_gt = sess.run([img_inp, global_gt_dict])
+                except:
+                    print('problem')
+                    continue
+                
                 for batchIndex in xrange(batchSize):
                     image = ((img[batchIndex] + 0.5) * 255).astype(np.uint8)
-                    segmentation = global_gt['segmentation'][batchIndex].astype(np.uint8).squeeze()
-                    boundary = global_gt['boundary'][batchIndex].astype(np.uint8)
-
-                 
-                    #boundary = np.concatenate([boundary, np.zeros((HEIGHT, WIDTH, 1))], axis=2)
-
-                    info = global_gt['info'][batchIndex]
-                    datasetIndex = 2
-                    if dataset == 'scannet':
-                        datasetIndex = 3
-                        pass
-                    info = np.concatenate([info[3:], info[:3], np.ones(1) * datasetIndex])
-
-                    depthFilename = global_gt['image_path'][batchIndex].replace('color.jpg', 'depth.pgm')
                     
-                    depth = np.array(PIL.Image.open(depthFilename)).astype(np.float32) / info[18]
-                    invalidMask = (depth < 1e-4).astype(np.float32)
-                    invalidMask = (cv2.resize(invalidMask, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR) > 1e-4).astype(np.bool)
-                    depth = cv2.resize(depth, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)
-                    #cv2.imwrite('test/depth_ori_' + str(batchIndex) + '.png', drawDepthImage(depth))
-                    depth[invalidMask] = 0
+                    segmentation = np.argmax(np.concatenate([global_gt['segmentation'][batchIndex], global_gt['non_plane_mask'][batchIndex]], axis=-1), axis=-1).astype(np.uint8).squeeze()
+                    boundary = global_gt['boundary'][batchIndex].astype(np.uint8)
+                    semantics = global_gt['semantics'][batchIndex].astype(np.uint8)
 
 
-                    semanticsFilename = global_gt['image_path'][batchIndex].replace('color.jpg', 'segmentation.png').replace('frames', 'annotation/semantics')
-                    semantics = cv2.imread(semanticsFilename, -1)
-                    semantics = cv2.resize(semantics, (WIDTH, HEIGHT), interpolation=cv2.INTER_NEAREST)
-                    #cv2.imwrite('test/segmentation_' + str(batchIndex) + '.png', drawSegmentationImage(semantics, blackIndex=0))
-                    #cv2.imwrite('test/depth_' + str(batchIndex) + '.png', drawDepthImage(depth))
-                    # cv2.imwrite('test/boundary_' + str(batchIndex) + '.png', drawMaskImage(boundary))
-                    # cv2.imwrite('test/image_' + str(batchIndex) + '.png', image)               
+                    planes = global_gt['plane'][batchIndex]
+                    numPlanes = global_gt['num_planes'][batchIndex]
+                    if np.isnan(planes).any():
+                        print(global_gt['image_path'][batchIndex])
+                        planes, segmentation, numPlanes = removeSmallSegments(planes, np.zeros((HEIGHT, WIDTH, 3)), global_gt['depth'][batchIndex].squeeze(), np.zeros((HEIGHT, WIDTH, 3)), np.argmax(global_gt['segmentation'][batchIndex], axis=-1), global_gt['semantics'][batchIndex], global_gt['info'][batchIndex], global_gt['num_planes'][batchIndex])
+                        if np.isnan(planes).any():
+                            np.save('temp/plane.npy', global_gt['plane'][batchIndex])                        
+                            np.save('temp/depth.npy', global_gt['depth'][batchIndex])
+                            np.save('temp/segmentation.npy', global_gt['segmentation'][batchIndex])
+                            np.save('temp/info.npy', global_gt['info'][batchIndex])
+                            np.save('temp/num_planes.npy', global_gt['num_planes'][batchIndex])
+                            print('why')
+                            exit(1)
+                        pass
 
-                    planes, segmentation, numPlanes = removeSmallSegments(global_gt['plane'][batchIndex], image, depth, np.zeros((HEIGHT * WIDTH * 3)), segmentation, semantics, info, global_gt['num_planes'][batchIndex])
                     
                     example = tf.train.Example(features=tf.train.Features(feature={
                         'image_path': _bytes_feature(global_gt['image_path'][batchIndex]),
                         'image_raw': _bytes_feature(image.tostring()),
-                        'depth': _float_feature(depth.reshape(-1)),
+                        'depth': _float_feature(global_gt['depth'][batchIndex].reshape(-1)),
                         'normal': _float_feature(np.zeros((HEIGHT * WIDTH * 3))),
                         'semantics_raw': _bytes_feature(semantics.tostring()),
                         'plane': _float_feature(planes.reshape(-1)),
@@ -122,7 +116,7 @@ def writeRecordFile(split, dataset):
                         'segmentation_raw': _bytes_feature(segmentation.tostring()),
                         'boundary_raw': _bytes_feature(boundary.tostring()),
                         #'plane_relation': _float_feature(planeRelations.reshape(-1)),
-                        'info': _float_feature(info),
+                        'info': _float_feature(global_gt['info'][batchIndex]),
                     }))
                     
                     writer.write(example.SerializeToString())
@@ -146,5 +140,6 @@ if __name__=='__main__':
     #writeRecordFile('val', 'matterport')
     #writeRecordFile('val', 'scannet')
     # writeRecordFile('train', 'matterport')    
-    writeRecordFile('train', 'scannet')    
+    #writeRecordFile('train', 'scannet')
+    writeRecordFile('train', 'nyu_rgbd')    
 
