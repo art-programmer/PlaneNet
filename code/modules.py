@@ -136,10 +136,11 @@ def calcImageDiff(images, kernel_size = 9):
     image_diff = tf.nn.depthwise_conv2d(images, tf.tile(neighbor_kernel, [1, 1, 3, 1]), strides=[1, 1, 1, 1], padding='SAME')
     image_diff = tf.pow(image_diff, 2)
     image_diff = tf.reduce_sum(image_diff, axis=3, keep_dims=True)
-    image_diff = image_diff / (tf.reduce_mean(image_diff, axis=[1, 2, 3], keep_dims=True) * 2)
-    image_diff = tf.exp(-image_diff)
+    var_image_diff =  tf.reduce_mean(image_diff, axis=[1, 2, 3], keep_dims=True)
+    #image_diff = image_diff
+    #image_diff = tf.exp(-image_diff)
     #image_diff = tf.nn.max_pool(image_diff, ksize=[1, 3, 3, 1], strides=[1, 1, 1, 1], padding='SAME')
-    return image_diff
+    return image_diff, var_image_diff
     
 def meanfieldModule(planeSegmentations, planeDepths, planesY, imageDiff, numOutputPlanes = 20, coef = [1, 1, 1], beta = 1, iteration = 0, maxDepthDiff = 0.2, varDepthDiff = 0.5, kernel_size = 9):
     batchSize = int(planeSegmentations.shape[0])
@@ -1109,7 +1110,8 @@ def divideLayers(segmentations, planes, non_plane_mask, info, num_planes, numOut
 
 
 
-def calcMessages(planeSegmentations, planeDepths, planesY, imageDiff, varImageDiff, numOutputPlanes = 20, coef = [1, 1, 1], beta = 1, iteration = 0, maxDepthDiff = 0.2, varDepthDiff = 0.5, kernel_size = 9):
+def calcMessages(planeSegmentations, planeDepths, planesY, numOutputPlanes = 21, coef = [1, 1, 1], beta = 1, iteration = 0, maxDepthDiff = 0.2, varDepthDiff = 0.5, kernel_size = 9):
+    #images, varImageDiff
     batchSize = int(planeSegmentations.shape[0])
     height = int(planeSegmentations.shape[1])
     width = int(planeSegmentations.shape[2])
@@ -1119,6 +1121,22 @@ def calcMessages(planeSegmentations, planeDepths, planesY, imageDiff, varImageDi
     d2n2s = tf.reduce_sum(tf.pow(planeDepths, 2) * n2 * planeSegmentations, axis=-1, keep_dims=True)
     dnsd = tf.reduce_sum(planeDepths * n2 * planeSegmentations, axis=-1, keep_dims=True) * planeDepths
     n2sd2 = tf.reduce_sum(n2 * planeSegmentations, axis=-1, keep_dims=True) * tf.pow(planeDepths, 2)
-    message = d2n2s - 2 * dnsd + n2sd2
+
+    messages = d2n2s - 2 * dnsd + n2sd2
+
+    maxDepthDiff = 0.2
+    messages = tf.minimum(messages / pow(maxDepthDiff, 2), 1)
     
-    return refined_segmentation, {'diff': DS}
+    # vertical_padding = tf.zeros((batchSize, height, 1, numOutputPlanes))
+    # horizontal_padding = tf.zeros((batchSize, height, 1, numOutputPlanes))    
+
+
+    # neighbor_kernel_array = gaussian(kernel_size)
+    # neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 0
+    # neighbor_kernel_array /= neighbor_kernel_array.sum()
+    # neighbor_kernel = tf.constant(neighbor_kernel_array.reshape(-1), shape=neighbor_kernel_array.shape, dtype=tf.float32)
+    # neighbor_kernel = tf.reshape(neighbor_kernel, [kernel_size, kernel_size, 1, 1])
+    
+    # messages = tf.nn.depthwise_conv2d(messages, tf.tile(neighbor_kernel, [1, 1, numOutputPlanes, 1]), strides=[1, 1, 1, 1], padding='SAME')
+
+    return messages

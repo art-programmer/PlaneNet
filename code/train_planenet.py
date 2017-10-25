@@ -52,7 +52,10 @@ def build_graph(img_inp_train, img_inp_val, training_flag, options):
         if options.predictConfidence:
             global_pred_dict['confidence'] = net.layers['plane_confidence_pred']
             pass
-        
+        if options.predictSemantics:
+            global_pred_dict['semantics'] = net.layers['semantics_pred']
+            pass
+
         #local predictions
         if options.predictLocal:
             local_pred_dict = {'score': net.layers['local_score_pred'], 'plane': net.layers['local_plane_pred'], 'mask': net.layers['local_mask_pred']}
@@ -220,9 +223,7 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
         #normal_loss = tf.constant(0.0)
 
         if options.predictSemantics:
-            semantics_pred = net.layers['semantics_pred']
             semantics_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=global_pred_dict['semantics'], labels=global_gt_dict['semantics'])) * 1000
-            global_pred_dict['semantics'] = semantics_pred
         else:
             semantics_loss = tf.constant(0.0)
             pass
@@ -279,7 +280,7 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
             smooth_mask = tf.nn.relu(smooth_mask - margin)
             #boundary_loss += tf.reduce_mean(smooth_mask * plane_mask) * 1000
             boundary_loss += tf.reduce_mean(smooth_mask) * 1000
-        elif options.boundaryLoss == 2:
+        elif options.boundaryLoss == 3:
             S = tf.one_hot(tf.argmax(all_segmentations, 3), depth=options.numOutputPlanes + 1)
             #sigmaDepthDiff = 0.5
             #DS_diff = tf.exp(-tf.pow(1 - tf.clip_by_value(tf.abs(all_depths - tf.reduce_sum(all_depths * S, 3, keep_dims=True)), 0, 1), 2) / sigmaDepthDiff) - tf.exp(-1 / sigmaDepthDiff) * S
@@ -310,6 +311,17 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
             debug_dict['cost_mask'] = tf.reduce_sum(DS * all_segmentations_softmax, axis=3)
             #debug_dict['cost_mask'] = DS * all_segmentations_softmax
             #debug_dict['cost_mask'] = tf.reduce_sum(DS * S, axis=3)
+        elif options.boundaryLoss == 2:
+            planesY = global_pred_dict['plane'][:, :, 1]
+            planesD = tf.maximum(tf.norm(global_pred_dict['plane'], axis=-1), 1e-4)
+            planesY /= planesD
+            planesY = tf.concat([planesY, tf.ones((options.batchSize, 1)) * 100], axis=1)
+            
+            #imageDiff = calcImageDiff(img_inp)
+            #all_segmentations_softmax, _ = segmentationRefinementModule(all_segmentations_softmax, all_depths, planesY, imageDiff, numIterations=options.crf, numOutputPlanes=21)
+            messages = calcMessages(all_segmentations_softmax, all_depths, planesY, numOutputPlanes=21)
+            boundary_loss += tf.reduce_mean(messages * all_segmentations_softmax) * 100000
+            debug_dict['cost_mask'] = messages
             pass
           
         if options.predictBoundary:
@@ -573,7 +585,7 @@ def test(options):
     global_pred_dict, local_pred_dict, deep_pred_dicts = build_graph(img_inp, img_inp, training_flag, options)
     var_to_restore = tf.global_variables()
 
-    loss, loss_dict, debug_dict = build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, global_gt_dict, global_gt_dict, training_flag, options)
+    loss, loss_dict, debug_dict = build_loss(img_inp, img_inp, global_pred_dict, deep_pred_dicts, global_gt_dict, global_gt_dict, training_flag, options)
     
 
     config=tf.ConfigProto()
@@ -805,16 +817,16 @@ def test(options):
                     
                 if 'cost_mask' in debug:
                     cv2.imwrite(options.test_dir + '/' + str(index) + '_cost_mask.png', drawMaskImage(np.sum(debug['cost_mask'][0], axis=-1)))
-                    #continue
-                    # for planeIndex in xrange(options.numOutputPlanes + 1):
-                    #     cv2.imwrite(options.test_dir + '/' + str(index) + '_cost_mask_' + str(planeIndex) + '.png', drawMaskImage(debug['cost_mask'][0, :, :, planeIndex]))
-                    #     continue
-                    # all_segmentations = np.concatenate([pred_s, pred_np_m], axis=2)
-                    # all_segmentations = softmax(all_segmentations)
-                    # for planeIndex in xrange(options.numOutputPlanes + 1):
-                    #     cv2.imwrite(options.test_dir + '/' + str(index) + '_segmentation_pred_' + str(planeIndex) + '.png', drawMaskImage(all_segmentations[:, :, planeIndex]))
-                    #     continue
-                    # exit(1)
+
+                    for planeIndex in xrange(options.numOutputPlanes + 1):
+                        cv2.imwrite(options.test_dir + '/' + str(index) + '_cost_mask_' + str(planeIndex) + '.png', drawMaskImage(debug['cost_mask'][0, :, :, planeIndex]))
+                        continue
+                    all_segmentations = np.concatenate([pred_s, pred_np_m], axis=2)
+                    all_segmentations = softmax(all_segmentations)
+                    for planeIndex in xrange(options.numOutputPlanes + 1):
+                        cv2.imwrite(options.test_dir + '/' + str(index) + '_segmentation_pred_' + str(planeIndex) + '.png', drawMaskImage(all_segmentations[:, :, planeIndex]))
+                        continue
+                    exit(1)
                     pass
 
                 if 'normal' in global_gt:
@@ -1258,7 +1270,7 @@ def parse_args():
                         default=1, type=int)
     parser.add_argument('--diverseLoss', dest='diverseLoss',
                         help='use diverse loss: [0, 1]',
-                        default=1, type=int)
+                        default=0, type=int)
     parser.add_argument('--labelLoss', dest='labelLoss',
                         help='use label loss: [0, 1]',
                         default=0, type=int)    
@@ -1327,8 +1339,8 @@ def parse_args():
     if args.boundaryLoss != 1:
         args.keyname += '_bl' + str(args.boundaryLoss)
         pass
-    if args.diverseLoss == 0:
-        args.keyname += '_dl0'
+    if args.diverseLoss == 1:
+        args.keyname += '_dl1'
         pass
     if args.labelLoss == 1:
         args.keyname += '_ll1'
