@@ -332,7 +332,7 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
 
         label_loss = tf.constant(0.0)
         if options.labelLoss == 1:
-            label_loss = tf.reduce_mean(tf.reduce_max(all_segmentations_softmax, axis=[1, 2])) * 1000
+            label_loss = tf.reduce_mean(tf.reduce_max(all_segmentations_softmax, axis=[1, 2])) * 10000
             pass
         
         #regularization
@@ -461,7 +461,7 @@ def main(options):
             #     pass
             var_to_restore = [v for v in var_to_restore if 'semantics' not in v.name]
             loader = tf.train.Saver(var_to_restore)
-            loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + options.hybrid + '_ll1_bw0.5_pb_pp_sm0/checkpoint.ckpt')
+            loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid3_bl0_ll1_bw0.5_pb_pp_ps_sm0/checkpoint.ckpt')
             #loader.restore(sess,"checkpoint/planenet/checkpoint.ckpt")
             sess.run(batchno.assign(1))
         elif options.restore == 4:
@@ -1270,7 +1270,7 @@ def parse_args():
                         default=1, type=int)
     parser.add_argument('--diverseLoss', dest='diverseLoss',
                         help='use diverse loss: [0, 1]',
-                        default=0, type=int)
+                        default=1, type=int)
     parser.add_argument('--labelLoss', dest='labelLoss',
                         help='use label loss: [0, 1]',
                         default=0, type=int)    
@@ -1339,8 +1339,8 @@ def parse_args():
     if args.boundaryLoss != 1:
         args.keyname += '_bl' + str(args.boundaryLoss)
         pass
-    if args.diverseLoss == 1:
-        args.keyname += '_dl1'
+    if args.diverseLoss == 0:
+        args.keyname += '_dl0'
         pass
     if args.labelLoss == 1:
         args.keyname += '_ll1'
