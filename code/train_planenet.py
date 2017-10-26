@@ -219,7 +219,7 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
         depth_loss += tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_depth'], global_gt_dict['depth']) * validDepthMask) * 1000
 
         valid_normal_mask = tf.squeeze(tf.cast(tf.less(tf.slice(global_gt_dict['info'], [0, 19], [options.batchSize, 1]), 2), tf.float32))
-        normal_loss = tf.reduce_mean(tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_normal'], global_gt_dict['normal']) * validDepthMask, axis=[1, 2, 3]) * valid_normal_mask) * 1000
+        normal_loss = tf.reduce_mean(tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_normal'], global_gt_dict['normal']) * validDepthMask, axis=[1, 2, 3]) * valid_normal_mask) * 100000
         #normal_loss = tf.constant(0.0)
 
         if options.predictSemantics:
@@ -1292,7 +1292,7 @@ def parse_args():
                         default=0.5, type=float)
     parser.add_argument('--predictBoundary', dest='predictBoundary',
                         help='whether predict boundary or not: [0, 1]',
-                        default=1, type=int)
+                        default=0, type=int)
     parser.add_argument('--predictSemantics', dest='predictSemantics',
                         help='whether predict semantics or not: [0, 1]',
                         default=1, type=int)    

@@ -56,18 +56,6 @@ def writeRecordFile(split, dataset):
     #global_gt_dict['boundary'] = findBoundaryModuleSmooth(global_gt_dict['depth'], segmentation_gt, plane_mask, global_gt_dict['smooth_boundary'], max_depth_diff = 0.1, max_normal_diff = np.sqrt(2 * (1 - np.cos(np.deg2rad(20)))))
     
     
-    # info = np.zeros(20)
-    # info[0] = 5.1885790117450188e+02
-    # info[2] = 3.2558244941119034e+02 - 40
-    # info[5] = 5.1946961112127485e+02
-    # info[6] = 2.5373616633400465e+02 - 44
-    # info[10] = 1
-    # info[15] = 1
-    # info[16] = 561
-    # info[17] = 427
-    # info[18] = 1000
-    # info[19] = 1
-    
     with tf.Session() as sess:
         sess.run(init_op)
         coord = tf.train.Coordinator()
