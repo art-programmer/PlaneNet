@@ -1633,6 +1633,7 @@ def evaluatePlaneSegmentation(predPlanes, predSegmentations, gtPlanes, gtSegment
     # print(((maxIOU >= IOU) * planeMask).sum(1).astype(np.float32))
     # print(gtNumPlanes)
     # print(float(((maxIOU >= IOU) * planeMask).sum()) / totalNumPlanes)
+    
     # exit(1)
     
     pixel_curves = []
