@@ -25,7 +25,7 @@ from SegmentationRefinement import *
 #ALL_METHODS = [('bl2_ll1_bw0.5_pb_pp_sm0', ''), ('pb_pp', 'pixelwise_1'), ('pb_pp', 'pixelwise_2'), ('pb_pp', 'pixelwise_3'), ('pb_pp', 'semantics'), ('pb_pp', 'gt')]
 
 ALL_TITLES = ['planenet label loss', 'planenet crf', 'planenet label backward', 'planenet different matching']
-ALL_METHODS = [('ll1_pb_pp', ''), ('crf1_pb_pp', ''), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', ''), ('ll1_bw0.5_pb_pp_sm0', '')]
+ALL_METHODS = [('bl0_dl0_bw0.5_pb_pp_ps_sm0', ''), ('crf1_pb_pp', ''), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', ''), ('ll1_bw0.5_pb_pp_sm0', '')]
 
 #ALL_METHODS = [('ll1_pb_pp', 'pixelwise_1'), ('crf1_pb_pp', 'pixelwise_2'), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', 'pixelwise_3'), ('ll1_bw0.5_pb_pp_sm0', 'pixelwise_4')]
 
@@ -1006,22 +1006,22 @@ if __name__=='__main__':
                         default=20, type=int)
     parser.add_argument('--dataset', dest='dataset',
                         help='dataset name',
-                        default='SUNCG', type=str)
+                        default='ScanNet', type=str)
     parser.add_argument('--hybrid', dest='hybrid',
                         help='hybrid',
-                        default='0', type=str)
+                        default='3', type=str)
     parser.add_argument('--visualizeImages', dest='visualizeImages',
                         help='visualize image',
                         default=10, type=int)    
     parser.add_argument('--numImages', dest='numImages',
                         help='the number of images',
-                        default=10, type=int)
+                        default=30, type=int)
     parser.add_argument('--startIndex', dest='startIndex',
                         help='start index',
                         default=0, type=int)    
     parser.add_argument('--useCache', dest='useCache',
                         help='use cache',
-                        default=1, type=int)
+                        default=0, type=int)
     # parser.add_argument('--useCRF', dest='useCRF',
     #                     help='use crf',
     #                     default=0, type=int)
@@ -1036,7 +1036,7 @@ if __name__=='__main__':
                         default=-1, type=int)
     parser.add_argument('--methods', dest='methods',
                         help='methods',
-                        default='012345', type=str)
+                        default='0123', type=str)
     parser.add_argument('--rootFolder', dest='rootFolder',
                         help='root folder',
                         default='/mnt/vision/PlaneNet/', type=str)
