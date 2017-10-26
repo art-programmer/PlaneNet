@@ -411,7 +411,6 @@ def main(options):
     #global_pred_dict, local_pred_dict, deep_pred_dicts = build_graph(img_inp_train, img_inp_val, img_inp_rgbd_train, img_inp_rgbd_val, img_inp_3d_train, img_inp_3d_val, training_flag, options)
     global_pred_dict, local_pred_dict, deep_pred_dicts = build_graph(img_inp_train, img_inp_val, training_flag, options)
     
-    var_to_restore = [v for v in tf.global_variables()]
     
     #loss, loss_dict, _ = build_loss(global_pred_dict, local_pred_dict, deep_pred_dicts, global_gt_dict_train, local_gt_dict_train, global_gt_dict_val, local_gt_dict_val, training_flag, options)
     #loss_rgbd, loss_dict_rgbd, _ = build_loss_rgbd(global_pred_dict, deep_pred_dicts, global_gt_dict_rgbd_train, global_gt_dict_rgbd_val, training_flag, options)
@@ -426,8 +425,6 @@ def main(options):
     #val_writer_rgbd = tf.summary.FileWriter(options.log_dir + '/val_rgbd')
     #writers = [train_writer, val_writer, train_writer_rgbd, val_writer_rgbd]
     
-    tf.summary.scalar('loss', loss)
-    summary_op = tf.summary.merge_all()
 
     with tf.variable_scope('statistics'):
         batchno = tf.Variable(0, dtype=tf.int32, trainable=False, name='batchno')
@@ -437,6 +434,11 @@ def main(options):
 
     optimizer = tf.train.AdamOptimizer(options.LR)
     train_op = optimizer.minimize(loss, global_step=batchno)
+
+    var_to_restore = [v for v in tf.global_variables()]
+
+    tf.summary.scalar('loss', loss)
+    summary_op = tf.summary.merge_all()
 
     
     config=tf.ConfigProto()
