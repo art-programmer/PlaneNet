@@ -380,8 +380,8 @@ def main(options):
         val_inputs.append(options.rootFolder + '/planes_matterport_val.tfrecords')
         pass
     if '3' in options.hybrid:
-        train_inputs.append(options.rootFolder + '/planes_scannet_train.tfrecords')
-        val_inputs.append(options.rootFolder + '/planes_scannet_val.tfrecords')
+        train_inputs.append('/home/chenliu/Projects/Data/PlaneNet/planes_scannet_train.tfrecords')
+        val_inputs.append('/home/chenliu/Projects/Data/PlaneNet/planes_scannet_val.tfrecords')
         pass
     
     reader_train = RecordReaderAll()
@@ -462,7 +462,12 @@ def main(options):
             #     pass
             var_to_restore = [v for v in var_to_restore if 'semantics' not in v.name]
             loader = tf.train.Saver(var_to_restore)
-            loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + options.hybrid + '_bl0_ll1_bw0.5_pb_pp_ps_sm0/checkpoint.ckpt')
+            if len(options.hybrid) == 1:
+                hybrid = options.hybrid
+            else:
+                hybrid = str(3)
+                pass
+            loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + hybrid + '_bl0_ll1_bw0.5_pb_pp_ps_sm0/checkpoint.ckpt')
             #loader.restore(sess,"checkpoint/planenet/checkpoint.ckpt")
             sess.run(batchno.assign(1))
         elif options.restore == 4:
@@ -577,7 +582,7 @@ def test(options):
     elif options.dataset == 'matterport':
         filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
-        filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_scannet_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer(['/home/chenliu/Projects/Data/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
         pass
     img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
 
