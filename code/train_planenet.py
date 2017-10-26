@@ -460,7 +460,7 @@ def main(options):
             # if options.predictConfidence == 1:
             #     var_to_restore = [v for v in var_to_restore if 'confidence' not in v.name]
             #     pass
-            var_to_restore = [v for v in var_to_restore if 'semantics' not in v.name]
+            #var_to_restore = [v for v in var_to_restore if 'semantics' not in v.name]
             loader = tf.train.Saver(var_to_restore)
             if len(options.hybrid) == 1:
                 hybrid = options.hybrid
