@@ -544,9 +544,10 @@ def evaluateDepths(predDepths, gtDepths, validMasks, planeMasks=True, printInfo=
     
     numPixels = float(masks.sum())
     
-    rms = np.sqrt((pow(predDepths - gtDepths, 2) * masks).sum() / numPixels)
-    #log10 = (np.abs(np.log10(np.maximum(predDepths, 1e-4)) - np.log10(np.maximum(gtDepths, 1e-4))) * masks).sum() / numPixels
-    #rel = (np.abs(predDepths - gtDepths) / np.maximum(gtDepths, 1e-4) * masks).sum() / numPixels
+    rmse = np.sqrt((pow(predDepths - gtDepths, 2) * masks).sum() / numPixels)
+    #rmse_log = np.sqrt((pow(np.log(1 + np.abs(predDepths - gtDepths)), 2) * masks).sum() / numPixels)
+    log10 = (np.abs(np.log10(np.maximum(predDepths, 1e-4)) - np.log10(np.maximum(gtDepths, 1e-4))) * masks).sum() / numPixels
+    rel = (np.abs(predDepths - gtDepths) / np.maximum(gtDepths, 1e-4) * masks).sum() / numPixels
     deltas = np.maximum(predDepths / np.maximum(gtDepths, 1e-4), gtDepths / np.maximum(predDepths, 1e-4)) + (1 - masks.astype(np.float32)) * 10000
     accuracy_1 = (deltas < 1.25).sum() / numPixels
     accuracy_2 = (deltas < pow(1.25, 2)).sum() / numPixels
@@ -554,9 +555,9 @@ def evaluateDepths(predDepths, gtDepths, validMasks, planeMasks=True, printInfo=
     recall = float(masks.sum()) / validMasks.sum()
     #print((rms, recall))
     if printInfo:
-        print(('evaluate', rms, accuracy_1, accuracy_2, accuracy_3, recall))
+        print(('evaluate', rmse, log10, rel, accuracy_1, accuracy_2, accuracy_3, recall))
         pass
-    return rms, accuracy_1
+    return rmse, accuracy_1
     #return rel, log10, rms, accuracy_1, accuracy_2, accuracy_3, recall
 
 def drawDepthImage(depth):
