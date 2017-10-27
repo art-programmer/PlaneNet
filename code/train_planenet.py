@@ -42,7 +42,7 @@ def build_graph(img_inp_train, img_inp_val, training_flag, options):
         non_plane_mask_pred = net.layers['non_plane_mask_pred']
         non_plane_depth_pred = net.layers['non_plane_depth_pred']
         non_plane_normal_pred = net.layers['non_plane_normal_pred']
-        
+        non_plane_normal_pred = tf.nn.l2_normalize(non_plane_normal_pred, dim=-1)
 
 
         # if True:
