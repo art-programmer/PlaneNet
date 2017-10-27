@@ -96,7 +96,8 @@ def writeRecordFile(split, dataset):
         try:
             for _ in xrange(numImages / batchSize):
                 img, global_gt, pred_dict = sess.run([img_inp, global_gt_dict, global_pred_dict])
-                
+
+                print(_)                
                 for batchIndex in xrange(batchSize):
                     numPlanes = global_gt['num_planes'][batchIndex]
                     if numPlanes == 0:
