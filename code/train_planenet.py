@@ -404,8 +404,8 @@ def main(options):
         val_inputs.append(options.rootFolder + '/planes_matterport_val.tfrecords')
         pass
     if '3' in options.hybrid:
-        train_inputs.append('/home/chenliu/Projects/Data/PlaneNet/planes_scannet_train.tfrecords')
-        val_inputs.append('/home/chenliu/Projects/Data/PlaneNet/planes_scannet_val.tfrecords')
+        train_inputs.append(options.dataFolder + '/planes_scannet_train.tfrecords')
+        val_inputs.append(options.dataFolder + '/planes_scannet_val.tfrecords')
         pass
     
     reader_train = RecordReaderAll()
@@ -609,7 +609,7 @@ def test(options):
     elif options.dataset == 'matterport':
         filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
-        filename_queue = tf.train.string_input_producer(['/home/chenliu/Projects/Data/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer([options.dataFolder + '/planes_scannet_val.tfrecords'], num_epochs=1)
         pass
     img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
 
@@ -1377,6 +1377,9 @@ def parse_args():
     parser.add_argument('--rootFolder', dest='rootFolder',
                         help='root folder',
                         default='/mnt/vision/PlaneNet/', type=str)
+    parser.add_argument('--dataFolder', dest='dataFolder',
+                        help='data folder',
+                        default='/home/chenliu/Projects/PlaneNet/', type=str)
     parser.add_argument('--saveInterval', dest='saveInterval',
                         help='save interval',
                         default=900, type=int)
