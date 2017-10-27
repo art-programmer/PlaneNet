@@ -57,7 +57,8 @@ def writeHTML(options):
         r_inp.td().img(src=path + '/' + str(index) + '_depth_gt.png')
         r_inp.td().img(src=path + '/' + str(index) + '_segmentation_gt.png')
         r_inp.td().img(src=path + '/' + str(index) + '_semantics_gt.png')                
-
+        r_inp.td().img(src=path + '/' + str(index) + '_depth_gt_plane.png')
+        r_inp.td().img(src=path + '/' + str(index) + '_depth_gt_diff.png')        
         # r = t.tr()
         # r.td('PlaneNet prediction')
         # r.td().img(src=firstFolder + '/' + str(index) + '_segmentation_pred.png')
@@ -154,10 +155,11 @@ def evaluatePlanePrediction(options):
         cv2.imwrite(options.test_dir + '/' + str(image_index) + '_semantics_gt.png', drawSegmentationImage(gt_dict['semantics'][image_index], blackIndex=0))
 
         
-        # plane_depths = calcPlaneDepths(gt_dict['plane'][image_index], WIDTH, HEIGHT, gt_dict['info'][image_index])
-        # all_depths = np.concatenate([plane_depths, np.expand_dims(gt_dict['depth'][image_index], -1)], axis=2)
-        # depth = np.sum(all_depths * np.concatenate([gt_dict['segmentation'][image_index], 1 - np.expand_dims(gt_dict['plane_mask'][image_index], -1)], axis=2), axis=2)
-        # cv2.imwrite(options.test_dir + '/' + str(image_index) + '_depth_gt_plane.png', drawDepthImage(depth))
+        plane_depths = calcPlaneDepths(gt_dict['plane'][image_index], WIDTH, HEIGHT, gt_dict['info'][image_index])
+        all_depths = np.concatenate([plane_depths, np.expand_dims(gt_dict['depth'][image_index], -1)], axis=2)
+        depth = np.sum(all_depths * np.concatenate([gt_dict['segmentation'][image_index], 1 - np.expand_dims(gt_dict['plane_mask'][image_index], -1)], axis=2), axis=2)
+        cv2.imwrite(options.test_dir + '/' + str(image_index) + '_depth_gt_plane.png', drawDepthImage(depth))
+        cv2.imwrite(options.test_dir + '/' + str(image_index) + '_depth_gt_diff.png', drawMaskImage((depth - gt_dict['depth'][image_index]) * 5 + 0.5))        
         
         for method_index, pred_dict in enumerate(predictions):
             cv2.imwrite(options.test_dir + '/' + str(image_index) + '_depth_pred_' + str(method_index) + '.png', drawDepthImage(pred_dict['depth'][image_index]))
@@ -384,7 +386,9 @@ def evaluatePlanePrediction(options):
     # cv2.imwrite(options.test_dir + '/test_depth.png', drawDepthImage(pred_d))
     # cv2.imwrite(options.test_dir + '/test_segmentation.png', drawSegmentationImage(pred_s))
     # exit(1)
-   
+
+
+    
     
     pixel_metric_curves = [[], [], [], [], [], []]
     plane_metric_curves = [[], [], [], [], [], []]
@@ -768,7 +772,7 @@ def getPrediction(options):
     elif options.dataset == 'matterport':
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
-        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val_temp.tfrecords'], num_epochs=1)
         pass
     
     img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
@@ -789,7 +793,6 @@ def getPrediction(options):
     init_op = tf.group(tf.global_variables_initializer(),
                        tf.local_variables_initializer())
 
-    print(options)
     
     pred_dict = {}
     with tf.Session(config=config) as sess:
@@ -885,7 +888,7 @@ def getGroundTruth(options):
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
         reader = RecordReaderAll()
-        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val_temp.tfrecords'], num_epochs=1)
         pass
     
     img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
