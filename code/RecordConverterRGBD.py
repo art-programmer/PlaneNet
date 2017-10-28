@@ -31,7 +31,7 @@ def writeRecordFile(split):
     numOutputPlanes = 20
     if split == 'train':
         reader = RecordReaderRGBD()
-        filename_queue = tf.train.string_input_producer(['../planes_nyu_rgbd_train.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer(['../planes_nyu_rgbd_train.tfrecords', '../planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
         img_inp, global_gt_dict, _ = reader.getBatch(filename_queue, numOutputPlanes=numOutputPlanes, batchSize=batchSize, random=False, getLocal=True)
         writer = tf.python_io.TFRecordWriter('/mnt/vision/PlaneNet/planes_nyu_rgbd_train.tfrecords')
         numImages = 50000
@@ -79,6 +79,7 @@ def writeRecordFile(split):
                     if global_gt['num_planes'][batchIndex] == 0:
                         print('no plane')
                         continue
+                    
                     image = ((img[batchIndex] + 0.5) * 255).astype(np.uint8)
                     segmentation = global_gt['segmentation'][batchIndex].astype(np.uint8).squeeze()
                     boundary = global_gt['boundary'][batchIndex].astype(np.uint8)
@@ -127,5 +128,5 @@ def writeRecordFile(split):
 
     
 if __name__=='__main__':
-    writeRecordFile('val')
+    writeRecordFile('train')
     #writeRecordFile('val')
