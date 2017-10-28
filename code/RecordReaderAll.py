@@ -59,7 +59,10 @@ class RecordReaderAll():
         depth = tf.reshape(depth, [HEIGHT, WIDTH, 1])
 
         normal = features['normal']
-        normal = tf.reshape(normal, [HEIGHT, WIDTH, 3])        
+        normal = tf.reshape(normal, [HEIGHT, WIDTH, 3])
+        
+        #normal = tf.stack([normal[:, :, 1], normal[:, :, 0], normal[:, :, 2]], axis=2)
+
 
         semantics = tf.decode_raw(features['semantics_raw'], tf.uint8)
         semantics = tf.cast(tf.reshape(semantics, [HEIGHT, WIDTH]), tf.int32)
