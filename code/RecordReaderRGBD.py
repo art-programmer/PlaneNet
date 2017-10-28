@@ -38,8 +38,8 @@ class RecordReaderRGBD():
                 'image_path': tf.FixedLenFeature([], tf.string),                
                 'image_raw': tf.FixedLenFeature([], tf.string),
                 'depth': tf.FixedLenFeature([HEIGHT * WIDTH], tf.float32),
-                #'normal': tf.FixedLenFeature([HEIGHT * WIDTH * 3], tf.float32),
-                'normal': tf.FixedLenFeature([427 * 561 * 3], tf.float32),                
+                'normal': tf.FixedLenFeature([HEIGHT * WIDTH * 3], tf.float32),
+                #'normal': tf.FixedLenFeature([427 * 561 * 3], tf.float32),                
                 'plane': tf.FixedLenFeature([NUM_PLANES * 3], tf.float32),
                 'num_planes': tf.FixedLenFeature([], tf.int64),                
                 #'plane_relation': tf.FixedLenFeature([NUM_PLANES * NUM_PLANES], tf.float32),
@@ -59,9 +59,10 @@ class RecordReaderRGBD():
         depth = tf.reshape(depth, [HEIGHT, WIDTH, 1])
 
         normal = features['normal']
-        #normal = tf.reshape(normal, [HEIGHT, WIDTH, 3])
-        normal = tf.reshape(normal, [427, 561, 3])
-        normal = tf.image.resize_images(normal, [HEIGHT, WIDTH])
+        normal = tf.reshape(normal, [HEIGHT, WIDTH, 3])
+        
+        #normal = tf.reshape(normal, [427, 561, 3])
+        #normal = tf.image.resize_images(normal, [HEIGHT, WIDTH])
         
         numPlanes = tf.minimum(tf.cast(features['num_planes'], tf.int32), numOutputPlanes)
         

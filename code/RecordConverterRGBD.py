@@ -40,7 +40,7 @@ def writeRecordFile(split):
         filename_queue = tf.train.string_input_producer(['../planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
         img_inp, global_gt_dict, _ = reader.getBatch(filename_queue, numOutputPlanes=numOutputPlanes, batchSize=batchSize, random=False, getLocal=True)
         writer = tf.python_io.TFRecordWriter('/mnt/vision/PlaneNet/planes_nyu_rgbd_val.tfrecords')
-        numImages = 1000
+        numImages = 100
         pass
     
         
@@ -67,7 +67,7 @@ def writeRecordFile(split):
     info[18] = 1000
     info[19] = 1
 
-    numPlanesArray = []
+    #numPlanesArray = []
     
     with tf.Session() as sess:
         sess.run(init_op)
@@ -91,12 +91,12 @@ def writeRecordFile(split):
 
                     numPlanes = global_gt['num_planes'][batchIndex]
 
-                    planes, segmentation, numPlanes = refitPlanes(planes, segmentation, global_gt['depth'][batchIndex], info, numOutputPlanes=20, planeAreaThreshold=6*8)
-                    print(global_gt['num_planes'][batchIndex], numPlanes)
-                    numPlanesArray.append(numPlanes)
+                    planes, segmentation, numPlanes = refitPlanes(planes, segmentation, global_gt['depth'][batchIndex].squeeze(), info, numOutputPlanes=20, planeAreaThreshold=6*8)
+                    #print(global_gt['num_planes'][batchIndex], numPlanes)
+                    #numPlanesArray.append(numPlanes)
                     
                     normal = global_gt['normal'][batchIndex]
-                    normal = np.stack([normal[:, :, 0], normal[:, :, 2], -normal[:, :, 1]], axis=2)
+                    normal = np.stack([-normal[:, :, 2], -normal[:, :, 0], -normal[:, :, 1]], axis=2)
                     
                     #cv2.imwrite('test/segmentation_' + str(batchIndex) + '.png', drawSegmentationImage(segmentation, planeMask = segmentation < 20, black=True))
                     #boundary = np.concatenate([boundary, np.zeros((HEIGHT, WIDTH, 1))], axis=2)                
@@ -133,11 +133,11 @@ def writeRecordFile(split):
         coord.join(threads)
         sess.close()
         pass
-    numPlanesArray = np.array(numPlanesArray)
-    np.save('results/num_planes.npy', numPlanesArray)
+    #numPlanesArray = np.array(numPlanesArray)
+    #np.save('results/num_planes.npy', numPlanesArray)
     return
 
     
 if __name__=='__main__':
-    writeRecordFile('train')
+    #writeRecordFile('train')
     #writeRecordFile('val')

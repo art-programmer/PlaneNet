@@ -1785,8 +1785,7 @@ def refitPlanes(planes, segmentation, depth, info, numOutputPlanes=20, planeArea
     
     validDepthMask = depth > 1e-4
     
-    newPlanes = []
-    newSegmentation = np.ones(segmentation.shape, dtype=np.uint8) * numOutputPlanes
+    newPlaneInfo = []
     for planeIndex in xrange(numOutputPlanes):
         mask = segmentation == planeIndex
         points = XYZ[np.logical_and(cv2.erode(mask.astype(np.float32), np.ones((3, 3))) > 0.5, validDepthMask)]
@@ -1794,16 +1793,31 @@ def refitPlanes(planes, segmentation, depth, info, numOutputPlanes=20, planeArea
             try:
                 plane = fitPlane(points)
                 plane /= pow(np.linalg.norm(plane), 2)
-                newSegmentation[mask] = len(newPlanes)                
-                newPlanes.append(plane)
+                newPlaneInfo.append((plane, mask, points.shape[0]))
+                #newPlaneInfo.append((planes[planeIndex], mask, points.shape[0]))                
             except:
                 pass
             pass
         continue
-    numPlanes = len(newPlanes)
+    
+    numPlanes = len(newPlaneInfo)
     if numPlanes == 0:
         return np.zeros((numOutputPlanes, 3)), newSegmentation, numPlanes
+    
+    newPlaneInfo = sorted(newPlaneInfo, key=lambda x: -x[2])
+
+    newPlanes = []
+    newSegmentation = np.ones(segmentation.shape, dtype=np.uint8) * numOutputPlanes
+    for planeIndex, planeInfo in enumerate(newPlaneInfo):
+        newPlanes.append(planeInfo[0])
+        newSegmentation[planeInfo[1]] = planeIndex
+        continue
+    
     newPlanes = np.array(newPlanes)
+    if numPlanes < numOutputPlanes:
+        newPlanes = np.concatenate([newPlanes, np.zeros((numOutputPlanes - numPlanes, 3))], axis=0)
+        pass
+    
     return newPlanes, newSegmentation, numPlanes
 
 def mergePlanes(planes, segmentations, depth, info, segmentationsTarget, numOutputPlanes=20, nonPlaneRatioThreshold=0.7, coveredPlaneRatioThreshold=0.5, planeDistanceThreshold=0.2):
@@ -1914,12 +1928,12 @@ def mergePlanes(planes, segmentations, depth, info, segmentationsTarget, numOutp
     numPlanes = len(newPlanes)
     if numPlanes == 0:
         return np.zeros((numOutputPlanes, 3)), newSegmentation, numPlanes
-
+    
     newPlanes = np.array(newPlanes)
-
     if numPlanes < numOutputPlanes:
         newPlanes = np.concatenate([newPlanes, np.zeros((numOutputPlanes - numPlanes, 3))], axis=0)
         pass
+    
     return newPlanes, newSegmentation.astype(np.uint8), numPlanes
 
 
