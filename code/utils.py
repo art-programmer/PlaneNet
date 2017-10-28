@@ -1799,11 +1799,7 @@ def refitPlanes(planes, segmentation, depth, info, numOutputPlanes=20, planeArea
                 pass
             pass
         continue
-    
-    numPlanes = len(newPlaneInfo)
-    if numPlanes == 0:
-        return np.zeros((numOutputPlanes, 3)), newSegmentation, numPlanes
-    
+
     newPlaneInfo = sorted(newPlaneInfo, key=lambda x: -x[2])
 
     newPlanes = []
@@ -1812,6 +1808,10 @@ def refitPlanes(planes, segmentation, depth, info, numOutputPlanes=20, planeArea
         newPlanes.append(planeInfo[0])
         newSegmentation[planeInfo[1]] = planeIndex
         continue
+    
+    numPlanes = len(newPlaneInfo)
+    if numPlanes == 0:
+        return np.zeros((numOutputPlanes, 3)), newSegmentation, numPlanes    
     
     newPlanes = np.array(newPlanes)
     if numPlanes < numOutputPlanes:
