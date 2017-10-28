@@ -94,6 +94,9 @@ def writeRecordFile(split):
                     planes, segmentation, numPlanes = refitPlanes(planes, segmentation, global_gt['depth'][batchIndex].squeeze(), info, numOutputPlanes=20, planeAreaThreshold=6*8)
                     #print(global_gt['num_planes'][batchIndex], numPlanes)
                     #numPlanesArray.append(numPlanes)
+
+                    if numPlanes == 0:
+                        continue
                     
                     normal = global_gt['normal'][batchIndex]
                     normal = np.stack([-normal[:, :, 2], -normal[:, :, 0], -normal[:, :, 1]], axis=2)
@@ -139,5 +142,5 @@ def writeRecordFile(split):
 
     
 if __name__=='__main__':
-    #writeRecordFile('train')
-    #writeRecordFile('val')
+    writeRecordFile('train')
+    writeRecordFile('val')
