@@ -66,6 +66,8 @@ def writeRecordFile(split):
     info[17] = 427
     info[18] = 1000
     info[19] = 1
+
+    numPlanesArray = []
     
     with tf.Session() as sess:
         sess.run(init_op)
@@ -85,9 +87,15 @@ def writeRecordFile(split):
 
                     planes = global_gt['plane'][batchIndex]
                     planes = np.stack([-planes[:, 0], -planes[:, 2], -planes[:, 1]], axis=1)
+
+                    numPlanes = global_gt['num_planes'][batchIndex]
+
+                    planes, segmentation, numPlanes = refitPlanes(planes, segmentation, global_gt['depth'][batchIndex], info, numOutputPlanes=20, planeAreaThreshold=6*8)
+                    print(global_gt['num_planes'][batchIndex], numPlanes)
+                    numPlanesArray.append(numPlanes)
                     
                     normal = global_gt['normal'][batchIndex]
-                    normal = np.stack([-normal[:, :, 0], -normal[:, :, 2], -normal[:, :, 1]], axis=2)
+                    normal = np.stack([normal[:, :, 0], normal[:, :, 2], -normal[:, :, 1]], axis=2)
                     
                     #cv2.imwrite('test/segmentation_' + str(batchIndex) + '.png', drawSegmentationImage(segmentation, planeMask = segmentation < 20, black=True))
                     #boundary = np.concatenate([boundary, np.zeros((HEIGHT, WIDTH, 1))], axis=2)                
@@ -101,7 +109,7 @@ def writeRecordFile(split):
                         'depth': _float_feature(global_gt['depth'][batchIndex].reshape(-1)),
                         'normal': _float_feature(normal.reshape(-1)),
                         'plane': _float_feature(planes.reshape(-1)),
-                        'num_planes': _int64_feature([global_gt['num_planes'][batchIndex]]),
+                        'num_planes': _int64_feature([numPlanes]),
                         'segmentation_raw': _bytes_feature(segmentation.tostring()),
                         'semantics_raw': _bytes_feature(np.zeros((HEIGHT, WIDTH), np.uint8).tostring()),                
                         'boundary_raw': _bytes_feature(boundary.tostring()),
@@ -122,7 +130,10 @@ def writeRecordFile(split):
         
         # Wait for threads to finish.
         coord.join(threads)
-        sess.close()    
+        sess.close()
+        pass
+    numPlanesArray = np.array(numPlanesArray)
+    np.save('results/num_planes.npy', numPlanesArray)
     return
 
     
