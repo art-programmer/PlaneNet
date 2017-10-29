@@ -29,7 +29,7 @@ from RecordReaderAll import *
 #it also controls which data batch to use (*_train or *_val)
 
 
-def build_graph(img_inp_train, img_inp_val, gt_dict, training_flag, options):
+def build_graph(img_inp_train, img_inp_val, training_flag, options):
     with tf.device('/gpu:%d'%options.gpu_id):
         img_inp = tf.cond(training_flag, lambda: img_inp_train, lambda: img_inp_val)
         
@@ -611,13 +611,13 @@ def test(options):
     elif options.dataset == 'matterport':
         filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
-        filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_scannet_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_scannet_train.tfrecords'], num_epochs=1)
         pass
     img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
 
     training_flag = tf.constant(False, tf.bool)
 
-    global_pred_dict, local_pred_dict, deep_pred_dicts = build_graph(img_inp, img_inp, global_gt_dict, training_flag, options)
+    global_pred_dict, local_pred_dict, deep_pred_dicts = build_graph(img_inp, img_inp, training_flag, options)
     var_to_restore = tf.global_variables()
 
     loss, loss_dict, debug_dict = build_loss(img_inp, img_inp, global_pred_dict, deep_pred_dicts, global_gt_dict, global_gt_dict, training_flag, options)

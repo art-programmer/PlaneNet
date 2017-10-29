@@ -1820,7 +1820,138 @@ def refitPlanes(planes, segmentation, depth, info, numOutputPlanes=20, planeArea
     
     return newPlanes, newSegmentation, numPlanes
 
-def mergePlanes(planes, segmentations, depth, info, segmentationsTarget, numOutputPlanes=20, nonPlaneRatioThreshold=0.7, coveredPlaneRatioThreshold=0.5, planeDistanceThreshold=0.2):
+# def filterPlanesPred(planes, segmentations, depth, info, segmentationsTarget, numOutputPlanes=20, nonPlaneRatioThreshold=0.7, coveredPlaneRatioThreshold=0.5, planeDistanceThreshold=0.05, planeAngleThreshold=np.cos(np.deg2rad(20))):
+
+#     camera = getCameraFromInfo(info)
+#     width = depth.shape[1]
+#     height = depth.shape[0]
+
+#     #camera = getNYURGBDCamera()
+#     #camera = getSUNCGCamera()
+
+#     urange = (np.arange(width, dtype=np.float32) / width * camera['width'] - camera['cx']) / camera['fx']
+#     urange = urange.reshape(1, -1).repeat(height, 0)
+#     vrange = (np.arange(height, dtype=np.float32) / height * camera['height'] - camera['cy']) / camera['fy']
+#     vrange = vrange.reshape(-1, 1).repeat(width, 1)
+#     X = depth * urange
+#     Y = depth
+#     Z = -depth * vrange
+
+#     XYZ = np.stack([X, Y, Z], axis=2)
+    
+#     validDepthMask = depth > 1e-4
+    
+#     #numPlanes = planes.shape[0]
+#     validPlaneInfo = []
+#     emptyMaskTarget = segmentationsTarget[:, :, numOutputPlanes]
+#     emptyMask = segmentations[:, :, numOutputPlanes]    
+#     for planeIndex in xrange(numOutputPlanes):
+#         mask = segmentations[:, :, planeIndex]
+#         if (emptyMaskTarget * mask).sum() < mask.sum() * nonPlaneRatioThreshold:
+#             points = XYZ[np.logical_and(cv2.erode(mask, np.ones((3, 3))) > 0.5, validDepthMask)]
+#             if points.shape[0] >= 3:
+#                 try:
+#                     plane = fitPlane(points)
+#                     plane /= pow(np.linalg.norm(plane), 2)
+#                     validPlaneInfo.append((plane, mask, points))                    
+#                 except:
+#                     emptyMask += mask
+#                 pass
+#             else:
+#                 emptyMask += mask
+#         else:
+#             emptyMask += mask
+#             pass
+#         continue
+    
+#     #validPlaneInfo = sorted(validPlaneInfo, key=lambda x:-x[2])
+
+#     for planeIndex, planeInfo in enumerate(validPlaneInfo):
+#         cv2.imwrite('test/mask_' + str(planeIndex) + '.png', drawMaskImage(planeInfo[1]))
+#         print(planeIndex, planeInfo[0])
+#         continue
+    
+#     emptyMask = (emptyMask > 0.5).astype(np.float32)
+#     for planeIndexTarget in xrange(numOutputPlanes):
+#         maskTarget = segmentationsTarget[:, :, planeIndexTarget]
+#         excludedMask = ((maskTarget + emptyMask) > 0.5).astype(np.float32)
+#         coveredPlanes = []
+#         for planeIndex, planeInfo in enumerate(validPlaneInfo):
+#             mask = planeInfo[1]
+#             area = mask.sum()
+#             if (maskTarget * mask).sum() / area > coveredPlaneRatioThreshold:
+#                 coveredPlanes.append((planeIndex, planeInfo[0], planeInfo[2]))
+#                 pass
+#             continue
+#         if len(coveredPlanes) <= 1:
+#             continue
+        
+#         coveredPlanes = sorted(coveredPlanes, key=lambda x:-x[2].shape[0])
+
+        
+#         majorPlane = coveredPlanes[0][1]
+#         majorPlaneD = np.linalg.norm(majorPlane)
+#         majorPlaneNormal = majorPlane / majorPlaneD
+#         mergedPlanes = [coveredPlanes[0][0], ]
+#         for planeInfo in coveredPlanes[1:]:
+#             #if np.linalg.norm(planeInfo[1] - majorPlane) < planeDistanceThreshold:
+#             distance = np.abs(np.sum(planeInfo[2] * majorPlaneNormal, axis=-1) - majorPlaneD)
+#             print(distance.mean())
+#             print(distance.max())
+#             planeNormal = planeInfo[1] / np.linalg.norm(planeInfo[1])            
+#             print(np.sum(planeNormal * majorPlaneNormal), planeAngleThreshold)
+#             exit(1)
+#             if distance.mean() < planeDistanceThreshold and np.sum(planeNormal * majorPlaneNormal) > planeAngleThreshold:
+#                 mergedPlanes.append(planeInfo[0])
+#                 pass
+#             continue
+#         if mergedPlanes <= 1:
+#             continue
+#         newValidPlaneInfo = []
+#         mergedPlaneMask = np.zeros(emptyMask.shape)
+#         for planeIndex, planeInfo in enumerate(validPlaneInfo):
+#             if planeIndex not in mergedPlanes:
+#                 if (excludedMask * planeInfo[1]).sum() < planeInfo[1].sum() * nonPlaneRatioThreshold:
+#                     newValidPlaneInfo.append(planeInfo)
+#                     pass
+#             else:
+#                 mergedPlaneMask += planeInfo[1]
+#                 pass
+#             continue
+#         cv2.erode(mergedPlaneMask, np.ones((3, 3)))        
+#         mergedPlaneMask = mergedPlaneMask > 0.5
+#         points = XYZ[np.logical_and(mergedPlaneMask, validDepthMask)]
+#         if points.shape[0] >= 3:
+#             try:
+#                 mergedPlane = fitPlane(points)
+#                 mergedPlane = mergedPlane / pow(np.linalg.norm(mergedPlane), 2)
+#                 newValidPlaneInfo.append((mergedPlane, mergedPlaneMask.astype(np.float32), points))
+#             except:
+#                 pass
+#             pass
+#         validPlaneInfo = newValidPlaneInfo
+#         continue
+
+#     validPlaneInfo = sorted(validPlaneInfo, key=lambda x: -x[1].sum())
+    
+#     newPlanes = []
+#     newSegmentation = np.ones(emptyMask.shape) * numOutputPlanes
+#     for planeIndex, planeInfo in enumerate(validPlaneInfo):
+#         newPlanes.append(planeInfo[0])
+#         newSegmentation[planeInfo[1].astype(np.bool)] = planeIndex
+#         continue
+#     numPlanes = len(newPlanes)
+#     if numPlanes == 0:
+#         return np.zeros((numOutputPlanes, 3)), newSegmentation, numPlanes
+    
+#     newPlanes = np.array(newPlanes)
+#     if numPlanes < numOutputPlanes:
+#         newPlanes = np.concatenate([newPlanes, np.zeros((numOutputPlanes - numPlanes, 3))], axis=0)
+#         pass
+    
+#     return newPlanes, newSegmentation.astype(np.uint8), numPlanes
+
+def filterPlanes(planes, segmentations, depth, info, numOutputPlanes=20, coveredPlaneRatioThreshold=0.5, planeDistanceThreshold=0.05, normalDotThreshold=np.cos(np.deg2rad(20)), planeFittingThreshold = 0.03):
 
     camera = getCameraFromInfo(info)
     width = depth.shape[1]
@@ -1840,90 +1971,100 @@ def mergePlanes(planes, segmentations, depth, info, segmentationsTarget, numOutp
     XYZ = np.stack([X, Y, Z], axis=2)
     
     validDepthMask = depth > 1e-4
+
+    
     
     #numPlanes = planes.shape[0]
     validPlaneInfo = []
-    emptyMaskTarget = segmentationsTarget[:, :, numOutputPlanes]
-    emptyMask = segmentations[:, :, numOutputPlanes]    
     for planeIndex in xrange(numOutputPlanes):
         mask = segmentations[:, :, planeIndex]
-        if (emptyMaskTarget * mask).sum() < mask.sum() * nonPlaneRatioThreshold:
-            points = XYZ[np.logical_and(cv2.erode(mask, np.ones((3, 3))) > 0.5, validDepthMask)]
-            if points.shape[0] >= 3:
-                try:
-                    plane = fitPlane(points)
-                    plane /= pow(np.linalg.norm(plane), 2)
-                    validPlaneInfo.append((plane, mask))                    
-                except:
-                    emptyMask += mask
-                pass
-            else:
-                emptyMask += mask
-        else:
-            emptyMask += mask
-            pass
-        continue
-    
-    #validPlaneInfo = sorted(validPlaneInfo, key=lambda x:-x[2])
-
-    emptyMask = (emptyMask > 0.5).astype(np.float32)
-    for planeIndexTarget in xrange(numOutputPlanes):
-        maskTarget = segmentationsTarget[:, :, planeIndexTarget]
-        excludedMask = ((maskTarget + emptyMask) > 0.5).astype(np.float32)
-        coveredPlanes = []
-        for planeIndex, planeInfo in enumerate(validPlaneInfo):
-            mask = planeInfo[1]
-            area = mask.sum()
-            if (maskTarget * mask).sum() / area > coveredPlaneRatioThreshold:
-                coveredPlanes.append((planeIndex, planeInfo[0], area))
-                pass
-            continue
-        if len(coveredPlanes) <= 1:
-            continue
-        
-        coveredPlanes = sorted(coveredPlanes, key=lambda x:-x[2])
-        
-        majorPlane = coveredPlanes[0][1]
-        mergedPlanes = [coveredPlanes[0][0], ]
-        for planeInfo in coveredPlanes[1:]:
-            if np.linalg.norm(planeInfo[1] - majorPlane) < planeDistanceThreshold:
-                mergedPlanes.append(planeInfo[0])
-                pass
-            continue
-        if mergedPlanes <= 1:
-            continue
-        newValidPlaneInfo = []
-        mergedPlaneMask = np.zeros(emptyMask.shape)
-        for planeIndex, planeInfo in enumerate(validPlaneInfo):
-            if planeIndex not in mergedPlanes:
-                if (excludedMask * planeInfo[1]).sum() < planeInfo[1].sum() * nonPlaneRatioThreshold:
-                    newValidPlaneInfo.append(planeInfo)
-                    pass
-            else:
-                mergedPlaneMask += planeInfo[1]
-                pass
-            continue
-        cv2.erode(mergedPlaneMask, np.ones((3, 3)))        
-        mergedPlaneMask = mergedPlaneMask > 0.5
-        points = XYZ[np.logical_and(mergedPlaneMask, validDepthMask)]
+        points = XYZ[np.logical_and(cv2.erode(mask, np.ones((3, 3)), 2) > 0.5, validDepthMask)]
         if points.shape[0] >= 3:
             try:
-                mergedPlane = fitPlane(points)
-                mergedPlane = mergedPlane / pow(np.linalg.norm(mergedPlane), 2)
-                newValidPlaneInfo.append((mergedPlane, mergedPlaneMask.astype(np.float32)))
+                plane = fitPlane(points)
+                plane /= pow(np.linalg.norm(plane), 2)
+                #plane = planes[planeIndex]
+                
+                #planeD = np.linalg.norm(plane)
+                #diff = np.abs(np.sum(points * (plane / planeD), axis=-1) - planeD).mean()
+                #validMask = np.abs(np.sum(points * (plane / planeD), axis=-1) - planeD) < planeDistanceThreshold
+
+                #diff = (np.abs((np.sum(points * plane, axis=-1) - 1) / np.linalg.norm(plane)) > 0.05).astype(np.float32).mean()
+
+                #print(planeIndex, diff, mask.sum())
+                #cv2.imwrite('test/mask_' + str(planeIndex) + '.png', drawMaskImage(mask))                
+                #if diff < planeFittingThreshold:
+                validPlaneInfo.append((plane, mask, points))
+                #    pass
             except:
                 pass
             pass
-        validPlaneInfo = newValidPlaneInfo
         continue
 
-    validPlaneInfo = sorted(validPlaneInfo, key=lambda x: -x[1].sum())
+    #validPlaneInfo = sorted(validPlaneInfo, key=lambda x:-x[2])
+
+    validPlaneInfo = sorted(validPlaneInfo, key=lambda x: -x[2].shape[0])
+
+    if False:
+        for planeIndex, planeInfo in enumerate(validPlaneInfo):
+            cv2.imwrite('test/mask_' + str(planeIndex) + '.png', drawMaskImage(planeInfo[1]))
+            print(planeIndex, planeInfo[0], planeInfo[3], planeInfo[1].sum())
+            continue
+        pass
+
+    newPlaneInfo = []
+    usedPlaneMask = np.zeros(len(validPlaneInfo), dtype=np.bool)
+    for majorPlaneIndex, majorPlaneInfo in enumerate(validPlaneInfo):
+        if usedPlaneMask[majorPlaneIndex]:
+            continue
+        usedPlaneMask[majorPlaneIndex] = True
+        
+        majorPlane = majorPlaneInfo[0]
+        majorPlaneD = np.linalg.norm(majorPlane)
+        majorPlaneNormal = majorPlane / majorPlaneD
+
+        mergedPlaneMask = majorPlaneInfo[1].copy()
+        planeMerged = False
+        for planeIndex, planeInfo in enumerate(validPlaneInfo):
+            if planeIndex <= majorPlaneIndex or usedPlaneMask[planeIndex]:
+                continue
+            
+            fittingDiff = np.abs(np.sum(planeInfo[2] * majorPlaneNormal, axis=-1) - majorPlaneD)
+            planeNormal = planeInfo[0] / np.linalg.norm(planeInfo[0])
+            normalDot = np.sum(planeNormal * majorPlaneNormal)
+            
+            #print(majorPlaneIndex, planeIndex)
+            #print(majorPlane, planeInfo[0])
+            #print(fittingDiff.mean(), (fittingDiff < 0.05).astype(np.float32).mean(), normalDot, normalDotThreshold)
+
+            if fittingDiff.mean() < planeDistanceThreshold and normalDot > normalDotThreshold:
+                #print('merge', majorPlaneIndex, planeIndex)
+                mergedPlaneMask += planeInfo[1]
+                usedPlaneMask[planeIndex] = True                                
+                planeMerged = True
+                pass
+            continue
+
+        if planeMerged:
+            mergedPlaneMask = (mergedPlaneMask > 0.5).astype(np.float32)
+            pass
+        
+        newPlaneInfo.append((majorPlaneInfo[0], mergedPlaneMask))
+        continue
+
+    newPlaneInfo = sorted(newPlaneInfo, key=lambda x: -x[1].sum())
     
     newPlanes = []
-    newSegmentation = np.ones(emptyMask.shape) * numOutputPlanes
-    for planeIndex, planeInfo in enumerate(validPlaneInfo):
+    newSegmentation = np.ones((height, width), dtype=np.uint8) * numOutputPlanes
+    for planeIndex, planeInfo in enumerate(newPlaneInfo):
+        area = planeInfo[1].sum()
+        xs = planeInfo[1].max(0).nonzero()[0]
+        ys = planeInfo[1].max(1).nonzero()[0]
+        length = np.sqrt(pow(xs.max() - xs.min() + 1, 2) + pow(ys.max() - ys.min() + 1, 2))
+        if area < (width * height / 100.) or area / length < 10:
+            continue
+        newSegmentation[planeInfo[1].astype(np.bool)] = len(newPlanes)        
         newPlanes.append(planeInfo[0])
-        newSegmentation[planeInfo[1].astype(np.bool)] = planeIndex
         continue
     numPlanes = len(newPlanes)
     if numPlanes == 0:
@@ -1934,7 +2075,7 @@ def mergePlanes(planes, segmentations, depth, info, segmentationsTarget, numOutp
         newPlanes = np.concatenate([newPlanes, np.zeros((numOutputPlanes - numPlanes, 3))], axis=0)
         pass
     
-    return newPlanes, newSegmentation.astype(np.uint8), numPlanes
+    return newPlanes, newSegmentation, numPlanes
 
 
 def getSegmentationsGraphCut(planes, image, depth, normal, info):

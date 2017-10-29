@@ -26,7 +26,7 @@ from SegmentationRefinement import *
 
 ALL_TITLES = ['planenet label loss', 'planenet crf', 'planenet label backward', 'planenet different matching']
 #ALL_METHODS = [('bl0_dl0_bw0.5_pb_pp_ps_sm0', ''), ('ll1_pb_pp', ''), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', ''), ('ll1_bw0.5_pb_pp_sm0', '')]
-ALL_METHODS = [('ll1_pb_pp', ''), ('crf1_pb_pp', ''), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', ''), ('ll1_bw0.5_pb_pp_sm0', '')]
+ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', ''), ('ll1_pb_pp', ''), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', ''), ('ll1_bw0.5_pb_pp_sm0', '')]
 
 #ALL_METHODS = [('ll1_pb_pp', 'pixelwise_1'), ('crf1_pb_pp', 'pixelwise_2'), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', 'pixelwise_3'), ('ll1_bw0.5_pb_pp_sm0', 'pixelwise_4')]
 
@@ -875,19 +875,16 @@ def getGroundTruth(options):
     options.batchSize = 1
     min_after_dequeue = 1000
 
+    reader = RecordReaderAll()
     if options.dataset == 'SUNCG':
-        reader = RecordReaderAll()
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_SUNCG_val.tfrecords'], num_epochs=10000)
     elif options.dataset == 'NYU_RGBD':
-        reader = RecordReaderAll()
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
         options.deepSupervision = 0
         options.predictLocal = 0
     elif options.dataset == 'matterport':
-        reader = RecordReaderAll()
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
-        reader = RecordReaderAll()
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
         pass
     
