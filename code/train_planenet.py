@@ -29,7 +29,7 @@ from RecordReaderAll import *
 #it also controls which data batch to use (*_train or *_val)
 
 
-def build_graph(img_inp_train, img_inp_val, gt_dict, training_flag, options):
+def build_graph(img_inp_train, img_inp_val, training_flag, options):
     with tf.device('/gpu:%d'%options.gpu_id):
         img_inp = tf.cond(training_flag, lambda: img_inp_train, lambda: img_inp_val)
         
@@ -496,7 +496,7 @@ def main(options):
                 hybrid = str(3)
                 pass
             #loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + hybrid + '_bl0_ll1_bw0.5_pb_pp_ps_sm0/checkpoint.ckpt')
-            loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + hybrid + '_ll1_pb_pp/checkpoint.ckpt')            
+            loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + hybrid + '_bl0_ll1_bw0.5_pp_ps_sm0/checkpoint.ckpt')            
             #loader.restore(sess,"checkpoint/planenet/checkpoint.ckpt")
             sess.run(batchno.assign(1))
         elif options.restore == 4:

@@ -14,7 +14,7 @@ from skimage import segmentation
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from layers import PlaneDepthLayer
 #from layers import PlaneNormalLayer
-from SegmentationRefinement import *
+#from SegmentationRefinement import *
 
 class ColorPalette:
     def __init__(self, numColors):
