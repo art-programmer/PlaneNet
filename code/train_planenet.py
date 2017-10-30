@@ -242,7 +242,7 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
         #normal_loss = tf.reduce_mean(tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_normal'], global_gt_dict['normal']) * validDepthMask, axis=[1, 2, 3]) * valid_normal_mask) * 1000
         #normal_loss = tf.constant(0.0)
 
-        if options.predictSemantics and False:
+        if options.predictSemantics:
             valid_semantics_mask = tf.squeeze(tf.cast(tf.not_equal(tf.slice(global_gt_dict['info'], [0, 19], [options.batchSize, 1]), 1), tf.float32))
             semantics_loss = tf.reduce_mean(tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=global_pred_dict['semantics'], labels=global_gt_dict['semantics']), axis=[1, 2]) * valid_semantics_mask) * 1000
         else:
@@ -398,6 +398,7 @@ def main(options):
     if '1' in options.hybrid:
         for _ in xrange(10):
             train_inputs.append(options.rootFolder + '/planes_nyu_rgbd_train.tfrecords')
+            train_inputs.append(options.rootFolder + '/planes_nyu_rgbd_labeled_train.tfrecords')
             val_inputs.append(options.rootFolder + '/planes_nyu_rgbd_val.tfrecords')
             continue
         pass
@@ -488,7 +489,10 @@ def main(options):
             # if options.predictConfidence == 1:
             #     var_to_restore = [v for v in var_to_restore if 'confidence' not in v.name]
             #     pass
-            #var_to_restore = [v for v in var_to_restore if 'semantics' not in v.name]
+            if options.predictSemantics == 1:
+                var_to_restore = [v for v in var_to_restore if 'semantics' not in v.name]
+                pass
+            
             loader = tf.train.Saver(var_to_restore)
             if len(options.hybrid) == 1:
                 hybrid = options.hybrid
@@ -496,7 +500,7 @@ def main(options):
                 hybrid = str(3)
                 pass
             #loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + hybrid + '_bl0_ll1_bw0.5_pb_pp_ps_sm0/checkpoint.ckpt')
-            loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + hybrid + '_bl0_ll1_bw0.5_pp_ps_sm0/checkpoint.ckpt')            
+            loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + hybrid + '_bl0_dl0_ll1_bw0.5_pb_pp/checkpoint.ckpt')            
             #loader.restore(sess,"checkpoint/planenet/checkpoint.ckpt")
             sess.run(batchno.assign(1))
         elif options.restore == 4:
@@ -1484,7 +1488,7 @@ def parse_args():
     #layers where deep supervision happens
     args.deepSupervisionLayers = []
     if args.deepSupervision >= 1:
-        #args.deepSupervisionLayers.append('res4b22_relu')
+        args.deepSupervisionLayers.append('res4b22_relu')
         pass
     if args.deepSupervision >= 2:
         args.deepSupervisionLayers.append('res4b12_relu')
