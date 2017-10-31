@@ -540,7 +540,7 @@ def getProbabilityMax(segmentation):
     probabilities = probabilities.reshape([height, width, -1])
     return probabilities
 
-def evaluateNormal(predNormal, gtSegmentations, numPlanes, gtPlanes):
+def evaluateNormal(predNormal, gtSegmentations, numPlanes):
     var = 0
     numImages = predNormal.shape[0]
     totalNumPlanes = 0
@@ -553,10 +553,28 @@ def evaluateNormal(predNormal, gtSegmentations, numPlanes, gtPlanes):
             normals = predNormal[imageIndex][mask.astype(np.bool)]
             averageNormal = np.mean(normals, axis=0, keepdims=True)
             averageNormal /= np.linalg.norm(averageNormal)
-            degrees = np.rad2deg(np.arccos(np.sum(normals * averageNormal, axis=-1)))
+            degrees = np.rad2deg(np.arccos(np.minimum(np.sum(normals * averageNormal, axis=-1), 1)))
+            #degrees = np.rad2deg(np.arccos(np.sum(normals * averageNormal, axis=-1)))
+            degrees = np.minimum(degrees, 180 - degrees)
             var += degrees.mean()
             totalNumPlanes += 1
+
+            cv2.imwrite('test/mask_' + str(planeIndex) + '.png', drawMaskImage(mask))
+            #print(normals)
+            # if planeIndex == 4:
+            #     for normal in normals:
+            #         print(normal)
+            #         continue
+            #     print(normals.mean(0))
+            #     exit(1)
+            # print(degrees)
+            # print(planeIndex, averageNormal, degrees.mean())
+            # print(normals[degrees > 90])
+            
             continue
+        
+        #print(var / totalNumPlanes)
+        #exit(1)
         continue
     var /= totalNumPlanes
     print(var)
@@ -568,9 +586,10 @@ def evaluateDepths(predDepths, gtDepths, validMasks, planeMasks=True, printInfo=
     numPixels = float(masks.sum())
     
     rmse = np.sqrt((pow(predDepths - gtDepths, 2) * masks).sum() / numPixels)
-    #rmse_log = np.sqrt((pow(np.log(1 + np.abs(predDepths - gtDepths)), 2) * masks).sum() / numPixels)
+    rmse_log = np.sqrt((pow(np.log(predDepths) - np.log(gtDepths), 2) * masks).sum() / numPixels)
     log10 = (np.abs(np.log10(np.maximum(predDepths, 1e-4)) - np.log10(np.maximum(gtDepths, 1e-4))) * masks).sum() / numPixels
     rel = (np.abs(predDepths - gtDepths) / np.maximum(gtDepths, 1e-4) * masks).sum() / numPixels
+    rel_sqr = (pow(predDepths - gtDepths, 2) / np.maximum(gtDepths, 1e-4) * masks).sum() / numPixels    
     deltas = np.maximum(predDepths / np.maximum(gtDepths, 1e-4), gtDepths / np.maximum(predDepths, 1e-4)) + (1 - masks.astype(np.float32)) * 10000
     accuracy_1 = (deltas < 1.25).sum() / numPixels
     accuracy_2 = (deltas < pow(1.25, 2)).sum() / numPixels
@@ -578,7 +597,7 @@ def evaluateDepths(predDepths, gtDepths, validMasks, planeMasks=True, printInfo=
     recall = float(masks.sum()) / validMasks.sum()
     #print((rms, recall))
     if printInfo:
-        print(('evaluate', rmse, log10, rel, accuracy_1, accuracy_2, accuracy_3, recall))
+        print(('evaluate', rel, rel_sqr, log10, rmse, rmse_log, accuracy_1, accuracy_2, accuracy_3, recall))
         pass
     return rmse, accuracy_1
     #return rel, log10, rms, accuracy_1, accuracy_2, accuracy_3, recall
@@ -2226,3 +2245,44 @@ def getSegmentationsGraphCut(planes, image, depth, normal, info):
     refined_segmentation = refined_segmentation.reshape([height, width])
     
     return refined_segmentation
+
+def calcNormal(depth, info):
+
+    height = depth.shape[0]
+    width = depth.shape[1]
+
+    camera = getCameraFromInfo(info)
+    urange = (np.arange(width, dtype=np.float32) / (width) * (camera['width']) - camera['cx']) / camera['fx']
+    urange = urange.reshape(1, -1).repeat(height, 0)
+    vrange = (np.arange(height, dtype=np.float32) / (height) * (camera['height']) - camera['cy']) / camera['fy']
+    vrange = vrange.reshape(-1, 1).repeat(width, 1)
+    
+    X = depth * urange
+    Y = depth
+    Z = -depth * vrange
+
+    points = np.stack([X, Y, Z], axis=2).reshape(-1, 3)
+
+    grids = np.array([-9, -6, -3, -1, 0, 1, 3, 6, 9])
+
+    normals = []
+    for index in xrange(width * height):
+        us = index % width + grids
+        us = us[np.logical_and(us >= 0, us < width)]
+        vs = index / width + grids
+        vs = vs[np.logical_and(vs >= 0, vs < height)]
+        indices = (np.expand_dims(vs, -1) * width + np.expand_dims(us, 0)).reshape(-1)
+        try:
+            plane = fitPlane(points[indices])
+            normals.append(-plane / np.linalg.norm(plane))
+        except:
+            if len(normals) > 0:
+                normals.append(normals[-1])
+            else:
+                normals.append([0, 0, 0])
+                pass
+            pass
+        continue
+    normal = np.array(normals).reshape((height, width, 3))
+    return normal
+

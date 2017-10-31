@@ -238,7 +238,8 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
 
 
         valid_normal_mask = tf.squeeze(tf.cast(tf.less(tf.slice(global_gt_dict['info'], [0, 19], [options.batchSize, 1]), 2), tf.float32))
-        normal_loss = tf.reduce_mean(tf.reduce_sum(-global_pred_dict['non_plane_normal'] * global_gt_dict['normal'] * validDepthMask, axis=[1, 2, 3]) / numValidPixels * valid_normal_mask) * 1000
+        normal_gt = tf.nn.l2_normalize(global_gt_dict['normal'], dim=-1)
+        normal_loss = tf.reduce_mean(tf.reduce_sum(-global_pred_dict['non_plane_normal'] * normal_gt * validDepthMask, axis=[1, 2, 3]) / numValidPixels * valid_normal_mask) * 1000
         #normal_loss = tf.reduce_mean(tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_normal'], global_gt_dict['normal']) * validDepthMask, axis=[1, 2, 3]) * valid_normal_mask) * 1000
         #normal_loss = tf.constant(0.0)
 
