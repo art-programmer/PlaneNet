@@ -2519,6 +2519,8 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
 
     dominantNormals = np.stack([dominantNormal_1, dominantNormal_2, dominantNormal_3], axis=0)
 
+    dominantNormalImage = np.abs(np.matmul(normal, dominantNormals.transpose()))
+    cv2.imwrite('test/dominant_normal.png', drawMaskImage(dominantNormalImage))
     planeHypothesisAreaThreshold = width * height * 0.01
     
     planes = []
@@ -2574,8 +2576,8 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
     indices = np.arange(width * height, dtype=np.int32)
     uv = np.stack([indices % width, indices / width], axis=1)
     colors = image.reshape((-1, 3))
-    windowW = 9
-    windowH = 3    
+    windowW = 21
+    windowH = 7   
     dominantLineMaps = []
     for vanishingPointIndex, vanishingPoint in enumerate(vanishingPoints):
         horizontalDirection = uv - np.expand_dims(vanishingPoint, 0)
@@ -2602,11 +2604,10 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
 
             neighborsColor = colors[indices_1] * np.expand_dims(areas_1, -1) + colors[indices_2] * np.expand_dims(areas_2, -1) + colors[indices_3] * np.expand_dims(areas_3, -1) + colors[indices_4] * np.expand_dims(areas_4, -1)
             colorDiff = np.linalg.norm(neighborsColor - colors, axis=-1)
-            
+
             #cv2.imwrite('test/color_diff_' + str(vanishingPointIndex) + '_' + str(directionIndex) + '.png', drawMaskImage(colorDiff.reshape((height, width)) / 100))
             colorDiffs.append(colorDiff)
             continue
-
         colorDiffs = np.stack(colorDiffs, 1)
 
         deltaUs, deltaVs = np.meshgrid(np.arange(windowW) - (windowW - 1) / 2, np.arange(windowH) - (windowH - 1) / 2)
@@ -2616,7 +2617,12 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
         windowIndices = (np.minimum(np.maximum(np.round(windowIndices[:, :, 1]), 0), height - 1) * width + np.minimum(np.maximum(np.round(windowIndices[:, :, 0]), 0), width - 1)).astype(np.int32)
         
         dominantLineMap = []
-        print(uv.shape)
+
+        # index = 361 * width + 146
+        # mask = np.zeros((height * width))
+        # mask[windowIndices[index]] = 1
+        # cv2.imwrite('test/mask.png', drawMaskImage(mask.reshape((height, width))))
+        # exit(1)
         for pixels in windowIndices:
             gradientSums = colorDiffs[pixels].sum(0)
             dominantLineMap.append(gradientSums[1] / gradientSums[0])
@@ -2746,3 +2752,32 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
     normalPred = allNormals.reshape(-1, numOutputPlanes + 1, 3)[np.arange(width * height), planeSegmentation.reshape(-1)].reshape((height, width, 3))
     
     return planes, planeSegmentation, depthPred, normalPred
+
+
+def testPlaneExtraction():
+    depth = cv2.imread('../../Data/SUNCG/0004d52d1aeeb8ae6de39d6bd993e992/000000_depth.png', -1).astype(np.float32) / 1000
+    normal = (cv2.imread('../../Data/SUNCG/0004d52d1aeeb8ae6de39d6bd993e992/000000_norm_camera.png').astype(np.float32) / 255) * 2 - 1
+    normal = np.stack([normal[:, :, 2], normal[:, :, 1], normal[:, :, 0]], axis=2)
+    image = cv2.imread('../../Data/SUNCG/0004d52d1aeeb8ae6de39d6bd993e992/000000_mlt.png')
+
+    cv2.imwrite('test/depth.png', drawDepthImage(depth))
+    cv2.imwrite('test/normal.png', drawNormalImage(normal))
+    cv2.imwrite('test/image.png', image)
+
+    info = np.zeros(20)
+    info[0] = 517.97
+    info[2] = 320
+    info[5] = 517.97
+    info[6] = 240
+    info[10] = 1
+    info[15] = 1
+    info[16] = 640
+    info[17] = 480
+    info[18] = 1000
+    info[19] = 0
+
+    pred_p, pred_s, pred_d, pred_n = fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageIndex=-1)
+    exit(1)
+    return
+
+
