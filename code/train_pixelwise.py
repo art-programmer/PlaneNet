@@ -125,12 +125,20 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
         
 
         #if options.predictPixelwise == 1:
-        depth_diff = global_pred_dict['non_plane_depth'] - global_gt_dict['depth']
-        depth_diff_gx = depth_diff - tf.concat([tf.ones([options.batchSize, HEIGHT, 1, 1]), depth_diff[:, :, :WIDTH - 1]], axis=2)
-        depth_diff_gy = depth_diff - tf.concat([tf.ones([options.batchSize, 1, WIDTH, 1]), depth_diff[:, :HEIGHT - 1]], axis=1)
+        validDepthMask = tf.cast(tf.greater(global_gt_dict['depth'], 1e-4), tf.float32)
+        numValidPixels = tf.reduce_sum(validDepthMask, axis=[1, 2, 3])        
+        depth_loss = tf.constant(0.0)
+        if options.predictPlanes == 1:
+            all_segmentations = tf.concat([global_pred_dict['segmentation'], global_pred_dict['non_plane_mask']], axis=3)
+            all_segmentations_softmax = tf.nn.softmax(all_segmentations)
+            depth_loss += tf.reduce_mean(tf.reduce_sum(tf.squared_difference(all_depths, global_gt_dict['depth']) * all_segmentations_softmax, axis=3, keep_dims=True) * validDepthMask) * 10000
+        else:
+            depth_diff = global_pred_dict['non_plane_depth'] - global_gt_dict['depth']
+            depth_diff_gx = depth_diff - tf.concat([tf.ones([options.batchSize, HEIGHT, 1, 1]), depth_diff[:, :, :WIDTH - 1]], axis=2)
+            depth_diff_gy = depth_diff - tf.concat([tf.ones([options.batchSize, 1, WIDTH, 1]), depth_diff[:, :HEIGHT - 1]], axis=1)
 
-        numValidPixels = tf.reduce_sum(validDepthMask, axis=[1, 2, 3])
-        depth_loss = tf.reduce_mean(tf.reduce_sum(tf.pow(depth_diff * validDepthMask, 2), axis=[1, 2, 3]) / numValidPixels - 0.5 * tf.pow(tf.reduce_sum(depth_diff * validDepthMask, axis=[1, 2, 3]) / numValidPixels, 2) + tf.reduce_sum((tf.pow(depth_diff_gx, 2) + tf.pow(depth_diff_gy, 2)) * validDepthMask, axis=[1, 2, 3]) / numValidPixels) * 1000
+            depth_loss += tf.reduce_mean(tf.reduce_sum(tf.pow(depth_diff * validDepthMask, 2), axis=[1, 2, 3]) / numValidPixels - 0.5 * tf.pow(tf.reduce_sum(depth_diff * validDepthMask, axis=[1, 2, 3]) / numValidPixels, 2) + tf.reduce_sum((tf.pow(depth_diff_gx, 2) + tf.pow(depth_diff_gy, 2)) * validDepthMask, axis=[1, 2, 3]) / numValidPixels) * 1000
+            pass
         
         #depth_loss += tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_depth'], global_gt_dict['depth']) * validDepthMask) * 10000
 
@@ -249,7 +257,7 @@ def main(options):
         sess.run(init_op)
         if options.restore == 0:
             #fine-tune from DeepLab model
-            var_to_restore = [v for v in var_to_restore if 'res5d' not in v.name and 'segmentation' not in v.name and 'plane' not in v.name and 'deep_supervision' not in v.name and 'local' not in v.name and 'boundary' not in v.name and 'degridding' not in v.name and 'res2a_branch2a' not in v.name and 'res2a_branch1' not in v.name]
+            var_to_restore = [v for v in var_to_restore if 'res5d' not in v.name and 'segmentation' not in v.name and 'plane' not in v.name and 'deep_supervision' not in v.name and 'local' not in v.name and 'boundary' not in v.name and 'degridding' not in v.name and 'res2a_branch2a' not in v.name and 'res2a_branch1' not in v.name and 'Adam' not in v.name and 'beta' not in v.name and 'statistics' not in v.name and 'semantics' not in v.name]
             pretrained_model_loader = tf.train.Saver(var_to_restore)
             pretrained_model_loader.restore(sess,"../pretrained_models/deeplab_resnet.ckpt")
         elif options.restore == 1:
@@ -1180,9 +1188,9 @@ def parse_args():
     parser.add_argument('--predictConfidence', dest='predictConfidence',
                         help='whether predict plane confidence or not: [0, 1]',
                         default=0, type=int)
-    parser.add_argument('--predictPixelwise', dest='predictPixelwise',
-                        help='whether predict pixelwise depth or not: [0, 1]',
-                        default=1, type=int)    
+    parser.add_argument('--predictPlanes', dest='predictPlanes',
+                        help='whether predict planes or not: [0, 1]',
+                        default=0, type=int)    
     parser.add_argument('--fineTuningCheckpoint', dest='fineTuningCheckpoint',
                         help='specify the model for fine-tuning',
                         default='../PlaneSetGeneration/dump_planenet_diverse/train_planenet_diverse.ckpt', type=str)
@@ -1218,45 +1226,15 @@ def parse_args():
         pass
     args.keyname += '_hybrid' + args.hybrid
     
-    if args.boundaryLoss != 1:
-        args.keyname += '_bl' + str(args.boundaryLoss)
-        pass
-    if args.diverseLoss == 0:
-        args.keyname += '_dl0'
-        pass
-    if args.labelLoss == 1:
-        args.keyname += '_ll1'
-        pass    
     if args.deepSupervision != 1:
         args.keyname += '_ds' + str(args.deepSupervision)
         pass
-    if args.crf > 0:
-        args.keyname += '_crf' + str(args.crf)
-        pass
-    if args.backwardLossWeight > 0:
-        args.keyname += '_bw' + str(args.backwardLossWeight)
-        pass
-    if args.predictBoundary == 1:
-        args.keyname += '_pb'
-        pass
-    if args.predictConfidence == 1:
-        args.keyname += '_pc'
-        pass        
-    if args.predictLocal == 1:
-        args.keyname += '_pl'
-        pass
-    if args.predictPixelwise == 1:
+    if args.predictPlanes == 1:
         args.keyname += '_pp'
         pass
     if args.predictSemantics == 1:
         args.keyname += '_ps'
         pass    
-    if args.sameMatching == 0:
-        args.keyname += '_sm0'
-        pass
-    if args.anchorPlanes == 1:
-        args.keyname += '_ap1'
-        pass
 
     #args.predictSemantics = 0
     #args.predictBoundary = 0
