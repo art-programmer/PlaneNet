@@ -1372,7 +1372,7 @@ def parse_args():
                         default=0, type=int)
     parser.add_argument('--diverseLoss', dest='diverseLoss',
                         help='use diverse loss: [0, 1]',
-                        default=1, type=int)
+                        default=0, type=int)
     parser.add_argument('--labelLoss', dest='labelLoss',
                         help='use label loss: [0, 1]',
                         default=1, type=int)
@@ -1393,16 +1393,16 @@ def parse_args():
                         default=0, type=int)
     parser.add_argument('--backwardLossWeight', dest='backwardLossWeight',
                         help='backward matching loss',
-                        default=0.5, type=float)
+                        default=0, type=float)
     parser.add_argument('--predictBoundary', dest='predictBoundary',
                         help='whether predict boundary or not: [0, 1]',
                         default=0, type=int)
     parser.add_argument('--predictSemantics', dest='predictSemantics',
                         help='whether predict semantics or not: [0, 1]',
                         default=1, type=int)    
-    # parser.add_argument('--predictLocal', dest='predictLocal',
-    #                     help='whether predict local planes or not: [0, 1]',
-    #                     default=0, type=int)
+    parser.add_argument('--predictLocal', dest='predictLocal',
+                        help='whether predict local planes or not: [0, 1]',
+                        default=0, type=int)
     parser.add_argument('--predictConfidence', dest='predictConfidence',
                         help='whether predict plane confidence or not: [0, 1]',
                         default=0, type=int)
