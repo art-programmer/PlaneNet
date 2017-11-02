@@ -355,13 +355,17 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
 
         label_loss = tf.constant(0.0)
         if options.labelLoss == 1:
-            label_loss = tf.reduce_mean(tf.reduce_max(all_segmentations_softmax, axis=[1, 2]) * tf.concat([tf.cast(tf.equal(tf.squeeze(num_matches, axis=2), 0), tf.float32), tf.ones([options.batchSize, 1])], axis=1)) * 1000
+            #label_loss = tf.reduce_mean(tf.reduce_max(all_segmentations_softmax, axis=[1, 2]) * tf.concat([tf.cast(tf.equal(tf.squeeze(num_matches, axis=2), 0), tf.float32), tf.ones([options.batchSize, 1])], axis=1)) * 1000
+            label_loss = tf.reduce_mean(tf.log(1 + tf.reduce_sum(all_segmentations_softmax, axis=[1, 2]))) * 100
             #label_loss = tf.reduce_mean(tf.reduce_max(all_segmentations_softmax, axis=[1, 2])) * 1000
             pass
         
         #regularization
         l2_losses = tf.add_n([options.l2Weight * tf.nn.l2_loss(v) for v in tf.trainable_variables() if 'weights' in v.name])
 
+        if options.planeLoss == 0:
+            plane_loss = tf.constant(0.0)
+            pass
 
         loss = plane_loss + segmentation_loss + depth_loss + normal_loss + plane_confidence_loss + diverse_loss + boundary_loss + local_score_loss + local_plane_loss + local_mask_loss + label_loss + semantics_loss + l2_losses
 
@@ -1371,7 +1375,10 @@ def parse_args():
                         default=1, type=int)
     parser.add_argument('--labelLoss', dest='labelLoss',
                         help='use label loss: [0, 1]',
-                        default=1, type=int)    
+                        default=1, type=int)
+    parser.add_argument('--planeLoss', dest='planeLoss',
+                        help='use plane loss: [0, 1]',
+                        default=1, type=int)        
     parser.add_argument('--deepSupervision', dest='deepSupervision',
                         help='deep supervision level: [0, 1, 2]',
                         default=1, type=int)
@@ -1393,9 +1400,9 @@ def parse_args():
     parser.add_argument('--predictSemantics', dest='predictSemantics',
                         help='whether predict semantics or not: [0, 1]',
                         default=1, type=int)    
-    parser.add_argument('--predictLocal', dest='predictLocal',
-                        help='whether predict local planes or not: [0, 1]',
-                        default=0, type=int)
+    # parser.add_argument('--predictLocal', dest='predictLocal',
+    #                     help='whether predict local planes or not: [0, 1]',
+    #                     default=0, type=int)
     parser.add_argument('--predictConfidence', dest='predictConfidence',
                         help='whether predict plane confidence or not: [0, 1]',
                         default=0, type=int)
@@ -1446,6 +1453,9 @@ def parse_args():
     if args.labelLoss == 1:
         args.keyname += '_ll1'
         pass    
+    if args.planeLoss == 0:
+        args.keyname += '_pl0'
+        pass
     if args.deepSupervision != 1:
         args.keyname += '_ds' + str(args.deepSupervision)
         pass
@@ -1461,9 +1471,9 @@ def parse_args():
     if args.predictConfidence == 1:
         args.keyname += '_pc'
         pass        
-    if args.predictLocal == 1:
-        args.keyname += '_pl'
-        pass
+    # if args.predictLocal == 1:
+    #     args.keyname += '_pl'
+    #     pass
     if args.predictPixelwise == 1:
         args.keyname += '_pp'
         pass

@@ -17,19 +17,6 @@ def findProposals(segmentations, numProposals = 5):
     proposals = np.argpartition(-segmentationsNeighbors, numProposals)[:, :, :numProposals]
     return proposals
 
-def readProposalInfo(info, proposals):
-    numProposals = proposals.shape[-1]
-    outputShape = list(info.shape)
-    outputShape[-1] = numProposals
-    info = info.reshape([-1, info.shape[-1]])
-    proposals = proposals.reshape([-1, proposals.shape[-1]])
-    proposalInfo = []
-
-    for proposal in xrange(numProposals):
-        proposalInfo.append(info[np.arange(info.shape[0]), proposals[:, proposal]])
-        continue
-    proposalInfo = np.stack(proposalInfo, axis=1).reshape(outputShape)
-    return proposalInfo
 
 def refineSegmentation(image, allSegmentations, allDepths, boundaries, numOutputPlanes=20, numIterations=20, numProposals=5):
     height = allSegmentations.shape[0]

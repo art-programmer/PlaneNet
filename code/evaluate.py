@@ -24,9 +24,12 @@ from SegmentationRefinement import *
 #ALL_TITLES = ['planenet', 'pixelwise', 'pixelwise+RANSAC', 'depth observation+RANSAC', 'pixelwise+semantics+RANSAC', 'gt']
 #ALL_METHODS = [('bl2_ll1_bw0.5_pb_pp_sm0', ''), ('pb_pp', 'pixelwise_1'), ('pb_pp', 'pixelwise_2'), ('pb_pp', 'pixelwise_3'), ('pb_pp', 'semantics'), ('pb_pp', 'gt')]
 
-ALL_TITLES = ['planenet label loss', 'planenet crf', 'planenet label backward', 'planenet different matching']
+ALL_TITLES = ['PlaneNet', 'Oracle NYU toolbox', 'NYU toolbox', 'Oracle Manhattan', 'Manhattan']
 #ALL_METHODS = [('bl0_dl0_bw0.5_pb_pp_ps_sm0', ''), ('ll1_pb_pp', ''), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', ''), ('ll1_bw0.5_pb_pp_sm0', '')]
-ALL_METHODS = [('bl0_dl0_ll1_bw0.5_pb_pp_sm0', ''), ('ll1_pb_pp', ''), ('bl0_dl0_ll1_pb_pp_ps', ''), ('bl0_dl0_ll1_ds0_pb_pp', '')]
+#ALL_METHODS = [('bl0_dl0_ll1_bw0.5_pb_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_ps', ''), ('bl0_dl0_ll1_ds0_pb_pp', '')]
+
+ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', 'pixelwise_2'), ('bl0_dl0_ll1_pb_pp_sm0', 'pixelwise_3'), ('bl0_dl0_ll1_pb_pp_sm0', 'pixelwise_6'), ('bl0_dl0_ll1_pb_pp_sm0', 'pixelwise_5')]
+
 
 #ALL_METHODS = [('ll1_pb_pp', 'pixelwise_1'), ('crf1_pb_pp', 'pixelwise_2'), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', 'pixelwise_3'), ('ll1_bw0.5_pb_pp_sm0', 'pixelwise_4')]
 
@@ -348,13 +351,25 @@ def evaluatePlanePrediction(options):
                 pred_d = pred_dict['np_depth'][image_index].squeeze()
                 if '_1' in method[1]:
                     pred_s = np.zeros(pred_dict['segmentation'][image_index].shape)
-                    pred_p = np.zeros(pred_dict['plane'][image_index].shape)    
-                elif '_2' in methods[1]:
-                    pred_p, pred_s, pred_d = fitPlanes(pred_d, gt_dict['info'][image_index], numPlanes=20, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=0.2)
-                elif '_3' in methods[1]:
-                    pred_p, pred_s, pred_d = fitPlanes(pred_d, gt_dict['info'][image_index], numPlanes=20, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=0.2)
-                elif '_4' in methods[1]:
+                    pred_p = np.zeros(pred_dict['plane'][image_index].shape)
+                elif '_2' in method[1]:
+                    #pred_p, pred_s, pred_d, pred_n = fitPlanes(pred_d, gt_dict['info'][image_index], numPlanes=20, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=0.2)
+                    pred_p, pred_s, pred_d, pred_n = fitPlanesNYU(gt_dict['image'], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['semantics'], gt_dict['info'][image_index], numOutputPlanes=20, planeAreaThreshold=3*4, distanceThreshold=0.05, local=0.2)
+                elif '_3' in method[1]:
+                    #pred_p, pred_s, pred_d, pred_n = fitPlanes(pred_d, gt_dict['info'][image_index], numPlanes=20, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=0.2)
+                    pred_p, pred_s, pred_d, pred_n = fitPlanesNYU(gt_dict['image'], pred_d, pred_n, gt_dict['semantics'], gt_dict['info'][image_index], numOutputPlanes=20, planeAreaThreshold=3*4, distanceThreshold=0.05, local=0.2)                    
+                # elif '_2' in methods[1]:
+                #     pred_p, pred_s, pred_d = fitPlanes(pred_d, gt_dict['info'][image_index], numPlanes=20, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=0.2)
+                # elif '_3' in methods[1]:
+                #     pred_p, pred_s, pred_d = fitPlanes(pred_d, gt_dict['info'][image_index], numPlanes=20, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=0.2)
+                elif '_4' in method[1]:
                     pred_p, pred_s, pred_d = fitPlanesSegmentation(pred_d, pred_dict['semantics'][image_index], gt_dict['info'][image_index], numPlanes=20, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=0.2)
+                elif '_5' in method[1]:
+                    pred_p, pred_s, pred_d, pred_n = fitPlanesManhattan(gt_dict['image'][image_index], pred_d, pred_n, gt_dict['info'][image_index], numOutputPlanes=20)
+                elif '_6' in method[1]:
+                    normal = calcNormal(gt_dict['depth'][image_index].squeeze(), gt_dict['info'][image_index])
+                    cv2.imwrite('test/normal.png', drawNormalImage(normal))
+                    pred_p, pred_s, pred_d, pred_n = fitPlanesManhattan(gt_dict['image'][image_index], gt_dict['depth'][image_index].squeeze(), normal, gt_dict['info'][image_index], numOutputPlanes=20, imageIndex=image_index)
                     pass
                 predPlanes.append(pred_p)                
                 predSegmentations.append(pred_s)
@@ -375,7 +390,8 @@ def evaluatePlanePrediction(options):
             pass
         continue
 
-
+    np.save(options.test_dir + '/results.npy', {'gt': gt_dict, 'pred': predictions})
+    
     #exit(1)
     
     #print(results)
@@ -396,9 +412,9 @@ def evaluatePlanePrediction(options):
         if titles[method_index] == 'pixelwise':
             continue
         segmentations = pred_dict['segmentation']
-        if method_index == 0:
-            segmentations = softmax(segmentations)
-            pass
+        #if method_index == 0:
+        #segmentations = softmax(segmentations)
+        #pass
         pixel_curves, plane_curves = evaluatePlaneSegmentation(pred_dict['plane'], segmentations, gt_dict['plane'], gt_dict['segmentation'], gt_dict['num_planes'], numOutputPlanes = options.numOutputPlanes)
 
         for metric_index, pixel_curve in enumerate(pixel_curves):

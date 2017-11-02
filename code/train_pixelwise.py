@@ -29,7 +29,7 @@ from RecordReaderAll import *
 #it also controls which data batch to use (*_train or *_val)
 
 
-def build_graph(img_inp_train, img_inp_val, training_flag, options):
+def build_graph(img_inp_train, img_inp_val, gt_dict, training_flag, options):
     with tf.device('/gpu:%d'%options.gpu_id):
         img_inp = tf.cond(training_flag, lambda: img_inp_train, lambda: img_inp_val)
         
@@ -49,7 +49,7 @@ def build_graph(img_inp_train, img_inp_val, training_flag, options):
             plane_pred = gt_dict['plane']
             non_plane_mask_pred = gt_dict['non_plane_mask'] * 10
             non_plane_depth_pred = gt_dict['depth']
-            non_plane_normal_pred = gt_dict['normal']            
+            non_plane_normal_pred = gt_dict['normal']
             segmentation_pred = gt_dict['segmentation'][:, :, :, :20] * 10
             pass
         
@@ -411,7 +411,7 @@ def test(options):
 
     training_flag = tf.constant(False, tf.bool)
 
-    global_pred_dict, local_pred_dict, deep_pred_dicts = build_graph(img_inp, img_inp, training_flag, options)
+    global_pred_dict, local_pred_dict, deep_pred_dicts = build_graph(img_inp, img_inp, global_gt_dict, training_flag, options)
     var_to_restore = tf.global_variables()
 
     loss, loss_dict, debug_dict = build_loss(img_inp, img_inp, global_pred_dict, deep_pred_dicts, global_gt_dict, global_gt_dict, training_flag, options)
@@ -470,7 +470,7 @@ def test(options):
                 # cv2.imwrite(options.test_dir + '/depth_gt.png', drawDepthImage(debug['depth_gt'][0].squeeze()))
                 # exit(1)
 
-                if 'pixelwise' in options.suffix:
+                if 'pixelwise' in options.suffix or True:
                     image = ((img[0] + 0.5) * 255).astype(np.uint8)
                     gt_d = global_gt['depth'].squeeze()
                     pred_d = global_pred['non_plane_depth'].squeeze()
