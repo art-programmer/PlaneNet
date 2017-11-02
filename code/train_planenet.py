@@ -472,7 +472,7 @@ def main(options):
         sess.run(init_op)
         if options.restore == 0:
             #fine-tune from DeepLab model
-            var_to_restore = [v for v in var_to_restore if 'res5d' not in v.name and 'segmentation' not in v.name and 'plane' not in v.name and 'deep_supervision' not in v.name and 'local' not in v.name and 'boundary' not in v.name and 'degridding' not in v.name and 'res2a_branch2a' not in v.name and 'res2a_branch1' not in v.name]
+            var_to_restore = [v for v in var_to_restore if 'res5d' not in v.name and 'segmentation' not in v.name and 'plane' not in v.name and 'deep_supervision' not in v.name and 'local' not in v.name and 'boundary' not in v.name and 'degridding' not in v.name and 'res2a_branch2a' not in v.name and 'res2a_branch1' not in v.name and 'Adam' not in v.name and 'beta' not in v.name and 'statistics' not in v.name and 'semantics' not in v.name]
             pretrained_model_loader = tf.train.Saver(var_to_restore)
             pretrained_model_loader.restore(sess,"../pretrained_models/deeplab_resnet.ckpt")
         elif options.restore == 1:
@@ -1372,7 +1372,7 @@ def parse_args():
                         default=0, type=int)
     parser.add_argument('--diverseLoss', dest='diverseLoss',
                         help='use diverse loss: [0, 1]',
-                        default=1, type=int)
+                        default=0, type=int)
     parser.add_argument('--labelLoss', dest='labelLoss',
                         help='use label loss: [0, 1]',
                         default=1, type=int)
@@ -1393,16 +1393,16 @@ def parse_args():
                         default=0, type=int)
     parser.add_argument('--backwardLossWeight', dest='backwardLossWeight',
                         help='backward matching loss',
-                        default=0.5, type=float)
+                        default=0, type=float)
     parser.add_argument('--predictBoundary', dest='predictBoundary',
                         help='whether predict boundary or not: [0, 1]',
                         default=0, type=int)
     parser.add_argument('--predictSemantics', dest='predictSemantics',
                         help='whether predict semantics or not: [0, 1]',
                         default=1, type=int)    
-    # parser.add_argument('--predictLocal', dest='predictLocal',
-    #                     help='whether predict local planes or not: [0, 1]',
-    #                     default=0, type=int)
+    parser.add_argument('--predictLocal', dest='predictLocal',
+                        help='whether predict local planes or not: [0, 1]',
+                        default=0, type=int)
     parser.add_argument('--predictConfidence', dest='predictConfidence',
                         help='whether predict plane confidence or not: [0, 1]',
                         default=0, type=int)
