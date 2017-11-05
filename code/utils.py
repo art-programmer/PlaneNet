@@ -2647,7 +2647,7 @@ def readProposalInfo(info, proposals):
     return proposalInfo
 
 
-def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageIndex=1):
+def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageIndex=1, parameters={}):
     #import sklearn.cluster
     #meanshift = sklearn.cluster.MeanShift(0.05)
     #import sklearn.neighbors    
@@ -2841,20 +2841,31 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
         continue
     dominantLineMaps = np.stack(dominantLineMaps, axis=2)
     #cv2.imwrite('test/dominant_lines.png', drawMaskImage(dominantLineMaps / 5))
-    if imageIndex >= 0:
-        cv2.imwrite('test/' + str(imageIndex) + '_dominant_lines.png', drawMaskImage(dominantLineMaps / 5))
+    if 'dominantLineThreshold' in parameters:
+        dominantLineThreshold = parameters['dominantLineThreshold']
     else:
-        cv2.imwrite('test/dominant_lines.png', drawMaskImage(dominantLineMaps / 5))
+        dominantLineThreshold = 5
         pass
     
-    smoothnessWeightMask = dominantLineMaps.max(2) > 5
+    if imageIndex >= 0:
+        cv2.imwrite('test/' + str(imageIndex) + '_dominant_lines.png', drawMaskImage(dominantLineMaps / dominantLineThreshold))
+    else:
+        cv2.imwrite('test/dominant_lines.png', drawMaskImage(dominantLineMaps / dominantLineThreshold))
+        pass
+    
+    smoothnessWeightMask = dominantLineMaps.max(2) > dominantLineThreshold
     cv2.imwrite('test/dominant_lines_mask.png', drawMaskImage(smoothnessWeightMask))    
     
     planesD = np.linalg.norm(planes, axis=1, keepdims=True)
     planeNormals = planes / np.maximum(planesD, 1e-4)
 
-          
-    distanceCostThreshold = 0.05
+
+    if 'distanceCostThreshold' in parameters:
+        distanceCostThreshold = parameters['distanceCostThreshold']
+    else:
+        distanceCostThreshold = 0.05
+        pass
+    
     distanceCost = np.abs(np.tensordot(points, planeNormals, axes=([1, 1])) - np.reshape(planesD, [1, -1])) / distanceCostThreshold
     #distanceCost = np.concatenate([distanceCost, np.ones((height * width, 1))], axis=1)
 
@@ -2880,9 +2891,12 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
     #cv2.imwrite('test/mask.png', drawSegmentationImage(planeMasks.reshape((height, width, -1))))
     #exit(1)
 
-
-    numProposals = 3
-    
+    if 'numProposals' in parameters:
+        numProposals = parameters['numProposals']
+    else:
+        numProposals = 3
+        pass
+        
     proposals = np.argpartition(unaries, numProposals)[:, :numProposals]
     proposals[np.logical_not(validMask)] = 0
     
@@ -2926,8 +2940,14 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
     # print(proposals[(y + 1) * width + x])
     # print(unaries[(y + 1) * width + x] * 10000)    
     # print(edges_features[y * width + x])
+
+    if 'smoothnessWeight' in parameters:
+        smoothnessWeight = parameters['smoothnessWeight']
+    else:
+        smoothnessWeight = 40
+        pass
     
-    refined_segmentation = inference_ogm(unaries, -edges_features * 40, edges, return_energy=False, alg='trw')
+    refined_segmentation = inference_ogm(unaries, -edges_features * smoothnessWeight, edges, return_energy=False, alg='trw')
 
     refined_segmentation = refined_segmentation.reshape([height, width, 1])
     refined_segmentation = readProposalInfo(proposals, refined_segmentation)
@@ -2974,7 +2994,7 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
     # allNormals = np.concatenate([planeNormals, np.expand_dims(normal, 2)], axis=2)
     # normalPred = allNormals.reshape(-1, planes.shape[0] + 1, 3)[np.arange(width * height), planeSegmentation.reshape(-1)].reshape((height, width, 3))
     
-    return planes, planeSegmentation, depthPred, normalPred
+    return planes, planeSegmentation
 
 
 def calcVanishingPoint(lines):
