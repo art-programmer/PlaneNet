@@ -247,214 +247,214 @@ end_header
     return
 
 
-def evaluatePlanes(planes, filename = None, depths = None, normals = None, invalidMask = None, outputFolder = None, outputIndex = 0, colorMap = None):
-    if filename != None:
-        if 'mlt' not in filename:
-            filename = filename.replace('color', 'mlt')
-            pass
-        normalFilename = filename.replace('mlt', 'norm_camera')
-        normals = np.array(PIL.Image.open(normalFilename)).astype(np.float) / 255 * 2 - 1
-        norm = np.linalg.norm(normals, 2, 2)
-        for c in xrange(3):
-            normals[:, :, c] /= norm
-            continue
+# def evaluatePlanes(planes, filename = None, depths = None, normals = None, invalidMask = None, outputFolder = None, outputIndex = 0, colorMap = None):
+#     if filename != None:
+#         if 'mlt' not in filename:
+#             filename = filename.replace('color', 'mlt')
+#             pass
+#         normalFilename = filename.replace('mlt', 'norm_camera')
+#         normals = np.array(PIL.Image.open(normalFilename)).astype(np.float) / 255 * 2 - 1
+#         norm = np.linalg.norm(normals, 2, 2)
+#         for c in xrange(3):
+#             normals[:, :, c] /= norm
+#             continue
         
-        depthFilename = filename.replace('mlt', 'depth')
-        depths = np.array(PIL.Image.open(depthFilename)).astype(np.float) / 1000
-        # if len(depths.shape) == 3:
-        #     depths = depths.mean(2)
-        #     pass
-        maskFilename = filename.replace('mlt', 'valid')    
-        invalidMask = np.array(PIL.Image.open(maskFilename))
-        invalidMask = invalidMask < 128
-        invalidMask += depths > 10
-        pass
+#         depthFilename = filename.replace('mlt', 'depth')
+#         depths = np.array(PIL.Image.open(depthFilename)).astype(np.float) / 1000
+#         # if len(depths.shape) == 3:
+#         #     depths = depths.mean(2)
+#         #     pass
+#         maskFilename = filename.replace('mlt', 'valid')    
+#         invalidMask = np.array(PIL.Image.open(maskFilename))
+#         invalidMask = invalidMask < 128
+#         invalidMask += depths > 10
+#         pass
 
-    height = normals.shape[0]
-    width = normals.shape[1]
-    focalLength = 517.97
-    urange = np.arange(width).reshape(1, -1).repeat(height, 0) - width * 0.5
-    vrange = np.arange(height).reshape(-1, 1).repeat(width, 1) - height * 0.5
-    ranges = np.array([urange / focalLength, np.ones(urange.shape), -vrange / focalLength]).transpose([1, 2, 0])
+#     height = normals.shape[0]
+#     width = normals.shape[1]
+#     focalLength = 517.97
+#     urange = np.arange(width).reshape(1, -1).repeat(height, 0) - width * 0.5
+#     vrange = np.arange(height).reshape(-1, 1).repeat(width, 1) - height * 0.5
+#     ranges = np.array([urange / focalLength, np.ones(urange.shape), -vrange / focalLength]).transpose([1, 2, 0])
     
-    X = depths / focalLength * urange
-    Y = depths
-    Z = -depths / focalLength * vrange
-    d = -(normals[:, :, 0] * X + normals[:, :, 1] * Y + normals[:, :, 2] * Z)    
+#     X = depths / focalLength * urange
+#     Y = depths
+#     Z = -depths / focalLength * vrange
+#     d = -(normals[:, :, 0] * X + normals[:, :, 1] * Y + normals[:, :, 2] * Z)    
 
 
-    normalDotThreshold = np.cos(np.deg2rad(30))
-    distanceThreshold = 50000
+#     normalDotThreshold = np.cos(np.deg2rad(30))
+#     distanceThreshold = 50000
     
-    reconstructedNormals = np.zeros(normals.shape)
-    reconstructedDepths = np.zeros(depths.shape)
-    segmentationImage = np.zeros((height, width, 3))
-    distanceMap = np.ones((height, width)) * distanceThreshold
-    occupancyMask = np.zeros((height, width)).astype(np.bool)
-    segmentationTest = np.zeros((height, width))
-    y = 297
-    x = 540
-    for planeIndex, plane in enumerate(planes):
-        planeD = np.linalg.norm(plane)
-        planeNormal = -plane / planeD
+#     reconstructedNormals = np.zeros(normals.shape)
+#     reconstructedDepths = np.zeros(depths.shape)
+#     segmentationImage = np.zeros((height, width, 3))
+#     distanceMap = np.ones((height, width)) * distanceThreshold
+#     occupancyMask = np.zeros((height, width)).astype(np.bool)
+#     segmentationTest = np.zeros((height, width))
+#     y = 297
+#     x = 540
+#     for planeIndex, plane in enumerate(planes):
+#         planeD = np.linalg.norm(plane)
+#         planeNormal = -plane / planeD
 
-        normalXYZ = np.dot(ranges, planeNormal)
-        normalXYZ = np.reciprocal(normalXYZ)
-        planeY = -normalXYZ * planeD
+#         normalXYZ = np.dot(ranges, planeNormal)
+#         normalXYZ = np.reciprocal(normalXYZ)
+#         planeY = -normalXYZ * planeD
 
-        distance = np.abs(planeNormal[0] * X + planeNormal[1] * Y + planeNormal[2] * Z + planeD) / np.abs(np.dot(normals, planeNormal))
-        #distance = np.abs(planeY - depths)
+#         distance = np.abs(planeNormal[0] * X + planeNormal[1] * Y + planeNormal[2] * Z + planeD) / np.abs(np.dot(normals, planeNormal))
+#         #distance = np.abs(planeY - depths)
         
-        mask = (distance < distanceMap) * (planeY > 0) * (np.abs(np.dot(normals, planeNormal)) > normalDotThreshold) * (np.abs(planeY - depths) < 0.5)
-        occupancyMask += mask
+#         mask = (distance < distanceMap) * (planeY > 0) * (np.abs(np.dot(normals, planeNormal)) > normalDotThreshold) * (np.abs(planeY - depths) < 0.5)
+#         occupancyMask += mask
         
-        reconstructedNormals[mask] = planeNormal
+#         reconstructedNormals[mask] = planeNormal
         
         
-        #if planeNormal[2] > 0.9:
-        #print(planeD)
-        #print(planeNormal)
-        # minDepth = depths.min()
-        # maxDepth = depths.max()
-        # print(depths[300][300])
-        # print(planeY[300][300])
-        # print(depths[350][350])
-        # print(planeY[350][350])
-        # PIL.Image.fromarray((np.maximum(np.minimum((planeY - minDepth) / (maxDepth - minDepth), 1), 0) * 255).astype(np.uint8)).save(outputFolder + '/plane.png')
-        # exit(1)
-        #pass
-        reconstructedDepths[mask] = planeY[mask]
-        if colorMap != None and planeIndex in colorMap:
-            segmentationImage[mask] = colorMap[planeIndex]
-        else:
-            segmentationImage[mask] = np.random.randint(255, size=(3,))
-            pass
-        distanceMap[mask] = distance[mask]
-        segmentationTest[mask] = planeIndex + 1
-        #print((planeIndex, planeY[y][x], distance[y][x], np.abs(np.dot(normals, planeNormal))[y][x]))
-        continue
+#         #if planeNormal[2] > 0.9:
+#         #print(planeD)
+#         #print(planeNormal)
+#         # minDepth = depths.min()
+#         # maxDepth = depths.max()
+#         # print(depths[300][300])
+#         # print(planeY[300][300])
+#         # print(depths[350][350])
+#         # print(planeY[350][350])
+#         # PIL.Image.fromarray((np.maximum(np.minimum((planeY - minDepth) / (maxDepth - minDepth), 1), 0) * 255).astype(np.uint8)).save(outputFolder + '/plane.png')
+#         # exit(1)
+#         #pass
+#         reconstructedDepths[mask] = planeY[mask]
+#         if colorMap != None and planeIndex in colorMap:
+#             segmentationImage[mask] = colorMap[planeIndex]
+#         else:
+#             segmentationImage[mask] = np.random.randint(255, size=(3,))
+#             pass
+#         distanceMap[mask] = distance[mask]
+#         segmentationTest[mask] = planeIndex + 1
+#         #print((planeIndex, planeY[y][x], distance[y][x], np.abs(np.dot(normals, planeNormal))[y][x]))
+#         continue
 
-    # print(distanceMap.mean())
-# print(distanceMap.max())
-    # print(np.abs(reconstructedDepths - depths)[occupancyMask].max())
-# print(pow(reconstructedDepths - depths, 2)[True - invalidMask].mean())
-    # exit(1)
+#     # print(distanceMap.mean())
+# # print(distanceMap.max())
+#     # print(np.abs(reconstructedDepths - depths)[occupancyMask].max())
+# # print(pow(reconstructedDepths - depths, 2)[True - invalidMask].mean())
+#     # exit(1)
 
-    # planeIndex = segmentationTest[y][x]
-# print(normals[y][x])
-    # plane = planes[int(planeIndex)]
-# planeD = np.linalg.norm(plane)
-    # planeNormal = -plane / planeD
-# print((planeNormal, planeD))
-    # print(depths[y][x])
-# print(reconstructedDepths[y][x])
-    # print(segmentationTest[y][x])
+#     # planeIndex = segmentationTest[y][x]
+# # print(normals[y][x])
+#     # plane = planes[int(planeIndex)]
+# # planeD = np.linalg.norm(plane)
+#     # planeNormal = -plane / planeD
+# # print((planeNormal, planeD))
+#     # print(depths[y][x])
+# # print(reconstructedDepths[y][x])
+#     # print(segmentationTest[y][x])
 
-    if outputFolder != None:
-        depths[invalidMask] = 0
-        normals[invalidMask] = 0
-        reconstructedDepths[invalidMask] = 0
-        reconstructedNormals[invalidMask] = 0
-        minDepth = depths.min()
-        maxDepth = depths.max()
-        #print(minDepth)
-        #print(maxDepth)
-        PIL.Image.fromarray(((depths - minDepth) / (maxDepth - minDepth) * 255).astype(np.uint8)).save(outputFolder + '/' + str(outputIndex) + '_depth.png')
-        PIL.Image.fromarray((np.maximum(np.minimum((reconstructedDepths - minDepth) / (maxDepth - minDepth), 1), 0) * 255).astype(np.uint8)).save(outputFolder + '/' + str(outputIndex) + '_depth_reconstructed.png')
-        #PIL.Image.fromarray((np.maximum(np.minimum((reconstructedDepths - depths) / (distanceThreshold), 1), 0) * 255).astype(np.uint8)).save(outputFolder + '/depth_' + str(outputIndex) + '_diff.png')
-        PIL.Image.fromarray(((normals + 1) / 2 * 255).astype(np.uint8)).save(outputFolder + '/' + str(outputIndex) + '_normal_.png')
-        PIL.Image.fromarray(((reconstructedNormals + 1) / 2 * 255).astype(np.uint8)).save(outputFolder + '/' + str(outputIndex) + '_normal_reconstructed.png')
-        PIL.Image.fromarray(segmentationImage.astype(np.uint8)).save(outputFolder + '/' + str(outputIndex) + '_plane_segmentation.png')
-        #depthImage = ((depths - minDepth) / (maxDepth - minDepth) * 255).astype(np.uint8)
-        #PIL.Image.fromarray((invalidMask * 255).astype(np.uint8)).save(outputFolder + '/mask.png')
-        #exit(1)
-    else:
-        occupancy = (occupancyMask > 0.5).astype(np.float32).sum() / (1 - invalidMask).sum()
-        invalidMask += np.invert(occupancyMask)
-        #PIL.Image.fromarray(invalidMask.astype(np.uint8) * 255).save(outputFolder + '/mask.png')
-        reconstructedDepths = np.maximum(np.minimum(reconstructedDepths, 10), 0)
-        depthError = pow(reconstructedDepths - depths, 2)[np.invert(invalidMask)].mean()
-        #depthError = distanceMap.mean()
-        normalError = np.arccos(np.maximum(np.minimum(np.sum(reconstructedNormals * normals, 2), 1), -1))[np.invert(invalidMask)].mean()
-        #normalError = pow(np.linalg.norm(reconstructedNormals - normals, 2, 2), 2)[True - invalidMask].mean()
-        #print((depthError, normalError, occupancy))
-        # print(depths.max())
-        # print(depths.min())
-        # print(reconstructedDepths.max())
-        # print(reconstructedDepths.min())
-        # print(occupancy)
-        # exit(1)
+#     if outputFolder != None:
+#         depths[invalidMask] = 0
+#         normals[invalidMask] = 0
+#         reconstructedDepths[invalidMask] = 0
+#         reconstructedNormals[invalidMask] = 0
+#         minDepth = depths.min()
+#         maxDepth = depths.max()
+#         #print(minDepth)
+#         #print(maxDepth)
+#         PIL.Image.fromarray(((depths - minDepth) / (maxDepth - minDepth) * 255).astype(np.uint8)).save(outputFolder + '/' + str(outputIndex) + '_depth.png')
+#         PIL.Image.fromarray((np.maximum(np.minimum((reconstructedDepths - minDepth) / (maxDepth - minDepth), 1), 0) * 255).astype(np.uint8)).save(outputFolder + '/' + str(outputIndex) + '_depth_reconstructed.png')
+#         #PIL.Image.fromarray((np.maximum(np.minimum((reconstructedDepths - depths) / (distanceThreshold), 1), 0) * 255).astype(np.uint8)).save(outputFolder + '/depth_' + str(outputIndex) + '_diff.png')
+#         PIL.Image.fromarray(((normals + 1) / 2 * 255).astype(np.uint8)).save(outputFolder + '/' + str(outputIndex) + '_normal_.png')
+#         PIL.Image.fromarray(((reconstructedNormals + 1) / 2 * 255).astype(np.uint8)).save(outputFolder + '/' + str(outputIndex) + '_normal_reconstructed.png')
+#         PIL.Image.fromarray(segmentationImage.astype(np.uint8)).save(outputFolder + '/' + str(outputIndex) + '_plane_segmentation.png')
+#         #depthImage = ((depths - minDepth) / (maxDepth - minDepth) * 255).astype(np.uint8)
+#         #PIL.Image.fromarray((invalidMask * 255).astype(np.uint8)).save(outputFolder + '/mask.png')
+#         #exit(1)
+#     else:
+#         occupancy = (occupancyMask > 0.5).astype(np.float32).sum() / (1 - invalidMask).sum()
+#         invalidMask += np.invert(occupancyMask)
+#         #PIL.Image.fromarray(invalidMask.astype(np.uint8) * 255).save(outputFolder + '/mask.png')
+#         reconstructedDepths = np.maximum(np.minimum(reconstructedDepths, 10), 0)
+#         depthError = pow(reconstructedDepths - depths, 2)[np.invert(invalidMask)].mean()
+#         #depthError = distanceMap.mean()
+#         normalError = np.arccos(np.maximum(np.minimum(np.sum(reconstructedNormals * normals, 2), 1), -1))[np.invert(invalidMask)].mean()
+#         #normalError = pow(np.linalg.norm(reconstructedNormals - normals, 2, 2), 2)[True - invalidMask].mean()
+#         #print((depthError, normalError, occupancy))
+#         # print(depths.max())
+#         # print(depths.min())
+#         # print(reconstructedDepths.max())
+#         # print(reconstructedDepths.min())
+#         # print(occupancy)
+#         # exit(1)
         
-        #reconstructedDepths[np.invert(occupancyMask)] = depths[np.invert(occupancyMask)]
-        return depthError, normalError, occupancy, segmentationTest, reconstructedDepths, occupancyMask
-    return
+#         #reconstructedDepths[np.invert(occupancyMask)] = depths[np.invert(occupancyMask)]
+#         return depthError, normalError, occupancy, segmentationTest, reconstructedDepths, occupancyMask
+#     return
 
 
-def evaluatePlanesSeparately(planes, filename, outputFolder = None, outputIndex = 0):
-    if 'mlt' not in filename:
-        filename = filename.replace('color', 'mlt')
-        pass
-    colorImage = np.array(PIL.Image.open(filename))
-    normalFilename = filename.replace('mlt', 'norm_camera')
-    normals = np.array(PIL.Image.open(normalFilename)).astype(np.float) / 255 * 2 - 1
-    height = normals.shape[0]
-    width = normals.shape[1]
-    norm = np.linalg.norm(normals, 2, 2)
-    for c in xrange(3):
-        normals[:, :, c] /= norm
-        continue
-
-    
-    depthFilename = filename.replace('mlt', 'depth')
-    depths = np.array(PIL.Image.open(depthFilename)).astype(np.float) / 1000
-    # if len(depths.shape) == 3:
-    #     depths = depths.mean(2)
-    #     pass
-    
-    focalLength = 517.97
-    urange = np.arange(width).reshape(1, -1).repeat(height, 0) - width * 0.5
-    vrange = np.arange(height).reshape(-1, 1).repeat(width, 1) - height * 0.5
-    ranges = np.array([urange / focalLength, np.ones(urange.shape), -vrange / focalLength]).transpose([1, 2, 0])
-    X = depths / focalLength * urange
-    Y = depths
-    Z = -depths / focalLength * vrange
-    d = -(normals[:, :, 0] * X + normals[:, :, 1] * Y + normals[:, :, 2] * Z)
+# def evaluatePlanesSeparately(planes, filename, outputFolder = None, outputIndex = 0):
+#     if 'mlt' not in filename:
+#         filename = filename.replace('color', 'mlt')
+#         pass
+#     colorImage = np.array(PIL.Image.open(filename))
+#     normalFilename = filename.replace('mlt', 'norm_camera')
+#     normals = np.array(PIL.Image.open(normalFilename)).astype(np.float) / 255 * 2 - 1
+#     height = normals.shape[0]
+#     width = normals.shape[1]
+#     norm = np.linalg.norm(normals, 2, 2)
+#     for c in xrange(3):
+#         normals[:, :, c] /= norm
+#         continue
 
     
-    maskFilename = filename.replace('mlt', 'valid')    
-    invalidMask = np.array(PIL.Image.open(maskFilename))
-    # if len(invalidMask.shape) == 3:
-    #     invalidMask = invalidMask.mean(2)
-    #     pass
-    invalidMask = invalidMask < 128
-    invalidMask += depths > 10
+#     depthFilename = filename.replace('mlt', 'depth')
+#     depths = np.array(PIL.Image.open(depthFilename)).astype(np.float) / 1000
+#     # if len(depths.shape) == 3:
+#     #     depths = depths.mean(2)
+#     #     pass
+    
+#     focalLength = 517.97
+#     urange = np.arange(width).reshape(1, -1).repeat(height, 0) - width * 0.5
+#     vrange = np.arange(height).reshape(-1, 1).repeat(width, 1) - height * 0.5
+#     ranges = np.array([urange / focalLength, np.ones(urange.shape), -vrange / focalLength]).transpose([1, 2, 0])
+#     X = depths / focalLength * urange
+#     Y = depths
+#     Z = -depths / focalLength * vrange
+#     d = -(normals[:, :, 0] * X + normals[:, :, 1] * Y + normals[:, :, 2] * Z)
+
+    
+#     maskFilename = filename.replace('mlt', 'valid')    
+#     invalidMask = np.array(PIL.Image.open(maskFilename))
+#     # if len(invalidMask.shape) == 3:
+#     #     invalidMask = invalidMask.mean(2)
+#     #     pass
+#     invalidMask = invalidMask < 128
+#     invalidMask += depths > 10
 
 
-    normalDotThreshold = np.cos(np.deg2rad(15))
-    distanceThreshold = 0.15
-    colorPalette = ColorPalette(len(planes))
-    for planeIndex, plane in enumerate(planes):
-        planeD = np.linalg.norm(plane)
-        planeNormal = -plane / planeD
+#     normalDotThreshold = np.cos(np.deg2rad(15))
+#     distanceThreshold = 0.15
+#     colorPalette = ColorPalette(len(planes))
+#     for planeIndex, plane in enumerate(planes):
+#         planeD = np.linalg.norm(plane)
+#         planeNormal = -plane / planeD
 
-        distance = np.abs(planeNormal[0] * X + planeNormal[1] * Y + planeNormal[2] * Z + planeD)
+#         distance = np.abs(planeNormal[0] * X + planeNormal[1] * Y + planeNormal[2] * Z + planeD)
 
-        normalXYZ = np.dot(ranges, planeNormal)
-        normalXYZ = np.reciprocal(normalXYZ)
-        planeY = -normalXYZ * planeD
+#         normalXYZ = np.dot(ranges, planeNormal)
+#         normalXYZ = np.reciprocal(normalXYZ)
+#         planeY = -normalXYZ * planeD
         
-        mask = (planeY > 0) * (np.abs(np.dot(normals, planeNormal)) > normalDotThreshold) * (distance < distanceThreshold)
+#         mask = (planeY > 0) * (np.abs(np.dot(normals, planeNormal)) > normalDotThreshold) * (distance < distanceThreshold)
 
-        maxDepth = 10
-        minDepth = 0
-        #PIL.Image.fromarray((np.minimum(np.maximum((planeY - minDepth) / (maxDepth - minDepth), 0), 1) * 255).astype(np.uint8)).save(outputFolder + '/plane_depth_' + str(planeIndex) + '.png')
-        #PIL.Image.fromarray(((planeNormal.reshape(1, 1, 3).repeat(height, 0).repeat(width, 1) + 1) / 2 * 255).astype(np.uint8)).save(outputFolder + '/plane_normal_' + str(planeIndex) + '.png')
-        planeImage = colorImage * 0.3
-        planeImage[mask] += colorPalette.getColor(planeIndex) * 0.7
-        PIL.Image.fromarray(planeImage.astype(np.uint8)).save(outputFolder + '/plane_mask_' + str(planeIndex) + '_' + str(outputIndex) + '.png')
-        #PIL.Image.fromarray(mask.astype(np.uint8) * 255).save(outputFolder + '/mask_' + str(planeIndex) + '.png')
-        continue
-    return
+#         maxDepth = 10
+#         minDepth = 0
+#         #PIL.Image.fromarray((np.minimum(np.maximum((planeY - minDepth) / (maxDepth - minDepth), 0), 1) * 255).astype(np.uint8)).save(outputFolder + '/plane_depth_' + str(planeIndex) + '.png')
+#         #PIL.Image.fromarray(((planeNormal.reshape(1, 1, 3).repeat(height, 0).repeat(width, 1) + 1) / 2 * 255).astype(np.uint8)).save(outputFolder + '/plane_normal_' + str(planeIndex) + '.png')
+#         planeImage = colorImage * 0.3
+#         planeImage[mask] += colorPalette.getColor(planeIndex) * 0.7
+#         PIL.Image.fromarray(planeImage.astype(np.uint8)).save(outputFolder + '/plane_mask_' + str(planeIndex) + '_' + str(outputIndex) + '.png')
+#         #PIL.Image.fromarray(mask.astype(np.uint8) * 255).save(outputFolder + '/mask_' + str(planeIndex) + '.png')
+#         continue
+#     return
 
 def residual2Planes(residualPlanes, predefinedPlanes):
     numClusters = predefinedPlanes.shape[0]
@@ -1675,36 +1675,217 @@ def mergePlanesBackup(points, planes, planePointIndices, planeDiffThreshold = 0.
     return groupedPlanes, groupedPlanePointIndices
 
 
-def evaluatePlaneSegmentation(predPlanes, predSegmentations, gtPlanes, gtSegmentations, gtNumPlanes, prefix = '', numOutputPlanes = 20):
-    if len(gtSegmentations.shape) == 3:
-        gtSegmentations = (np.expand_dims(gtSegmentations, -1) == np.arange(numOutputPlanes)).astype(np.float32)
+# def evaluatePlaneSegmentation(predPlanes, predSegmentations, gtPlanes, gtSegmentations, gtNumPlanes, prefix = '', numOutputPlanes = 20):
+#     if len(gtSegmentations.shape) == 3:
+#         gtSegmentations = (np.expand_dims(gtSegmentations, -1) == np.arange(numOutputPlanes)).astype(np.float32)
+#         pass
+#     if len(predSegmentations.shape) == 3:
+#         predSegmentations = (np.expand_dims(predSegmentations, -1) == np.arange(numOutputPlanes)).astype(np.float32)
+#         pass
+    
+#     width = predSegmentations.shape[2]
+#     height = predSegmentations.shape[1]
+
+#     planeDiffs = np.linalg.norm(np.expand_dims(gtPlanes, 2) - np.expand_dims(predPlanes, 1), axis=3)
+#     #print(gtPlanes[0])
+#     #print(predPlanes[0])
+#     #print(planeDiffs[0])
+
+#     planeAreas = np.sum(np.sum(gtSegmentations, axis=1), axis=1)
+#     intersection = np.sum((np.expand_dims(gtSegmentations, -1) * np.expand_dims(predSegmentations, 3) > 0.5).astype(np.float32), axis=(1, 2))
+#     union = np.sum((np.expand_dims(gtSegmentations, -1) + np.expand_dims(predSegmentations, 3) > 0.5).astype(np.float32), axis=(1, 2))
+#     planeIOUs = intersection / np.maximum(union, 1e-4)
+
+#     planeMask = np.expand_dims(np.arange(predPlanes.shape[1]), 0) < np.expand_dims(gtNumPlanes, 1)
+#     for index, numPlanes in enumerate(gtNumPlanes.tolist()):
+#         planeDiffs[index, numPlanes:] = 1000000
+#         planeIOUs[index, numPlanes:] = -1
+#         pass
+    
+#     totalNumPlanes = gtNumPlanes.sum()
+
+#     numPixels = planeAreas.sum(1)
+    
+#     # planeDistanceThreshold = 0.5
+#     # diffMask = (planeDiffs < planeDistanceThreshold).astype(np.float32)
+#     # maxIOU = np.max(planeIOUs * diffMask, axis=2)
+#     # IOU = 0.5
+#     # print(maxIOU[0])
+#     # print(planeMask[0])
+#     # print(((maxIOU >= IOU) * planeMask).sum(1).astype(np.float32))
+#     # print(gtNumPlanes)
+#     # print(float(((maxIOU >= IOU) * planeMask).sum()) / totalNumPlanes)
+    
+#     # exit(1)
+    
+#     pixel_curves = []
+#     plane_curves = []
+#     for planeDistanceThreshold in [0.1, 0.3, 0.5]:
+#         diffMask = (planeDiffs < planeDistanceThreshold).astype(np.float32)
+#         maxIOU = np.max(planeIOUs * diffMask, axis=2)
+#         stride = 0.1
+#         planeRecalls = []
+#         pixelRecalls = []
+#         for step in xrange(int(1 / stride + 1)):
+#             IOU = step * stride
+#             pixelRecalls.append((np.minimum((intersection * (planeIOUs >= IOU).astype(np.float32) * diffMask).sum(2), planeAreas).sum(1) / numPixels).mean())
+#             planeRecalls.append(float(((maxIOU >= IOU) * planeMask).sum()) / totalNumPlanes)            
+#             continue
+        
+#         pixel_curves.append(pixelRecalls)
+#         plane_curves.append(planeRecalls)
+#         pass
+    
+#     for IOUThreshold in [0.3, 0.5, 0.7]:
+#         IOUMask = (planeIOUs > IOUThreshold).astype(np.float32)
+#         minDiff = np.min(planeDiffs * IOUMask + 1000000 * (1 - IOUMask), axis=2)
+#         stride = 0.05
+#         planeRecalls = []
+#         pixelRecalls = []
+#         for step in xrange(int(0.5 / stride + 1)):
+#             diff = step * stride
+#             pixelRecalls.append((np.minimum((intersection * (planeDiffs <= diff).astype(np.float32) * IOUMask).sum(2), planeAreas).sum(1) / numPixels).mean())
+#             planeRecalls.append(float(((minDiff <= diff) * planeMask).sum()) / totalNumPlanes)
+#             continue
+#         pixel_curves.append(pixelRecalls)
+#         plane_curves.append(planeRecalls)
+#         pass
+
+    
+#     if prefix == '':
+#         return pixel_curves, plane_curves
+#     else:
+#         np.save(prefix + 'curves.npy', pixel_curves + plane_curves)
+#         return
+
+
+# def evaluatePlanes(predDepths, predSegmentations, predNumPlanes, gtDepths, gtSegmentations, gtNumPlanes, prefix = ''):
+#     if len(gtSegmentations.shape) == 3:
+#         gtSegmentations = (np.expand_dims(gtSegmentations, -1) == np.arange(gtNumPlanes)).astype(np.float32)
+#         pass
+#     if len(predSegmentations.shape) == 3:
+#         predSegmentations = (np.expand_dims(predSegmentations, -1) == np.arange(predNumPlanes)).astype(np.float32)
+#         pass
+    
+#     width = predSegmentations.shape[2]
+#     height = predSegmentations.shape[1]
+
+    
+#     #print(gtPlanes[0])
+#     #print(predPlanes[0])
+#     #print(planeDiffs[0])
+
+#     planeAreas = np.sum(np.sum(gtSegmentations, axis=1), axis=1)
+#     intersectionMask = np.expand_dims(gtSegmentations, -1) * np.expand_dims(predSegmentations, 3) > 0.5
+#     depthDiffs = np.expand_dims(gtDepths, -1) - np.expand_dims(predDepths, 3)
+#     intersection = np.sum((intersectionMask).astype(np.float32), axis=(1, 2))
+    
+#     planeDiffs = np.abs(depthDiffs * intersectionMask).sum(1).sum(1) / np.maximum(intersection, 1e-4)
+
+#     union = np.sum((np.expand_dims(gtSegmentations, -1) + np.expand_dims(predSegmentations, 3) > 0.5).astype(np.float32), axis=(1, 2))
+#     planeIOUs = intersection / np.maximum(union, 1e-4)
+
+    
+#     for index, numPlanes in enumerate(gtNumPlanes.tolist()):
+#         planeDiffs[index, numPlanes:] = 1000000
+#         planeIOUs[index, numPlanes:] = -1
+#         pass
+    
+#     totalNumPlanes = gtNumPlanes.sum()
+#     totalNumPredictions = predSegmentations.max(1).max(1).sum()
+
+#     numPixels = planeAreas.sum(1)
+    
+#     # planeDistanceThreshold = 0.5
+#     # diffMask = (planeDiffs < planeDistanceThreshold).astype(np.float32)
+#     # maxIOU = np.max(planeIOUs * diffMask, axis=2)
+#     # IOU = 0.5
+#     # print(maxIOU[0])
+#     # print(planeMask[0])
+#     # print(((maxIOU >= IOU) * planeMask).sum(1).astype(np.float32))
+#     # print(gtNumPlanes)
+#     # print(float(((maxIOU >= IOU) * planeMask).sum()) / totalNumPlanes)
+    
+#     # exit(1)
+    
+#     pixel_curves = []
+#     plane_curves = []
+
+#     validPlaneMask = np.expand_dims(np.arange(gtNumPlanes), 0) < np.expand_dims(gtNumPlanes, 1)    
+#     for planeDistanceThreshold in [0.05, 0.10, 0.15]:
+#         diffMask = (planeDiffs < planeDistanceThreshold).astype(np.float32)
+#         maxIOU = np.max(planeIOUs * diffMask, axis=2)
+#         stride = 0.1
+#         planeStatistics = []        
+#         pixelRecalls = []
+#         for step in xrange(int(1 / stride + 1)):
+#             IOU = step * stride
+#             pixelRecalls.append((np.minimum((intersection * (planeIOUs >= IOU).astype(np.float32) * diffMask).sum(2), planeAreas).sum(1) / numPixels).mean())
+#             planeStatistics.append((float((((maxIOU >= IOU) * validPlaneMask)).sum()), totalNumPlanes, totalNumPredictions))
+#             continue
+        
+#         pixel_curves.append(pixelRecalls)
+#         plane_curves.append(planeStatistics)
+#         pass
+
+
+#     for IOUThreshold in [0.3, 0.5, 0.7]:
+#         IOUMask = (planeIOUs > IOUThreshold).astype(np.float32)
+#         minDiff = np.min(planeDiffs * IOUMask + 1000000 * (1 - IOUMask), axis=2)
+#         stride = 0.02
+#         planeStatistics = []
+#         pixelRecalls = []
+#         for step in xrange(int(0.2 / stride + 1)):
+#             diff = step * stride
+#             pixelRecalls.append((np.minimum((intersection * (planeDiffs <= diff).astype(np.float32) * IOUMask).sum(2), planeAreas).sum(1) / numPixels).mean())
+#             planeStatistics.append(((((minDiff <= diff) * validPlaneMask).sum()), totalNumPlanes, totalNumPredictions))
+#             continue
+#         pixel_curves.append(pixelRecalls)
+#         plane_curves.append(planeStatistics)
+#         pass
+
+    
+#     if prefix == '':
+#         return pixel_curves, plane_curves
+#     else:
+#         np.save(prefix + 'curves.npy', pixel_curves + plane_curves)
+#         return
+
+def evaluatePlanePrediction(predDepths, predSegmentations, predNumPlanes, gtDepths, gtSegmentations, gtNumPlanes, prefix = ''):
+    if len(gtSegmentations.shape) == 2:
+        gtSegmentations = (np.expand_dims(gtSegmentations, -1) == np.arange(gtNumPlanes)).astype(np.float32)
         pass
-    if len(predSegmentations.shape) == 3:
-        predSegmentations = (np.expand_dims(predSegmentations, -1) == np.arange(numOutputPlanes)).astype(np.float32)
+    if len(predSegmentations.shape) == 2:
+        predSegmentations = (np.expand_dims(predSegmentations, -1) == np.arange(predNumPlanes)).astype(np.float32)
         pass
     
-    width = predSegmentations.shape[2]
-    height = predSegmentations.shape[1]
+    width = predSegmentations.shape[1]
+    height = predSegmentations.shape[0]
 
-    planeDiffs = np.linalg.norm(np.expand_dims(gtPlanes, 2) - np.expand_dims(predPlanes, 1), axis=3)
+    
     #print(gtPlanes[0])
     #print(predPlanes[0])
     #print(planeDiffs[0])
 
-    planeAreas = np.sum(np.sum(gtSegmentations, axis=1), axis=1)
-    intersection = np.sum((np.expand_dims(gtSegmentations, -1) * np.expand_dims(predSegmentations, 3) > 0.5).astype(np.float32), axis=(1, 2))
-    union = np.sum((np.expand_dims(gtSegmentations, -1) + np.expand_dims(predSegmentations, 3) > 0.5).astype(np.float32), axis=(1, 2))
+    planeAreas = gtSegmentations.sum(axis=(0, 1))
+    intersectionMask = np.expand_dims(gtSegmentations, -1) * np.expand_dims(predSegmentations, 2) > 0.5
+    depthDiffs = np.expand_dims(gtDepths, -1) - np.expand_dims(predDepths, 2)
+    intersection = np.sum((intersectionMask).astype(np.float32), axis=(0, 1))
+    
+    planeDiffs = np.abs(depthDiffs * intersectionMask).sum(axis=(0, 1)) / np.maximum(intersection, 1e-4)
+    planeDiffs[intersection < 1e-4] = 1
+    
+    union = np.sum((np.expand_dims(gtSegmentations, -1) + np.expand_dims(predSegmentations, 2) > 0.5).astype(np.float32), axis=(0, 1))
     planeIOUs = intersection / np.maximum(union, 1e-4)
 
-    planeMask = np.expand_dims(np.arange(predPlanes.shape[1]), 0) < np.expand_dims(gtNumPlanes, 1)
-    for index, numPlanes in enumerate(gtNumPlanes.tolist()):
-        planeDiffs[index, numPlanes:] = 1000000
-        planeIOUs[index, numPlanes:] = -1
-        pass
     
-    totalNumPlanes = gtNumPlanes.sum()
+    planeDiffs[gtNumPlanes:] = 1000000
+    planeIOUs[gtNumPlanes:] = -1
 
-    numPixels = planeAreas.sum(1)
+    
+    numPredictions = predSegmentations.max(axis=(0, 1)).sum()
+
+    numPixels = planeAreas.sum()
     
     # planeDistanceThreshold = 0.5
     # diffMask = (planeDiffs < planeDistanceThreshold).astype(np.float32)
@@ -1717,38 +1898,50 @@ def evaluatePlaneSegmentation(predPlanes, predSegmentations, gtPlanes, gtSegment
     # print(float(((maxIOU >= IOU) * planeMask).sum()) / totalNumPlanes)
     
     # exit(1)
+
+    # print(gtNumPlanes)
+    # #print('IOU')
+    # print(np.stack([planeIOUs.max(1), planeIOUs.argmax(1)], axis=1))
+    # print('diff')
+    # #print(np.abs(depthDiffs * intersectionMask).sum(axis=(0, 1)))
+    # #print(np.maximum(intersection, 1e-4))
+    # #print(np.stack([depthDiffs.min(1), depthDiffs.argmin(1)], axis=1))
+    # print(np.stack([planeDiffs.min(1) * 10000, planeDiffs.argmin(1)], axis=1))
+    # exit(1)
     
     pixel_curves = []
     plane_curves = []
-    for planeDistanceThreshold in [0.1, 0.3, 0.5]:
+
+    for planeDistanceThreshold in [0.1, 0.2, 0.3]:
         diffMask = (planeDiffs < planeDistanceThreshold).astype(np.float32)
-        maxIOU = np.max(planeIOUs * diffMask, axis=2)
+        maxIOU = np.max(planeIOUs * diffMask, axis=1)
         stride = 0.1
-        planeRecalls = []
+        planeStatistics = []        
         pixelRecalls = []
         for step in xrange(int(1 / stride + 1)):
             IOU = step * stride
-            pixelRecalls.append((np.minimum((intersection * (planeIOUs >= IOU).astype(np.float32) * diffMask).sum(2), planeAreas).sum(1) / numPixels).mean())
-            planeRecalls.append(float(((maxIOU >= IOU) * planeMask).sum()) / totalNumPlanes)            
+            pixelRecalls.append(np.minimum((intersection * (planeIOUs >= IOU).astype(np.float32) * diffMask).sum(1), planeAreas).sum(0) / numPixels)
+            planeStatistics.append((((maxIOU >= IOU)[:gtNumPlanes]).sum(), gtNumPlanes, numPredictions))
             continue
         
         pixel_curves.append(pixelRecalls)
-        plane_curves.append(planeRecalls)
+        plane_curves.append(planeStatistics)
         pass
-    
+
+
     for IOUThreshold in [0.3, 0.5, 0.7]:
         IOUMask = (planeIOUs > IOUThreshold).astype(np.float32)
-        minDiff = np.min(planeDiffs * IOUMask + 1000000 * (1 - IOUMask), axis=2)
+        minDiff = np.min(planeDiffs * IOUMask + 1000000 * (1 - IOUMask), axis=1)
         stride = 0.05
-        planeRecalls = []
+        planeStatistics = []
         pixelRecalls = []
         for step in xrange(int(0.5 / stride + 1)):
             diff = step * stride
-            pixelRecalls.append((np.minimum((intersection * (planeDiffs <= diff).astype(np.float32) * IOUMask).sum(2), planeAreas).sum(1) / numPixels).mean())
-            planeRecalls.append(float(((minDiff <= diff) * planeMask).sum()) / totalNumPlanes)
+            pixelRecalls.append(np.minimum((intersection * (planeDiffs <= diff).astype(np.float32) * IOUMask).sum(1), planeAreas).sum() / numPixels)
+            planeStatistics.append((((minDiff <= diff)[:gtNumPlanes]).sum(), gtNumPlanes, numPredictions))
             continue
         pixel_curves.append(pixelRecalls)
-        plane_curves.append(planeRecalls)
+        plane_curves.append(planeStatistics)
         pass
 
     
@@ -1758,6 +1951,7 @@ def evaluatePlaneSegmentation(predPlanes, predSegmentations, gtPlanes, gtSegment
         np.save(prefix + 'curves.npy', pixel_curves + plane_curves)
         return
 
+    
 def plotCurves(x, ys, filename = 'test/test.png', xlabel='', ylabel='', title='', labels=[]):
     import matplotlib.pyplot as plt
     fig = plt.figure()
@@ -2425,12 +2619,12 @@ def calcNormal(depth, info):
         indices = (np.expand_dims(vs, -1) * width + np.expand_dims(us, 0)).reshape(-1)
         try:
             plane = fitPlane(points[indices])
-            normals.append(-plane / np.linalg.norm(plane))
+            normals.append(-plane / np.maximum(np.linalg.norm(plane), 1e-4))
         except:
             if len(normals) > 0:
                 normals.append(normals[-1])
             else:
-                normals.append([0, 0, 0])
+                normals.append([0, -1, 0])
                 pass
             pass
         continue
@@ -2472,7 +2666,17 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
     Y = depth
     Z = -depth * vrange
 
+
+    normals = normal.reshape((-1, 3))
+    normals = normals / np.maximum(np.linalg.norm(normals, axis=-1, keepdims=True), 1e-4)
+
+    validMask = np.logical_and(np.linalg.norm(normals, axis=-1) > 1e-4, depth.reshape(-1) > 1e-4)
+    
+    valid_normals = normals[validMask]
+
+    
     points = np.stack([X, Y, Z], axis=2).reshape(-1, 3)
+    valid_points = points[validMask]
 
     polarAngles = np.arange(16) * np.pi / 2 / 16
     azimuthalAngles = np.arange(64) * np.pi * 2 / 64
@@ -2483,19 +2687,15 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
     normalBins = np.reshape(normalBins, [-1, 3])
     numBins = normalBins.shape[0]
     
-    normals = normal.reshape((-1, 3))
-    normals = normals / np.maximum(np.linalg.norm(normals, axis=-1, keepdims=True), 1e-4)
-
-    normals = normals[np.linalg.norm(normals, axis=-1) > 1e-4]
     
-    normalDiff = np.tensordot(normals, normalBins, axes=([1], [1]))
+    normalDiff = np.tensordot(valid_normals, normalBins, axes=([1], [1]))
     normalDiffSign = np.sign(normalDiff)
     normalDiff = np.maximum(normalDiff, -normalDiff)
     normalMask = one_hot(np.argmax(normalDiff, axis=-1), numBins)
     bins = normalMask.sum(0)
-    np.expand_dims(normals, 1) * np.expand_dims(normalMask, -1)
+    np.expand_dims(valid_normals, 1) * np.expand_dims(normalMask, -1)
 
-    maxNormals = np.expand_dims(normals, 1) * np.expand_dims(normalMask, -1)
+    maxNormals = np.expand_dims(valid_normals, 1) * np.expand_dims(normalMask, -1)
     maxNormals *= np.expand_dims(normalDiffSign, -1)
     averageNormals = maxNormals.sum(0) / np.maximum(np.expand_dims(bins, -1), 1e-4)
     averageNormals /= np.maximum(np.linalg.norm(averageNormals, axis=-1, keepdims=True), 1e-4)
@@ -2519,14 +2719,15 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
 
     dominantNormals = np.stack([dominantNormal_1, dominantNormal_2, dominantNormal_3], axis=0)
 
-    dominantNormalImage = np.abs(np.matmul(normal, dominantNormals.transpose()))
-    cv2.imwrite('test/dominant_normal.png', drawMaskImage(dominantNormalImage))
+    #dominantNormalImage = np.abs(np.matmul(normal, dominantNormals.transpose()))
+    #cv2.imwrite('test/dominant_normal.png', drawMaskImage(dominantNormalImage))
+    
     planeHypothesisAreaThreshold = width * height * 0.01
     
     planes = []
     offsetGap = 0.05
     for dominantNormal in dominantNormals:
-        offsets = np.tensordot(points, dominantNormal, axes=([1], [0]))
+        offsets = np.tensordot(valid_points, dominantNormal, axes=([1], [0]))
         #offsets = np.sort(offsets)
         
         #offsets = np.expand_dims(offsets, -1)
@@ -2576,8 +2777,8 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
     indices = np.arange(width * height, dtype=np.int32)
     uv = np.stack([indices % width, indices / width], axis=1)
     colors = image.reshape((-1, 3))
-    windowW = 21
-    windowH = 7   
+    windowW = 9
+    windowH = 3
     dominantLineMaps = []
     for vanishingPointIndex, vanishingPoint in enumerate(vanishingPoints):
         horizontalDirection = uv - np.expand_dims(vanishingPoint, 0)
@@ -2651,17 +2852,312 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
     
     planesD = np.linalg.norm(planes, axis=1, keepdims=True)
     planeNormals = planes / np.maximum(planesD, 1e-4)
+
+          
+    distanceCostThreshold = 0.05
+    distanceCost = np.abs(np.tensordot(points, planeNormals, axes=([1, 1])) - np.reshape(planesD, [1, -1])) / distanceCostThreshold
+    #distanceCost = np.concatenate([distanceCost, np.ones((height * width, 1))], axis=1)
+
+    normalCost = 0
+    if info[19] <= 1 or info[19] == 4 or True:
+        normalCostThreshold = 1 - np.cos(20)        
+        normalCost = (1 + np.tensordot(normals, planeNormals, axes=([1, 1]))) / normalCostThreshold
+        #normalCost[:, :, numPlanes:] = 10000
+        #normalCost = np.concatenate([normalCost, np.ones((height * width, 1))], axis=1)
+        pass
+
+    unaryCost = distanceCost + normalCost
+    unaryCost *= np.expand_dims(validMask.astype(np.float32), -1)
+    unaries = unaryCost.reshape((width * height, -1))
+
+    print('number of planes ', planes.shape[0])
+    cv2.imwrite('test/distance_cost.png', drawSegmentationImage(-distanceCost.reshape((height, width, -1)), unaryCost.shape[-1] - 1))
+    cv2.imwrite('test/normal_cost.png', drawSegmentationImage(-normalCost.reshape((height, width, -1)), unaryCost.shape[-1] - 1))
+    cv2.imwrite('test/unary_cost.png', drawSegmentationImage(-unaryCost.reshape((height, width, -1)), blackIndex=unaryCost.shape[-1] - 1))
+
+    cv2.imwrite('test/segmentation.png', drawSegmentationImage(-unaries.reshape((height, width, -1)), blackIndex=unaries.shape[-1]))
+    
+    #cv2.imwrite('test/mask.png', drawSegmentationImage(planeMasks.reshape((height, width, -1))))
+    #exit(1)
+
+
+    numProposals = 3
+    
+    proposals = np.argpartition(unaries, numProposals)[:, :numProposals]
+    proposals[np.logical_not(validMask)] = 0
+    
+    unaries = -readProposalInfo(unaries, proposals).reshape((-1, numProposals))
+    
+    nodes = np.arange(height * width).reshape((height, width))
+
+    #deltas = [(0, 1), (1, 0), (-1, 1), (1, 1)]
+    deltas = [(0, 1), (1, 0)]
+    
+    edges = []
+    edges_features = []
+    smoothnessWeights = 1 - 0.99 * smoothnessWeightMask.astype(np.float32)
+    
+    #edges_features = np.concatenate(edges_features, axis=0)
+    #print(proposals.shape)
+    #print(unaries.shape)    
+    #print(width * height)
+    for delta in deltas:
+        deltaX = delta[0]
+        deltaY = delta[1]
+        partial_nodes = nodes[max(-deltaY, 0):min(height - deltaY, height), max(-deltaX, 0):min(width - deltaX, width)].reshape(-1)
+        edges.append(np.stack([partial_nodes, partial_nodes + (deltaY * width + deltaX)], axis=1))
+
+        labelDiff = (np.expand_dims(proposals[partial_nodes], -1) != np.expand_dims(proposals[partial_nodes + (deltaY * width + deltaX)], 1)).astype(np.float32)
+        #labelDiff = labelDiff.transpose([0, 2, 1])
+        #print(labelDiff.shape)
+        edges_features.append(labelDiff * smoothnessWeights.reshape((width * height, -1))[partial_nodes].reshape(-1, 1, 1))
+        continue
+
+    #exit(1)
+
+    edges = np.concatenate(edges, axis=0)
+    edges_features = np.concatenate(edges_features, axis=0)
+
+
+    # y = 71
+    # x = 145
+    # print(proposals[y * width + x])
+    # print(unaries[y * width + x] * 10000)
+    # print(proposals[(y + 1) * width + x])
+    # print(unaries[(y + 1) * width + x] * 10000)    
+    # print(edges_features[y * width + x])
+    
+    refined_segmentation = inference_ogm(unaries, -edges_features * 40, edges, return_energy=False, alg='trw')
+
+    refined_segmentation = refined_segmentation.reshape([height, width, 1])
+    refined_segmentation = readProposalInfo(proposals, refined_segmentation)
+    #print(pairwise_matrix)
+    #refined_segmentation = inference_ogm(unaries * 5, -pairwise_matrix, edges, return_energy=False, alg='alphaexp')
+    planeSegmentation = refined_segmentation.reshape([height, width])
+
+    planeSegmentation[np.logical_not(validMask.reshape((height, width)))] = planes.shape[0]
+
+    cv2.imwrite('test/segmentation_refined.png', drawSegmentationImage(planeSegmentation))
+    #exit(1)
+
+    # if planes.shape[0] > numOutputPlanes:
+    #     planeInfo = []
+    #     for planeIndex in xrange(planes.shape[0]):
+    #         mask = planeSegmentation == planeIndex
+    #         planeInfo.append((planes[planeIndex], mask))
+    #         continue
+    #     planeInfo = sorted(planeInfo, key=lambda x: -x[1].sum())
+    #     newPlanes = []
+    #     newPlaneSegmentation = np.full(planeSegmentation.shape, numOutputPlanes)
+    #     for planeIndex in xrange(numOutputPlanes):
+    #         newPlanes.append(planeInfo[planeIndex][0])
+    #         newPlaneSegmentation[planeInfo[planeIndex][1]] = planeIndex
+    #         continue
+    #     planeSegmentation = newPlaneSegmentation
+    #     planes = np.array(newPlanes)
+    # else:
+    #     planeSegmentation[planeSegmentation == planes.shape[0]] = numOutputPlanes
+    #     pass
+
+    # if planes.shape[0] < numOutputPlanes:
+    #     planes = np.concatenate([planes, np.zeros((numOutputPlanes - planes.shape[0], 3))], axis=0)
+    #     pass
+
+    
+    # planeDepths = calcPlaneDepths(planes, width, height, info)
+    
+    # allDepths = np.concatenate([planeDepths, np.expand_dims(depth, -1)], axis=2)
+    # depthPred = allDepths.reshape([height * width, planes.shape[0] + 1])[np.arange(width * height), planeSegmentation.astype(np.int32).reshape(-1)].reshape(height, width)
+
+
+    # planeNormals = calcPlaneNormals(planes, width, height)
+    # allNormals = np.concatenate([planeNormals, np.expand_dims(normal, 2)], axis=2)
+    # normalPred = allNormals.reshape(-1, planes.shape[0] + 1, 3)[np.arange(width * height), planeSegmentation.reshape(-1)].reshape((height, width, 3))
+    
+    return planes, planeSegmentation, depthPred, normalPred
+
+
+def calcVanishingPoint(lines):
+    points = lines[:, :2]
+    normals = lines[:, 2:4] - lines[:, :2]
+    normals /= np.maximum(np.linalg.norm(normals, axis=-1, keepdims=True), 1e-4)
+    normals = np.stack([normals[:, 1], -normals[:, 0]], axis=1)
+    normalPointDot = (normals * points).sum(1)
+
+    if lines.shape[0] == 2:
+        VP = np.linalg.solve(normals, normalPointDot)
+    else:
+        VP = np.linalg.lstsq(normals, normalPointDot)[0]
+        pass
+    
+    # print(lines)
+    # print(points)
+    # print(normals)
+    # print(VP)
+    # exit(1)
+    return VP
+    
+def calcVanishingPoints(allLines, numVPs):
+    distanceThreshold = np.sin(np.deg2rad(5))
+    lines = allLines.copy()
+    VPs = []
+    VPLines = []
+    for VPIndex in xrange(numVPs):
+        points = lines[:, :2]
+        normals = lines[:, 2:4] - lines[:, :2]
+        normals /= np.maximum(np.linalg.norm(normals, axis=-1, keepdims=True), 1e-4)
+        normals = np.stack([normals[:, 1], -normals[:, 0]], axis=1)
+        maxNumInliers = 0
+        bestVP = np.zeros(2)
+        #for _ in xrange(int(np.sqrt(lines.shape[0]))):
+        for _ in xrange(lines.shape[0]):        
+            sampledInds = np.random.choice(lines.shape[0], 2)
+            if sampledInds[0] == sampledInds[1]:
+                continue
+            sampledLines = lines[sampledInds]
+            VP = calcVanishingPoint(sampledLines)
+            inliers = np.abs(((np.expand_dims(VP, 0) - points) * normals).sum(-1)) / np.linalg.norm(np.expand_dims(VP, 0) - points, axis=-1) < distanceThreshold
+            # print(sampledLines)
+            # print(VP)
+            # print(normals[inliers])
+            # exit(1)
+            numInliers = inliers.sum()
+            if numInliers > maxNumInliers:
+                maxNumInliers = numInliers
+                bestVP = VP
+                bestVPInliers = inliers
+                pass
+            continue
+        inlierLines = lines[bestVPInliers]
+        VP = calcVanishingPoint(inlierLines)
+        VPs.append(VP)
+        #print(bestVP)
+        #print(inlierLines)
+        #print(VP)
+        #exit(1)
+        VPLines.append(inlierLines)
+        lines = lines[np.logical_not(bestVPInliers)]
+        continue
+    VPs = np.stack(VPs, axis=0)
+    return VPs, VPLines, lines
+    
+def fitPlanesPiecewise(image, depth, normal, info, numOutputPlanes=20, imageIndex=1):
+    #import sklearn.cluster
+    #meanshift = sklearn.cluster.MeanShift(0.05)
+    #import sklearn.neighbors    
+    #meanshift = sklearn.neighbors.KernelDensity(0.05)
+    from pylsd import lsd
+    
+    height = depth.shape[0]
+    width = depth.shape[1]
+
+    camera = getCameraFromInfo(info)
+    urange = (np.arange(width, dtype=np.float32) / (width) * (camera['width']) - camera['cx']) / camera['fx']
+    urange = urange.reshape(1, -1).repeat(height, 0)
+    vrange = (np.arange(height, dtype=np.float32) / (height) * (camera['height']) - camera['cy']) / camera['fy']
+    vrange = vrange.reshape(-1, 1).repeat(width, 1)
+    
+    X = depth * urange
+    Y = depth
+    Z = -depth * vrange
+
+    points = np.stack([X, Y, Z], axis=2).reshape(-1, 3)
+
+    lines = lsd(image.mean(2))
+
+    lineImage = image.copy()
+    for line in lines:
+        cv2.line(lineImage, (int(line[0]), int(line[1])), (int(line[2]), int(line[3])), (0, 0, 255), int(np.ceil(line[4] / 2)))
+        continue
+    cv2.imwrite('test/lines.png', lineImage)
+
+    numVPs = 3
+    VPs, VPLines, remainingLines = calcVanishingPoints(lines, numVPs=numVPs)
+
+    lineImage = image.copy()    
+    for VPIndex, lines in enumerate(VPLines):
+        for line in lines:
+            cv2.line(lineImage, (int(line[0]), int(line[1])), (int(line[2]), int(line[3])), ((VPIndex == 0) * 255, (VPIndex == 1) * 255, (VPIndex == 2) * 255), int(np.ceil(line[4] / 2)))
+            continue
+        continue
+    cv2.imwrite('test/lines_vp.png', lineImage)    
+    #exit(1)
+
+    dominantNormals = np.stack([(VPs[:, 0] - info[2]) / info[0], np.ones(numVPs), -(VPs[:, 1] - info[6]) / info[5]], axis=1)
+    dominantNormals /= np.maximum(np.linalg.norm(dominantNormals, axis=1, keepdims=True), 1e-4)
+
+    dominantNormalImage = np.abs(np.matmul(normal, dominantNormals.transpose()))
+    cv2.imwrite('test/dominant_normal.png', drawMaskImage(dominantNormalImage))
+    planeHypothesisAreaThreshold = width * height * 0.01
+    
+    planes = []
+    vpPlaneIndices = []
+    offsetGap = 0.05
+    planeIndexOffset = 0
+    for dominantNormal in dominantNormals:
+        offsets = np.tensordot(points, dominantNormal, axes=([1], [0]))
+        #offsets = np.sort(offsets)
+        
+        #offsets = np.expand_dims(offsets, -1)
+        #clusters = meanshift.fit_predict(np.expand_dims(offsets, -1))
+        #clusters = meanshift.fit_predict(offsets)
+        #print(clusters.score_samples(offsets))
+        #print(offsets)
+        #print(np.argmax(offsets))
+        #print(clusters.score_samples(np.array([[offsets.max()]])))
+        #print(clusters.sample(10))
+        #exit(1)
+        # for clusterIndex in xrange(clusters.max()):
+        #     clusterMask = clusters == clusterIndex
+        #     print(clusterMask.sum())
+        #     if clusterMask.sum() < planeHypothesisAreaThreshold:
+        #         continue
+        #     planeD = offsets[clusterMask].mean()
+        #     planes.append(dominantNormal * planeD)
+        #     continue
+        
+        offset = offsets.min()
+        maxOffset = offsets.max()
+        while offset < maxOffset:
+            planeMask = np.logical_and(offsets >= offset, offsets < offset + offsetGap)
+            segmentOffsets = offsets[np.logical_and(offsets >= offset, offsets < offset + offsetGap)]
+            if segmentOffsets.shape[0] < planeHypothesisAreaThreshold:
+                offset += offsetGap
+                continue
+            planeD = segmentOffsets.mean()
+            planes.append(dominantNormal * planeD)
+            offset = planeD + offsetGap
+
+            #print(planeD, segmentOffsets.shape[0])            
+            #cv2.imwrite('test/mask_' + str(len(planes) - 1) + '.png', drawMaskImage(planeMask.reshape((height, width))))
+            continue
+
+        vpPlaneIndices.append(np.arange(planeIndexOffset, len(planes)))
+        planeIndexOffset = len(planes)
+        continue
+    
+    planes = np.array(planes)
+
+    
+    
+    planesD = np.linalg.norm(planes, axis=1, keepdims=True)
+    planeNormals = planes / np.maximum(planesD, 1e-4)
     
     distanceCostThreshold = 0.05
     distanceCost = np.abs(np.tensordot(points, planeNormals, axes=([1, 1])) - np.reshape(planesD, [1, -1])) / distanceCostThreshold
-    distanceCost = np.concatenate([distanceCost, np.ones((height * width, 1))], axis=1)
+    #distanceCost = np.concatenate([distanceCost, np.ones((height * width, 1))], axis=1)
 
+
+    normals = normal.reshape((-1, 3))
+    normals = normals / np.maximum(np.linalg.norm(normals, axis=-1, keepdims=True), 1e-4)
+    normals = normals[np.linalg.norm(normals, axis=-1) > 1e-4]
+    
     normalCost = 0
     if info[19] <= 1 or info[19] == 4:
         normalCostThreshold = 1 - np.cos(20)        
         normalCost = (1 + np.tensordot(normals, planeNormals, axes=([1, 1]))) / normalCostThreshold
         #normalCost[:, :, numPlanes:] = 10000
-        normalCost = np.concatenate([normalCost, np.ones((height * width, 1))], axis=1)
+        #normalCost = np.concatenate([normalCost, np.ones((height * width, 1))], axis=1)
         pass
 
     unaryCost = distanceCost + normalCost
@@ -2688,11 +3184,13 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
     
     nodes = np.arange(height * width).reshape((height, width))
 
-    deltas = [(0, 1), (1, 0), (-1, 1), (1, 1)]
+    #deltas = [(0, 1), (1, 0), (-1, 1), (1, 1)]
+    deltas = [(0, 1), (1, 0)]
     
     edges = []
     edges_features = []
-    smoothnessWeights = 1 - 0.99 * smoothnessWeightMask    
+            
+                
     #edges_features = np.concatenate(edges_features, axis=0)
     for delta in deltas:
         deltaX = delta[0]
@@ -2700,15 +3198,217 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
         partial_nodes = nodes[max(-deltaY, 0):min(height - deltaY, height), max(-deltaX, 0):min(width - deltaX, width)].reshape(-1)
         edges.append(np.stack([partial_nodes, partial_nodes + (deltaY * width + deltaX)], axis=1))
 
-        labelDiff = (np.expand_dims(proposals[partial_nodes], -1) != np.expand_dims(proposals[partial_nodes + (deltaY * width + deltaX)], 1)).astype(np.float32)        
-        edges_features.append(labelDiff * smoothnessWeights.reshape((width * height, -1))[partial_nodes].reshape(-1, 1, 1))
-        continue
+        labelDiff = (np.expand_dims(proposals[partial_nodes], -1) != np.expand_dims(proposals[partial_nodes + (deltaY * width + deltaX)], 1)).astype(np.float32)
 
+        
+        edges_features.append(labelDiff)
+        continue
 
     edges = np.concatenate(edges, axis=0)
     edges_features = np.concatenate(edges_features, axis=0)
+
     
-    refined_segmentation = inference_ogm(unaries, edges_features * 4, edges, return_energy=False, alg='trw')
+    lineSets = np.zeros((height * width, 3))
+    creaseLines = np.expand_dims(np.stack([planeNormals[:, 0] / info[0], planeNormals[:, 1], -planeNormals[:, 2] / info[5]], axis=1), 1) * planesD.reshape((1, -1, 1))
+    creaseLines = creaseLines - np.transpose(creaseLines, [1, 0, 2])    
+    for planeIndex_1 in xrange(planes.shape[0]):
+        for planeIndex_2 in xrange(planeIndex_1 + 1, planes.shape[0]):
+            creaseLine = creaseLines[planeIndex_1, planeIndex_2]
+            if abs(creaseLine[0]) > abs(creaseLine[2]):
+                vs = np.arange(height)
+                us = -(creaseLine[1] + (vs - info[6]) * creaseLine[2]) / creaseLine[0] + info[2]
+                minUs = np.floor(us).astype(np.int32)
+                maxUs = minUs + 1
+                validMask = np.logical_and(minUs >= 0, maxUs < width)
+                if validMask.sum() == 0:
+                    continue
+                vs = vs[validMask]
+                minUs = minUs[validMask]
+                maxUs = maxUs[validMask]
+                edgeIndices = (height - 1) * width + (vs * (width - 1) + minUs)
+                for index, edgeIndex in enumerate(edgeIndices):
+                    pixel_1 = vs[index] * width + minUs[index]
+                    pixel_2 = vs[index] * width + maxUs[index]
+                    proposals_1 = proposals[pixel_1]
+                    proposals_2 = proposals[pixel_2]                    
+                    if planeIndex_1 in proposals_1 and planeIndex_2 in proposals_2:
+                        proposalIndex_1 = np.where(proposals_1 == planeIndex_1)[0][0]
+                        proposalIndex_2 = np.where(proposals_2 == planeIndex_2)[0][0]
+                        edges_features[edgeIndex, proposalIndex_1, proposalIndex_2] * 0.5
+                        pass
+                    if planeIndex_2 in proposals_1 and planeIndex_1 in proposals_2:
+                        proposalIndex_1 = np.where(proposals_1 == planeIndex_2)[0][0]
+                        proposalIndex_2 = np.where(proposals_2 == planeIndex_1)[0][0]
+                        edges_features[edgeIndex, proposalIndex_1, proposalIndex_2] * 0.5
+                        pass
+                    continue
+
+                lineSets[vs * width + minUs, 0] = 1
+                lineSets[vs * width + maxUs, 0] = 1
+            else:
+                us = np.arange(width)
+                vs = -(creaseLine[1] + (us - info[2]) * creaseLine[0]) / creaseLine[2] + info[6]
+                minVs = np.floor(vs).astype(np.int32)
+                maxVs = minVs + 1
+                validMask = np.logical_and(minVs >= 0, maxVs < height)
+                if validMask.sum() == 0:
+                    continue                
+                us = us[validMask]
+                minVs = minVs[validMask]
+                maxVs = maxVs[validMask]                
+                edgeIndices = (minVs * width + us)
+                for index, edgeIndex in enumerate(edgeIndices):
+                    pixel_1 = minVs[index] * width + us[index]
+                    pixel_2 = maxVs[index] * width + us[index]
+                    proposals_1 = proposals[pixel_1]
+                    proposals_2 = proposals[pixel_2]                    
+                    if planeIndex_1 in proposals_1 and planeIndex_2 in proposals_2:
+                        proposalIndex_1 = np.where(proposals_1 == planeIndex_1)[0][0]
+                        proposalIndex_2 = np.where(proposals_2 == planeIndex_2)[0][0]
+                        edges_features[edgeIndex, proposalIndex_1, proposalIndex_2] *= 0.5
+                        pass
+                    if planeIndex_2 in proposals_1 and planeIndex_1 in proposals_2:
+                        proposalIndex_1 = np.where(proposals_1 == planeIndex_2)[0][0]
+                        proposalIndex_2 = np.where(proposals_2 == planeIndex_1)[0][0]
+                        edges_features[edgeIndex, proposalIndex_1, proposalIndex_2] *= 0.5
+                        pass
+                    continue
+                lineSets[minVs * width + us, 0] = 1
+                lineSets[maxVs * width + us, 0] = 1                
+                pass
+            continue
+        continue
+
+
+    
+    planeDepths = calcPlaneDepths(planes, width, height, info).reshape((height * width, -1))
+    planeDepths = readProposalInfo(planeDepths, proposals).reshape((-1, numProposals))
+
+    planeHorizontalVPMask = np.ones((planes.shape[0], 3), dtype=np.bool)
+    for VPIndex, planeIndices in enumerate(vpPlaneIndices):
+        planeHorizontalVPMask[planeIndices] = False
+        continue
+    
+    for VPIndex, lines in enumerate(VPLines):
+        lp = lines[:, :2]
+        ln = lines[:, 2:4] - lines[:, :2]
+        ln /= np.maximum(np.linalg.norm(ln, axis=-1, keepdims=True), 1e-4)
+        ln = np.stack([ln[:, 1], -ln[:, 0]], axis=1)
+        lnp = (ln * lp).sum(1, keepdims=True)
+        occlusionLines = np.concatenate([ln, lnp], axis=1)
+        for occlusionLine in occlusionLines:
+            if abs(occlusionLine[0]) > abs(occlusionLine[1]):
+                vs = np.arange(height)
+                us = (occlusionLine[2] - vs * occlusionLine[1]) / occlusionLine[0]
+                minUs = np.floor(us).astype(np.int32)
+                maxUs = minUs + 1
+                validMask = np.logical_and(minUs >= 0, maxUs < width)
+                vs = vs[validMask]
+                minUs = minUs[validMask]
+                maxUs = maxUs[validMask]                
+                edgeIndices = (height - 1) * width + (vs * (width - 1) + minUs)
+                for index, edgeIndex in enumerate(edgeIndices):
+                    pixel_1 = vs[index] * width + minUs[index]
+                    pixel_2 = vs[index] * width + maxUs[index]
+                    proposals_1 = proposals[pixel_1]
+                    proposals_2 = proposals[pixel_2]                    
+                    for proposalIndex_1, planeIndex_1 in enumerate(proposals_1):
+                        if not planeHorizontalVPMask[planeIndex_1][VPIndex]:
+                            continue
+                        planeDepth_1 = planeDepths[pixel_1][proposalIndex_1]
+                        for proposalIndex_2, planeIndex_2 in enumerate(proposals_2):
+                            if planeDepths[pixel_2][proposalIndex_2] > planeDepth_1:
+                                edges_features[edgeIndex, proposalIndex_1, proposalIndex_2] *= 0.6
+                                pass
+                            continue
+                        continue
+                    continue
+                lineSets[vs * width + minUs, 1] = 1
+                lineSets[vs * width + maxUs, 1] = 1
+            else:
+                us = np.arange(width)
+                vs = (occlusionLine[2] - us * occlusionLine[0]) / occlusionLine[1]
+                
+                minVs = np.floor(vs).astype(np.int32)
+                maxVs = minVs + 1
+                validMask = np.logical_and(minVs >= 0, maxVs < height)
+                us = us[validMask]
+                minVs = minVs[validMask]
+                maxVs = maxVs[validMask]                
+                edgeIndices = (minVs * width + us)
+                for index, edgeIndex in enumerate(edgeIndices):
+                    pixel_1 = minVs[index] * width + us[index]
+                    pixel_2 = maxVs[index] * width + us[index]
+                    proposals_1 = proposals[pixel_1]
+                    proposals_2 = proposals[pixel_2]                    
+                    for proposalIndex_1, planeIndex_1 in enumerate(proposals_1):
+                        if not planeHorizontalVPMask[planeIndex_1][VPIndex]:
+                            continue
+                        planeDepth_1 = planeDepths[pixel_1][proposalIndex_1]
+                        for proposalIndex_2, planeIndex_2 in enumerate(proposals_2):
+                            if planeDepths[pixel_2][proposalIndex_2] > planeDepth_1:
+                                edges_features[edgeIndex, proposalIndex_1, proposalIndex_2] *= 0.6
+                                pass
+                            continue
+                        continue
+                    continue
+                lineSets[minVs * width + us, 1] = 1
+                lineSets[maxVs * width + us, 1] = 1                
+                pass
+            continue
+        continue
+
+    # lp = remainingLines[:, :2]
+    # ln = remainingLines[:, 2:4] - remainingLines[:, :2]
+    # ln /= np.maximum(np.linalg.norm(ln, axis=-1, keepdims=True), 1e-4)
+    # ln = np.stack([ln[:, 1], -ln[:, 0]], axis=1)
+    # lnp = (ln * lp).sum(1, keepdims=True)
+    # occusionLines = np.concatenate([ln, lnp], axis=1)
+
+    for line in remainingLines:
+        if abs(line[3] - line[1]) > abs(line[2] - line[0]):
+            if line[3] < line[1]:
+                line = np.array([line[2], line[3], line[0], line[1]])
+                pass
+            vs = np.arange(line[1], line[3] + 1, dtype=np.int32)
+            us = line[0] + (vs - line[1]) / (line[3] - line[1]) * (line[2] - line[0])
+            minUs = np.floor(us).astype(np.int32)
+            maxUs = minUs + 1
+            validMask = np.logical_and(minUs >= 0, maxUs < width)
+            vs = vs[validMask]
+            minUs = minUs[validMask]
+            maxUs = maxUs[validMask]                
+            edgeIndices = (height - 1) * width + (vs * (width - 1) + minUs)
+            for edgeIndex in edgeIndices:
+                edges_features[edgeIndex] *= 0.6
+                continue
+            lineSets[(vs * width + minUs), 2] = 1
+            lineSets[(vs * width + maxUs), 2] = 1            
+        else:
+            if line[2] < line[0]:
+                line = np.array([line[2], line[3], line[0], line[1]])
+                pass
+            us = np.arange(line[0], line[2] + 1, dtype=np.int32)
+            vs = line[1] + (us - line[0]) / (line[2] - line[0]) * (line[3] - line[1])
+            
+            minVs = np.floor(vs).astype(np.int32)
+            maxVs = minVs + 1
+            validMask = np.logical_and(minVs >= 0, maxVs < height)
+            us = us[validMask]
+            minVs = minVs[validMask]
+            maxVs = maxVs[validMask]
+            edgeIndices = (minVs * width + us)
+            for edgeIndex in edgeIndices:
+                edges_features[edgeIndex] *= 0.6
+                continue
+            lineSets[minVs * width + us, 2] = 1
+            lineSets[maxVs * width + us, 2] = 1
+            continue
+        continue
+    cv2.imwrite('test/line_sets.png', drawMaskImage(lineSets.reshape((height, width, 3))))
+    
+        
+    refined_segmentation = inference_ogm(unaries, -edges_features * 4, edges, return_energy=False, alg='trw')
     refined_segmentation = refined_segmentation.reshape([height, width, 1])
     refined_segmentation = readProposalInfo(proposals, refined_segmentation)
     #print(pairwise_matrix)
@@ -2777,7 +3477,26 @@ def testPlaneExtraction():
     info[19] = 0
 
     pred_p, pred_s, pred_d, pred_n = fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageIndex=-1)
+    #pred_p, pred_s, pred_d, pred_n = fitPlanesPiecewise(image, depth, normal, info, numOutputPlanes=20, imageIndex=-1)    
     exit(1)
     return
 
+def estimateFocalLength():
+    from pylsd import lsd
+    
+    height = depth.shape[0]
+    width = depth.shape[1]
 
+    lines = lsd(image.mean(2))
+
+    lineImage = image.copy()
+    for line in lines:
+        cv2.line(lineImage, (int(line[0]), int(line[1])), (int(line[2]), int(line[3])), (0, 0, 255), int(np.ceil(line[4] / 2)))
+        continue
+    cv2.imwrite('test/lines.png', lineImage)
+
+    numVPs = 3
+    VPs, VPLines, remainingLines = calcVanishingPoints(lines, numVPs=numVPs)
+    focalLength = (np.sqrt((VPs[0] * VPs[1]).sum()) + np.sqrt((VPs[0] * VPs[2]).sum()) + np.sqrt((VPs[1] * VPs[2]).sum())) / 3
+    
+#testPlaneExtraction()

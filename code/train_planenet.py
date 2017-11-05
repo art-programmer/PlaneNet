@@ -22,6 +22,8 @@ from RecordReader import *
 from RecordReaderRGBD import *
 from RecordReader3D import *
 from RecordReaderAll import *
+from crfasrnn_layer import CrfRnnLayer
+
 #from SegmentationRefinement import *
 
 #training_flag: toggle dropout and batch normalization mode
@@ -53,11 +55,21 @@ def build_graph(img_inp_train, img_inp_val, training_flag, options):
             segmentation_pred = gt_dict['segmentation'][:, :, :, :20] * 10
             pass
         
+
+        if abs(options.crfrnn) > 0:
+            with tf.variable_scope('crfrnn'):
+                all_segmentations = CrfRnnLayer(image_dims=(HEIGHT, WIDTH), num_classes=options.numOutputPlanes + 1, theta_alpha=120., theta_beta=3., theta_gamma=3., num_iterations=abs(options.crfrnn), name='crfrnn')([tf.concat([segmentation_pred, non_plane_mask_pred], axis=3), img_inp * 255])
+                segmentation_pred = all_segmentations[:, :, :, :options.numOutputPlanes]
+                non_plane_mask_pred = all_segmentations[:, :, :, options.numOutputPlanes:]
+                pass
+            pass
         
         global_pred_dict = {'plane': plane_pred, 'segmentation': segmentation_pred, 'non_plane_mask': non_plane_mask_pred, 'non_plane_depth': non_plane_depth_pred, 'non_plane_normal': non_plane_normal_pred}
 
         if options.predictBoundary:
             global_pred_dict['boundary'] = net.layers['boundary_pred']
+        else:
+            global_pred_dict['boundary'] = tf.zeros((options.batchSize, HEIGHT, WIDTH, 2))
             pass
         if options.predictConfidence:
             global_pred_dict['confidence'] = net.layers['plane_confidence_pred']
@@ -356,7 +368,8 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
         label_loss = tf.constant(0.0)
         if options.labelLoss == 1:
             #label_loss = tf.reduce_mean(tf.reduce_max(all_segmentations_softmax, axis=[1, 2]) * tf.concat([tf.cast(tf.equal(tf.squeeze(num_matches, axis=2), 0), tf.float32), tf.ones([options.batchSize, 1])], axis=1)) * 1000
-            label_loss = tf.reduce_mean(tf.log(1 + tf.reduce_sum(all_segmentations_softmax, axis=[1, 2]))) * 100
+            #label_loss = tf.reduce_mean(tf.log(1 + tf.reduce_sum(all_segmentations_softmax, axis=[1, 2]))) * 100
+            label_loss = tf.reduce_mean(tf.sqrt(tf.reduce_sum(all_segmentations_softmax, axis=[1, 2]))) * 50
             #label_loss = tf.reduce_mean(tf.reduce_max(all_segmentations_softmax, axis=[1, 2])) * 1000
             pass
         
@@ -451,8 +464,14 @@ def main(options):
 
 
     optimizer = tf.train.AdamOptimizer(options.LR)
-    train_op = optimizer.minimize(loss, global_step=batchno)
-
+    if options.crfrnn >= 0:
+        train_op = optimizer.minimize(loss, global_step=batchno)
+    else:
+        var_to_train = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "crfrnn")
+        print(var_to_train)
+        train_op = optimizer.minimize(loss, global_step=batchno, var_list=var_to_train)
+        pass
+    
     var_to_restore = [v for v in tf.global_variables()]
 
     tf.summary.scalar('loss', loss)
@@ -497,6 +516,9 @@ def main(options):
             if options.predictSemantics == 1:
                 var_to_restore = [v for v in var_to_restore if 'semantics' not in v.name]
                 pass
+            if np.abs(options.crfrnn) > 0:
+                var_to_restore = [v for v in var_to_restore if 'crfrnn' not in v.name]
+                pass
             
             loader = tf.train.Saver(var_to_restore)
             if len(options.hybrid) == 1:
@@ -505,7 +527,7 @@ def main(options):
                 hybrid = str(3)
                 pass
             #loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + hybrid + '_bl0_ll1_bw0.5_pb_pp_ps_sm0/checkpoint.ckpt')
-            loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + hybrid + '_bl0_dl0_ll1_bw0.5_pb_pp/checkpoint.ckpt')            
+            loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + hybrid + '_bl0_dl0_ll1_pb_pp_sm0/checkpoint.ckpt')            
             #loader.restore(sess,"checkpoint/planenet/checkpoint.ckpt")
             sess.run(batchno.assign(1))
         elif options.restore == 4:
@@ -513,6 +535,15 @@ def main(options):
             #var_to_restore = [v for v in var_to_restore if 'res4b22_relu_non_plane' not in v.name]
             loader = tf.train.Saver(var_to_restore)
             loader.restore(sess, options.fineTuningCheckpoint)
+            sess.run(batchno.assign(1))
+            pass
+        elif options.restore == 5:
+            #fine-tune another model
+            #var_to_restore = [v for v in var_to_restore if 'res4b22_relu_non_plane' not in v.name]
+            loader = tf.train.Saver(var_to_restore)
+            print(options.checkpoint_dir.replace('crfrnn', 'crfrnn-'))
+            #exit(1)
+            loader.restore(sess,"%s/checkpoint.ckpt"%(options.checkpoint_dir.replace('crfrnn', 'crfrnn-')))            
             sess.run(batchno.assign(1))
             pass
         # Start input enqueue threads.
@@ -533,32 +564,22 @@ def main(options):
                 if batchIndexPeriod < len(options.hybrid):
                     #batchType = int(options.hybrid[batchIndexPeriod]) * 2 + 1
                     batchType = 1
-                    _, total_loss, losses, summary_str, gt_dict = sess.run([batchnoinc, loss, loss_dict, summary_op, global_pred_dict], feed_dict = {training_flag: batchType == 0})
-                    
+                    _, total_loss, losses, summary_str, debug = sess.run([batchnoinc, loss, loss_dict, summary_op, global_pred_dict], feed_dict = {training_flag: batchType == 0})          
                 else:
                     batchType = 0
-                    _, total_loss, losses, summary_str, gt_dict = sess.run([train_op, loss, loss_dict, summary_op, global_pred_dict], feed_dict = {training_flag: batchType == 0})
+                    _, total_loss, losses, summary_str, debug = sess.run([train_op, loss, loss_dict, summary_op, global_pred_dict], feed_dict = {training_flag: batchType == 0})
+
+                    # for batchIndex in xrange(options.batchSize):
+                    #     print(losses)
+                    #     print(debug['plane'][batchIndex])
+                    #     cv2.imwrite('test/image_' + str(batchIndex) + '.png', ((img[batchIndex] + 0.5) * 255).astype(np.uint8))
+                    #     cv2.imwrite('test/segmentation_' + str(batchIndex) + '.png', drawSegmentationImage(debug['segmentation'][batchIndex]))
+                    #     continue
+                    # exit(1)
+                    
                     pass
 
-                # for batchIndex in xrange(options.batchSize):
-                #     if np.isnan(global_gt['plane'][batchIndex]).any():
-                #         #print(losses)
-                #         #print(global_gt['plane'][batchIndex])
-                #         print(global_gt['num_planes'][batchIndex])
-                #         for planeIndex in xrange(global_gt['num_planes'][batchIndex]):
-                #             cv2.imwrite('test/mask_' + str(planeIndex) + '.png', drawMaskImage(global_gt['segmentation'][batchIndex, :, :, planeIndex]))
-                #             continue
-                #         np.save('temp/plane.npy', global_gt['plane'][batchIndex])                        
-                #         np.save('temp/depth.npy', global_gt['depth'][batchIndex])
-                #         np.save('temp/segmentation.npy', global_gt['segmentation'][batchIndex])
-                #         np.save('temp/info.npy', global_gt['info'][batchIndex])
-                #         np.save('temp/num_planes.npy', global_gt['num_planes'][batchIndex])
-                #         planes, segmentation, numPlanes = removeSmallSegments(global_gt['plane'][batchIndex], np.zeros((HEIGHT, WIDTH, 3)), global_gt['depth'][batchIndex].squeeze(), np.zeros((HEIGHT, WIDTH, 3)), np.argmax(global_gt['segmentation'][batchIndex], axis=-1), global_gt['semantics'][batchIndex], global_gt['info'][batchIndex], global_gt['num_planes'][batchIndex])
-                #         print(planes)
-                #         exit(1)
-                #         pass
-                #     continue
-                #writers[batchType].add_summary(summary_str, bno)
+                    
                 ema[batchType] = ema[batchType] * MOVING_AVERAGE_DECAY + total_loss
                 ema_acc[batchType] = ema_acc[batchType] * MOVING_AVERAGE_DECAY + 1
 
@@ -620,7 +641,7 @@ def test(options):
     elif options.dataset == 'matterport':
         filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
-        filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_scannet_train.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_scannet_val.tfrecords'], num_epochs=1)
         pass
     img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
 
@@ -1391,6 +1412,9 @@ def parse_args():
     parser.add_argument('--crf', dest='crf',
                         help='the number of CRF iterations',
                         default=0, type=int)
+    parser.add_argument('--crfrnn', dest='crfrnn',
+                        help='the number of CRF (as RNN) iterations',
+                        default=0, type=int)    
     parser.add_argument('--backwardLossWeight', dest='backwardLossWeight',
                         help='backward matching loss',
                         default=0, type=float)
@@ -1461,6 +1485,9 @@ def parse_args():
         pass
     if args.crf > 0:
         args.keyname += '_crf' + str(args.crf)
+        pass
+    if args.crfrnn != 0:
+        args.keyname += '_crfrnn' + str(args.crfrnn)
         pass
     if args.backwardLossWeight > 0:
         args.keyname += '_bw' + str(args.backwardLossWeight)
