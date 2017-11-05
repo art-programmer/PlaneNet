@@ -22,8 +22,6 @@ from RecordReader import *
 from RecordReaderRGBD import *
 from RecordReader3D import *
 from RecordReaderAll import *
-from crfasrnn_layer import CrfRnnLayer
-
 #from SegmentationRefinement import *
 
 #training_flag: toggle dropout and batch normalization mode
@@ -51,25 +49,15 @@ def build_graph(img_inp_train, img_inp_val, training_flag, options):
             plane_pred = gt_dict['plane']
             non_plane_mask_pred = gt_dict['non_plane_mask'] * 10
             non_plane_depth_pred = gt_dict['depth']
-            non_plane_normal_pred = gt_dict['normal']            
+            non_plane_normal_pred = gt_dict['normal']
             segmentation_pred = gt_dict['segmentation'][:, :, :, :20] * 10
             pass
         
-
-        if abs(options.crfrnn) > 0:
-            with tf.variable_scope('crfrnn'):
-                all_segmentations = CrfRnnLayer(image_dims=(HEIGHT, WIDTH), num_classes=options.numOutputPlanes + 1, theta_alpha=120., theta_beta=3., theta_gamma=3., num_iterations=abs(options.crfrnn), name='crfrnn')([tf.concat([segmentation_pred, non_plane_mask_pred], axis=3), img_inp * 255])
-                segmentation_pred = all_segmentations[:, :, :, :options.numOutputPlanes]
-                non_plane_mask_pred = all_segmentations[:, :, :, options.numOutputPlanes:]
-                pass
-            pass
         
         global_pred_dict = {'plane': plane_pred, 'segmentation': segmentation_pred, 'non_plane_mask': non_plane_mask_pred, 'non_plane_depth': non_plane_depth_pred, 'non_plane_normal': non_plane_normal_pred}
 
         if options.predictBoundary:
             global_pred_dict['boundary'] = net.layers['boundary_pred']
-        else:
-            global_pred_dict['boundary'] = tf.zeros((options.batchSize, HEIGHT, WIDTH, 2))
             pass
         if options.predictConfidence:
             global_pred_dict['confidence'] = net.layers['plane_confidence_pred']
@@ -135,116 +123,22 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
         all_depths = tf.concat([plane_depths, non_plane_depth], axis=3)
 
         
-        validPlaneMask = tf.cast(tf.less(tf.tile(tf.expand_dims(tf.range(options.numOutputPlanes), 0), [options.batchSize, 1]), tf.expand_dims(global_gt_dict['num_planes'], -1)), tf.float32)        
-        backwardLossWeight = options.backwardLossWeight
-        
-        #plane loss and segmentation loss (summation over deep supervisions and final supervision)
-        all_pred_dicts = deep_pred_dicts + [global_pred_dict]
-        plane_loss = tf.constant(0.0)
-        segmentation_loss = tf.constant(0.0)
-        plane_confidence_loss = tf.constant(0.0)
-        diverse_loss = tf.constant(0.0)
-        
-        #keep forward map (segmentation gt) from previous supervision so that we can have same matching for all supervisions (options.sameMatching = 1)
-        previous_plane_gt = None
-        previous_plane_confidence_gt = None        
-        previous_segmentation_gt = None
-        if options.anchorPlanes:
-            anchors_np = np.load('dump/anchors_' + options.hybrid + '.npy')
-            anchors = tf.reshape(tf.constant(anchors_np.reshape(-1)), anchors_np.shape)
-            anchors = tf.tile(tf.expand_dims(anchors, 0), [options.batchSize, 1, 1])
-            dists_forward, map_forward, dists_backward, _ = tf_nndistance.nn_distance(global_gt_dict['plane'], anchors)
-                            
-            forward_map = tf.one_hot(map_forward, depth=options.numOutputPlanes, axis=-1)
-            forward_map *= tf.expand_dims(validPlaneMask, -1)
-                
-            #number of ground truth mapped for each prediction
-            num_matches = tf.transpose(tf.reduce_sum(forward_map, axis=1, keep_dims=True), [0, 2, 1])
-            previous_plane_gt = tf.transpose(tf.matmul(global_gt_dict['plane'], forward_map, transpose_a=True), [0, 2, 1]) / tf.maximum(num_matches, 1e-4)
-            previous_plane_confidence_gt = tf.cast(num_matches > 0.5, tf.float32)
-
-            segmentation_gt_shuffled = tf.reshape(tf.matmul(tf.reshape(global_gt_dict['segmentation'], [-1, HEIGHT * WIDTH, options.numOutputPlanes]), forward_map), [-1, HEIGHT, WIDTH, options.numOutputPlanes])
-            segmentation_gt_shuffled = tf.concat([segmentation_gt_shuffled, global_gt_dict['non_plane_mask']], axis=3)
-            previous_segmentation_gt = segmentation_gt_shuffled
-            pass
-        
-        for pred_index, pred_dict in enumerate(all_pred_dicts):
-            if (options.sameMatching and pred_index > 0) or options.anchorPlanes:
-                #use matching from previous supervision and map ground truth planes based on the mapping
-
-                plane_loss += tf.reduce_mean(tf.squared_difference(pred_dict['plane'], previous_plane_gt) * previous_plane_confidence_gt) * 10000
-                
-                #all segmentations is the concatenation of plane segmentations and non plane mask
-                all_segmentations = tf.concat([pred_dict['segmentation'], pred_dict['non_plane_mask']], axis=3)
-
-                if options.crf > 0:
-                    all_segmentations_softmax = tf.nn.softmax(all_segmentations)          
-                    with tf.variable_scope('crf'):
-                        planesY = global_pred_dict['plane'][:, :, 1]
-                        planesD = tf.maximum(tf.norm(global_pred_dict['plane'], axis=-1), 1e-4)
-                        planesY /= planesD
-                        planesY = tf.concat([planesY, tf.ones((options.batchSize, 1)) * 100], axis=1)
-
-                        imageDiff = calcImageDiff(img_inp)
-                        all_segmentations_softmax, _ = segmentationRefinementModule(all_segmentations_softmax, all_depths, planesY, imageDiff, numIterations=options.crf, numOutputPlanes=21)
-                        segmentation_loss += tf.reduce_mean(-tf.reduce_sum(previous_segmentation_gt* tf.log(tf.maximum(all_segmentations_softmax, 1e-31)), axis=-1)) * 1000
-                        pass
-                    pass
-                else:
-                    segmentation_loss += tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=all_segmentations, labels=previous_segmentation_gt)) * 1000
-                    pass
-            else:
-                #calculate new matching by finding nearest neighbors again
-                dists_forward, map_forward, dists_backward, _ = tf_nndistance.nn_distance(global_gt_dict['plane'], pred_dict['plane'])
-                dists_forward *= validPlaneMask
-                
-                dists_forward = tf.reduce_mean(dists_forward)
-                dists_backward = tf.reduce_mean(dists_backward)
-                plane_loss += (dists_forward + dists_backward * backwardLossWeight) * 10000
-
-                forward_map = tf.one_hot(map_forward, depth=options.numOutputPlanes, axis=-1)
-                forward_map *= tf.expand_dims(validPlaneMask, -1)
-                
-                #number of ground truth mapped for each prediction
-                num_matches = tf.transpose(tf.reduce_sum(forward_map, axis=1, keep_dims=True), [0, 2, 1])
-                previous_plane_gt = tf.transpose(tf.matmul(global_gt_dict['plane'], forward_map, transpose_a=True), [0, 2, 1]) / tf.maximum(num_matches, 1e-4)
-                previous_plane_confidence_gt = tf.cast(num_matches > 0.5, tf.float32)
-                
-                                              
-                segmentation_gt_shuffled = tf.reshape(tf.matmul(tf.reshape(global_gt_dict['segmentation'], [-1, HEIGHT * WIDTH, options.numOutputPlanes]), forward_map), [-1, HEIGHT, WIDTH, options.numOutputPlanes])
-                segmentation_gt_shuffled = tf.concat([segmentation_gt_shuffled, global_gt_dict['non_plane_mask']], axis=3)
-                previous_segmentation_gt = segmentation_gt_shuffled
-                
-                all_segmentations = tf.concat([pred_dict['segmentation'], pred_dict['non_plane_mask']], axis=3)
-                segmentation_loss += tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=all_segmentations, labels=segmentation_gt_shuffled)) * 1000
-                debug_dict['segmentation'] = segmentation_gt_shuffled
-                pass
-
-            if options.diverseLoss:
-                plane_diff = tf.reduce_sum(tf.pow(tf.expand_dims(pred_dict['plane'], 1) - tf.expand_dims(pred_dict['plane'], 2), 2), axis=3)
-                plane_diff = tf.matrix_set_diag(plane_diff, tf.ones((options.batchSize, options.numOutputPlanes)))
-                minPlaneDiff = 0.1
-                diverse_loss += tf.reduce_mean(tf.clip_by_value(1 - plane_diff / minPlaneDiff, 0, 1)) * 10000
-                pass
-              
-            continue
-
-
-        if options.crf == 0:
-            all_segmentations_softmax = tf.nn.softmax(all_segmentations)
-            pass
-        
-        #depth loss
-        validDepthMask = tf.cast(tf.greater(global_gt_dict['depth'], 1e-4), tf.float32)
-        depth_loss = tf.reduce_mean(tf.reduce_sum(tf.squared_difference(all_depths, global_gt_dict['depth']) * all_segmentations_softmax, axis=3, keep_dims=True) * validDepthMask) * 10000
 
         #if options.predictPixelwise == 1:
-        depth_diff = global_pred_dict['non_plane_depth'] - global_gt_dict['depth']
-        depth_diff_gx = depth_diff - tf.concat([tf.ones([options.batchSize, HEIGHT, 1, 1]), depth_diff[:, :, :WIDTH - 1]], axis=2)
-        depth_diff_gy = depth_diff - tf.concat([tf.ones([options.batchSize, 1, WIDTH, 1]), depth_diff[:, :HEIGHT - 1]], axis=1)
+        validDepthMask = tf.cast(tf.greater(global_gt_dict['depth'], 1e-4), tf.float32)
+        numValidPixels = tf.reduce_sum(validDepthMask, axis=[1, 2, 3])        
+        depth_loss = tf.constant(0.0)
+        if options.predictPlanes == 1:
+            all_segmentations = tf.concat([global_pred_dict['segmentation'], global_pred_dict['non_plane_mask']], axis=3)
+            all_segmentations_softmax = tf.nn.softmax(all_segmentations)
+            depth_loss += tf.reduce_mean(tf.reduce_sum(tf.squared_difference(all_depths, global_gt_dict['depth']) * all_segmentations_softmax, axis=3, keep_dims=True) * validDepthMask) * 10000
+        else:
+            depth_diff = global_pred_dict['non_plane_depth'] - global_gt_dict['depth']
+            depth_diff_gx = depth_diff - tf.concat([tf.ones([options.batchSize, HEIGHT, 1, 1]), depth_diff[:, :, :WIDTH - 1]], axis=2)
+            depth_diff_gy = depth_diff - tf.concat([tf.ones([options.batchSize, 1, WIDTH, 1]), depth_diff[:, :HEIGHT - 1]], axis=1)
 
-        numValidPixels = tf.reduce_sum(validDepthMask, axis=[1, 2, 3])
-        depth_loss += tf.reduce_mean(tf.reduce_sum(tf.pow(depth_diff * validDepthMask, 2), axis=[1, 2, 3]) / numValidPixels - 0.5 * tf.pow(tf.reduce_sum(depth_diff * validDepthMask, axis=[1, 2, 3]) / numValidPixels, 2) + tf.reduce_sum((tf.pow(depth_diff_gx, 2) + tf.pow(depth_diff_gy, 2)) * validDepthMask, axis=[1, 2, 3]) / numValidPixels) * 1000
+            depth_loss += tf.reduce_mean(tf.reduce_sum(tf.pow(depth_diff * validDepthMask, 2), axis=[1, 2, 3]) / numValidPixels - 0.5 * tf.pow(tf.reduce_sum(depth_diff * validDepthMask, axis=[1, 2, 3]) / numValidPixels, 2) + tf.reduce_sum((tf.pow(depth_diff_gx, 2) + tf.pow(depth_diff_gy, 2)) * validDepthMask, axis=[1, 2, 3]) / numValidPixels) * 1000
+            pass
         
         #depth_loss += tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_depth'], global_gt_dict['depth']) * validDepthMask) * 10000
 
@@ -255,143 +149,21 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
         #normal_loss = tf.reduce_mean(tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_normal'], global_gt_dict['normal']) * validDepthMask, axis=[1, 2, 3]) * valid_normal_mask) * 1000
         #normal_loss = tf.constant(0.0)
 
-        if options.predictSemantics:
-            valid_semantics_mask = tf.squeeze(tf.cast(tf.not_equal(tf.slice(global_gt_dict['info'], [0, 19], [options.batchSize, 1]), 1), tf.float32))
-            semantics_loss = tf.reduce_mean(tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=global_pred_dict['semantics'], labels=global_gt_dict['semantics']), axis=[1, 2]) * valid_semantics_mask) * 1000
-        else:
-            semantics_loss = tf.constant(0.0)
-            pass
-
-        local_score_loss = tf.constant(0.0)
-        local_plane_loss = tf.constant(0.0)
-        local_mask_loss = tf.constant(0.0)
-                
-        #boundary loss
-        boundary_loss = tf.constant(0.0)
+        valid_semantics_mask = tf.squeeze(tf.cast(tf.not_equal(tf.slice(global_gt_dict['info'], [0, 19], [options.batchSize, 1]), 1), tf.float32))
+        semantics_loss = tf.reduce_mean(tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=global_pred_dict['semantics'], labels=global_gt_dict['semantics']), axis=[1, 2]) * valid_semantics_mask) * 1000
         
-        if False:
-            kernel_size = 3
-            padding = (kernel_size - 1) / 2
-            neighbor_kernel_array = gaussian(kernel_size, kernel_size)
-            neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 0
-            neighbor_kernel_array /= neighbor_kernel_array.sum()
-            neighbor_kernel_array *= -1
-            neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 1
-            neighbor_kernel = tf.constant(neighbor_kernel_array.reshape(-1), shape=neighbor_kernel_array.shape, dtype=tf.float32)
-            neighbor_kernel = tf.reshape(neighbor_kernel, [kernel_size, kernel_size, 1, 1])
-            
-            #calculate boundary ground truth on-the-fly as the calculation is subject to change
-        
-            depth_diff = tf.abs(tf.nn.depthwise_conv2d(global_gt_dict['depth'], neighbor_kernel, strides=[1, 1, 1, 1], padding='VALID'))
-            depth_diff = tf.pad(depth_diff, paddings = [[0, 0], [padding, padding], [padding, padding], [0, 0]])
-            max_depth_diff = 0.1
-            depth_boundary = tf.greater(depth_diff, max_depth_diff)
 
-            plane_region = tf.nn.max_pool(1 - global_gt_dict['non_plane_mask'], ksize=[1, kernel_size, kernel_size, 1], strides=[1, 1, 1, 1], padding='SAME', name='max_pool')
-            segmentation_eroded = 1 - tf.nn.max_pool(1 - global_gt_dict['segmentation'], ksize=[1, 3, 3, 1], strides=[1, 1, 1, 1], padding='SAME', name='max_pool')
-            plane_region -= tf.reduce_max(segmentation_eroded, axis=3, keep_dims=True)
-            boundary = tf.cast(depth_boundary, tf.float32) * plane_region
-            smooth_boundary = global_gt_dict['smooth_boundary']
-            boundary_gt = tf.concat([smooth_boundary, tf.maximum(boundary - smooth_boundary, 0)], axis=3)
-            pass
-
-
-        if options.boundaryLoss == 1 and False:
-            
-            all_segmentations_pred = all_segmentations_softmax
-            all_segmentations_min = 1 - tf.nn.max_pool(1 - all_segmentations_pred, ksize=[1, 3, 3, 1], strides=[1, 1, 1, 1], padding='SAME')
-            segmentation_diff = tf.reduce_max(all_segmentations_pred - all_segmentations_min, axis=3, keep_dims=True)
-
-            depth_pred = tf.reduce_sum(tf.multiply(all_depths, all_segmentations_pred), axis=3, keep_dims=True)
-            depth_neighbor = tf.nn.depthwise_conv2d(depth_pred, neighbor_kernel, strides=[1, 1, 1, 1], padding='SAME')
-            minDepthDiff = 0.02
-            depth_diff = tf.clip_by_value(tf.squared_difference(depth_pred, depth_neighbor) - pow(minDepthDiff, 2), 0, 1)
-
-            boundary = tf.reduce_max(global_gt_dict['boundary'], axis=3, keep_dims=True)
-            smooth_boundary = tf.slice(boundary_gt, [0, 0, 0, 0], [options.batchSize, HEIGHT, WIDTH, 1])
-            smooth_mask = segmentation_diff + boundary - 2 * segmentation_diff * boundary + depth_diff * smooth_boundary
-            margin = 0.0
-            smooth_mask = tf.nn.relu(smooth_mask - margin)
-            #boundary_loss += tf.reduce_mean(smooth_mask * plane_mask) * 1000
-            boundary_loss += tf.reduce_mean(smooth_mask) * 1000
-        elif options.boundaryLoss == 3:
-            S = tf.one_hot(tf.argmax(all_segmentations, 3), depth=options.numOutputPlanes + 1)
-            #sigmaDepthDiff = 0.5
-            #DS_diff = tf.exp(-tf.pow(1 - tf.clip_by_value(tf.abs(all_depths - tf.reduce_sum(all_depths * S, 3, keep_dims=True)), 0, 1), 2) / sigmaDepthDiff) - tf.exp(-1 / sigmaDepthDiff) * S
-            planesY = tf.slice(global_pred_dict['plane'], [0, 0, 1], [options.batchSize, options.numOutputPlanes, 1])
-            planesD = tf.maximum(tf.norm(global_pred_dict['plane'], axis=-1, keep_dims=True), 1e-4)
-            planesY /= planesD
-            #normalY = tf.reduce_sum(tf.slice(S, [0, 0, 0, 0], [options.batchSize, HEIGHT, WIDTH, options.numOutputPlanes]) * tf.reshape(planesY, [options.batchSize, 1, 1, options.numOutputPlanes]), axis=3, keep_dims=True)
-            planesY = tf.concat([planesY, tf.ones((options.batchSize, 1, 1)) * 100], axis=1)
-            normalY = tf.reduce_sum(S * tf.reshape(planesY, [options.batchSize, 1, 1, -1]), axis=3, keep_dims=True)
-            
-            maxDepthDiff = 0.1
-            labelDiffWeight = 0.05
-            depth_one_hot = tf.reduce_sum(all_depths * S, 3, keep_dims=True)
-            depth_diff = tf.clip_by_value(tf.pow((plane_depths - depth_one_hot) * normalY / maxDepthDiff, 2), 0, 1)
-            #depth_diff *= normalY
-            depth_diff = tf.concat([depth_diff, 1 - tf.slice(S, [0, 0, 0, options.numOutputPlanes], [options.batchSize, HEIGHT, WIDTH, 1])], axis=3)
-            DS_diff = (1 + labelDiffWeight) - tf.exp(-depth_diff) - S * labelDiffWeight
-            kernel_size = 3
-            neighbor_kernel_array = gaussian(kernel_size)
-            neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 0
-            neighbor_kernel_array /= neighbor_kernel_array.sum()
-            neighbor_kernel = tf.constant(neighbor_kernel_array.reshape(-1), shape=neighbor_kernel_array.shape, dtype=tf.float32)
-            neighbor_kernel = tf.reshape(neighbor_kernel, [kernel_size, kernel_size, 1, 1])
-
-            DS = tf.nn.depthwise_conv2d(DS_diff, tf.tile(neighbor_kernel, [1, 1, options.numOutputPlanes + 1, 1]), strides=[1, 1, 1, 1], padding='SAME')
-            boundary_loss += tf.reduce_mean(DS * all_segmentations_softmax) * 100000
-
-            debug_dict['cost_mask'] = tf.reduce_sum(DS * all_segmentations_softmax, axis=3)
-            #debug_dict['cost_mask'] = DS * all_segmentations_softmax
-            #debug_dict['cost_mask'] = tf.reduce_sum(DS * S, axis=3)
-        elif options.boundaryLoss == 2:
-            planesY = global_pred_dict['plane'][:, :, 1]
-            planesD = tf.maximum(tf.norm(global_pred_dict['plane'], axis=-1), 1e-4)
-            planesY /= planesD
-            planesY = tf.concat([planesY, tf.ones((options.batchSize, 1)) * 100], axis=1)
-            
-            #imageDiff = calcImageDiff(img_inp)
-            #all_segmentations_softmax, _ = segmentationRefinementModule(all_segmentations_softmax, all_depths, planesY, imageDiff, numIterations=options.crf, numOutputPlanes=21)
-            messages = calcMessages(all_segmentations_softmax, all_depths, planesY, numOutputPlanes=21)
-            boundary_loss += tf.reduce_mean(messages * all_segmentations_softmax) * 100000
-            debug_dict['cost_mask'] = messages
-            pass
-
-        
-        if options.predictBoundary and False:
-            #we predict boundaries directly for post-processing purpose
-            boundary_loss += tf.reduce_mean(tf.losses.sigmoid_cross_entropy(logits=global_pred_dict['boundary'], multi_class_labels=global_gt_dict['boundary'], weights=tf.maximum(global_gt_dict['boundary'] * 3, 1))) * 1000
-            pass
-
-
-        label_loss = tf.constant(0.0)
-        if options.labelLoss == 1:
-            #label_loss = tf.reduce_mean(tf.reduce_max(all_segmentations_softmax, axis=[1, 2]) * tf.concat([tf.cast(tf.equal(tf.squeeze(num_matches, axis=2), 0), tf.float32), tf.ones([options.batchSize, 1])], axis=1)) * 1000
-            #label_loss = tf.reduce_mean(tf.log(1 + tf.reduce_sum(all_segmentations_softmax, axis=[1, 2]))) * 100
-            label_loss = tf.reduce_mean(tf.sqrt(tf.reduce_sum(all_segmentations_softmax, axis=[1, 2]))) * 50
-            #label_loss = tf.reduce_mean(tf.reduce_max(all_segmentations_softmax, axis=[1, 2])) * 1000
-            pass
-        
-        #regularization
         l2_losses = tf.add_n([options.l2Weight * tf.nn.l2_loss(v) for v in tf.trainable_variables() if 'weights' in v.name])
 
-        if options.planeLoss == 0:
-            plane_loss = tf.constant(0.0)
-            pass
 
-        loss = plane_loss + segmentation_loss + depth_loss + normal_loss + plane_confidence_loss + diverse_loss + boundary_loss + local_score_loss + local_plane_loss + local_mask_loss + label_loss + semantics_loss + l2_losses
+        loss = depth_loss + normal_loss + semantics_loss + l2_losses
 
         #if options.pixelwiseLoss:
         #normal_loss = tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_normal'], global_gt_dict['normal'])) * 1000
         #depth_loss = tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_depth'], global_gt_dict['depth']) * validDepthMask) * 1000
         #pass
 
-        S = tf.one_hot(tf.argmax(all_segmentations, 3), depth=options.numOutputPlanes + 1)
-        depth_one_hot = tf.reduce_sum(all_depths * S, 3, keep_dims=True)
-        debug_dict['depth'] = depth_one_hot
-        
-        loss_dict = {'plane': plane_loss, 'segmentation': segmentation_loss, 'depth': depth_loss, 'normal': normal_loss, 'boundary': boundary_loss, 'diverse': diverse_loss, 'confidence': plane_confidence_loss, 'local_score': local_score_loss, 'local_plane': local_plane_loss, 'local_mask': local_mask_loss, 'label': label_loss, 'semantics': semantics_loss}
+        loss_dict = {'depth': depth_loss, 'normal': normal_loss, 'semantics': semantics_loss}
         pass
     return loss, loss_dict, debug_dict
 
@@ -464,14 +236,8 @@ def main(options):
 
 
     optimizer = tf.train.AdamOptimizer(options.LR)
-    if options.crfrnn >= 0:
-        train_op = optimizer.minimize(loss, global_step=batchno)
-    else:
-        var_to_train = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "crfrnn")
-        print(var_to_train)
-        train_op = optimizer.minimize(loss, global_step=batchno, var_list=var_to_train)
-        pass
-    
+    train_op = optimizer.minimize(loss, global_step=batchno)
+
     var_to_restore = [v for v in tf.global_variables()]
 
     tf.summary.scalar('loss', loss)
@@ -516,9 +282,6 @@ def main(options):
             if options.predictSemantics == 1:
                 var_to_restore = [v for v in var_to_restore if 'semantics' not in v.name]
                 pass
-            if np.abs(options.crfrnn) > 0:
-                var_to_restore = [v for v in var_to_restore if 'crfrnn' not in v.name]
-                pass
             
             loader = tf.train.Saver(var_to_restore)
             if len(options.hybrid) == 1:
@@ -527,7 +290,7 @@ def main(options):
                 hybrid = str(3)
                 pass
             #loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + hybrid + '_bl0_ll1_bw0.5_pb_pp_ps_sm0/checkpoint.ckpt')
-            loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + hybrid + '_bl0_dl0_ll1_pb_pp_sm0/checkpoint.ckpt')            
+            loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + hybrid + '_bl0_dl0_ll1_bw0.5_pb_pp/checkpoint.ckpt')            
             #loader.restore(sess,"checkpoint/planenet/checkpoint.ckpt")
             sess.run(batchno.assign(1))
         elif options.restore == 4:
@@ -535,15 +298,6 @@ def main(options):
             #var_to_restore = [v for v in var_to_restore if 'res4b22_relu_non_plane' not in v.name]
             loader = tf.train.Saver(var_to_restore)
             loader.restore(sess, options.fineTuningCheckpoint)
-            sess.run(batchno.assign(1))
-            pass
-        elif options.restore == 5:
-            #fine-tune another model
-            #var_to_restore = [v for v in var_to_restore if 'res4b22_relu_non_plane' not in v.name]
-            loader = tf.train.Saver(var_to_restore)
-            print(options.checkpoint_dir.replace('crfrnn', 'crfrnn-'))
-            #exit(1)
-            loader.restore(sess,"%s/checkpoint.ckpt"%(options.checkpoint_dir.replace('crfrnn', 'crfrnn-')))            
             sess.run(batchno.assign(1))
             pass
         # Start input enqueue threads.
@@ -564,22 +318,32 @@ def main(options):
                 if batchIndexPeriod < len(options.hybrid):
                     #batchType = int(options.hybrid[batchIndexPeriod]) * 2 + 1
                     batchType = 1
-                    _, total_loss, losses, summary_str, debug = sess.run([batchnoinc, loss, loss_dict, summary_op, global_pred_dict], feed_dict = {training_flag: batchType == 0})          
+                    _, total_loss, losses, summary_str, gt_dict = sess.run([batchnoinc, loss, loss_dict, summary_op, global_pred_dict], feed_dict = {training_flag: batchType == 0})
+                    
                 else:
                     batchType = 0
-                    _, total_loss, losses, summary_str, debug = sess.run([train_op, loss, loss_dict, summary_op, global_pred_dict], feed_dict = {training_flag: batchType == 0})
-
-                    # for batchIndex in xrange(options.batchSize):
-                    #     print(losses)
-                    #     print(debug['plane'][batchIndex])
-                    #     cv2.imwrite('test/image_' + str(batchIndex) + '.png', ((img[batchIndex] + 0.5) * 255).astype(np.uint8))
-                    #     cv2.imwrite('test/segmentation_' + str(batchIndex) + '.png', drawSegmentationImage(debug['segmentation'][batchIndex]))
-                    #     continue
-                    # exit(1)
-                    
+                    _, total_loss, losses, summary_str, gt_dict = sess.run([train_op, loss, loss_dict, summary_op, global_pred_dict], feed_dict = {training_flag: batchType == 0})
                     pass
 
-                    
+                # for batchIndex in xrange(options.batchSize):
+                #     if np.isnan(global_gt['plane'][batchIndex]).any():
+                #         #print(losses)
+                #         #print(global_gt['plane'][batchIndex])
+                #         print(global_gt['num_planes'][batchIndex])
+                #         for planeIndex in xrange(global_gt['num_planes'][batchIndex]):
+                #             cv2.imwrite('test/mask_' + str(planeIndex) + '.png', drawMaskImage(global_gt['segmentation'][batchIndex, :, :, planeIndex]))
+                #             continue
+                #         np.save('temp/plane.npy', global_gt['plane'][batchIndex])                        
+                #         np.save('temp/depth.npy', global_gt['depth'][batchIndex])
+                #         np.save('temp/segmentation.npy', global_gt['segmentation'][batchIndex])
+                #         np.save('temp/info.npy', global_gt['info'][batchIndex])
+                #         np.save('temp/num_planes.npy', global_gt['num_planes'][batchIndex])
+                #         planes, segmentation, numPlanes = removeSmallSegments(global_gt['plane'][batchIndex], np.zeros((HEIGHT, WIDTH, 3)), global_gt['depth'][batchIndex].squeeze(), np.zeros((HEIGHT, WIDTH, 3)), np.argmax(global_gt['segmentation'][batchIndex], axis=-1), global_gt['semantics'][batchIndex], global_gt['info'][batchIndex], global_gt['num_planes'][batchIndex])
+                #         print(planes)
+                #         exit(1)
+                #         pass
+                #     continue
+                #writers[batchType].add_summary(summary_str, bno)
                 ema[batchType] = ema[batchType] * MOVING_AVERAGE_DECAY + total_loss
                 ema_acc[batchType] = ema_acc[batchType] * MOVING_AVERAGE_DECAY + 1
 
@@ -641,13 +405,13 @@ def test(options):
     elif options.dataset == 'matterport':
         filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
-        filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_scannet_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_scannet_train.tfrecords'], num_epochs=1)
         pass
     img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
 
     training_flag = tf.constant(False, tf.bool)
 
-    global_pred_dict, local_pred_dict, deep_pred_dicts = build_graph(img_inp, img_inp, training_flag, options)
+    global_pred_dict, local_pred_dict, deep_pred_dicts = build_graph(img_inp, img_inp, global_gt_dict, training_flag, options)
     var_to_restore = tf.global_variables()
 
     loss, loss_dict, debug_dict = build_loss(img_inp, img_inp, global_pred_dict, deep_pred_dicts, global_gt_dict, global_gt_dict, training_flag, options)
@@ -706,7 +470,7 @@ def test(options):
                 # cv2.imwrite(options.test_dir + '/depth_gt.png', drawDepthImage(debug['depth_gt'][0].squeeze()))
                 # exit(1)
 
-                if 'pixelwise' in options.suffix:
+                if 'pixelwise' in options.suffix or True:
                     image = ((img[0] + 0.5) * 255).astype(np.uint8)
                     gt_d = global_gt['depth'].squeeze()
                     pred_d = global_pred['non_plane_depth'].squeeze()
@@ -1393,13 +1157,10 @@ def parse_args():
                         default=0, type=int)
     parser.add_argument('--diverseLoss', dest='diverseLoss',
                         help='use diverse loss: [0, 1]',
-                        default=0, type=int)
+                        default=1, type=int)
     parser.add_argument('--labelLoss', dest='labelLoss',
                         help='use label loss: [0, 1]',
-                        default=1, type=int)
-    parser.add_argument('--planeLoss', dest='planeLoss',
-                        help='use plane loss: [0, 1]',
-                        default=1, type=int)        
+                        default=1, type=int)    
     parser.add_argument('--deepSupervision', dest='deepSupervision',
                         help='deep supervision level: [0, 1, 2]',
                         default=1, type=int)
@@ -1412,12 +1173,9 @@ def parse_args():
     parser.add_argument('--crf', dest='crf',
                         help='the number of CRF iterations',
                         default=0, type=int)
-    parser.add_argument('--crfrnn', dest='crfrnn',
-                        help='the number of CRF (as RNN) iterations',
-                        default=0, type=int)    
     parser.add_argument('--backwardLossWeight', dest='backwardLossWeight',
                         help='backward matching loss',
-                        default=0, type=float)
+                        default=0.5, type=float)
     parser.add_argument('--predictBoundary', dest='predictBoundary',
                         help='whether predict boundary or not: [0, 1]',
                         default=0, type=int)
@@ -1430,9 +1188,9 @@ def parse_args():
     parser.add_argument('--predictConfidence', dest='predictConfidence',
                         help='whether predict plane confidence or not: [0, 1]',
                         default=0, type=int)
-    parser.add_argument('--predictPixelwise', dest='predictPixelwise',
-                        help='whether predict pixelwise depth or not: [0, 1]',
-                        default=1, type=int)    
+    parser.add_argument('--predictPlanes', dest='predictPlanes',
+                        help='whether predict planes or not: [0, 1]',
+                        default=0, type=int)    
     parser.add_argument('--fineTuningCheckpoint', dest='fineTuningCheckpoint',
                         help='specify the model for fine-tuning',
                         default='../PlaneSetGeneration/dump_planenet_diverse/train_planenet_diverse.ckpt', type=str)
@@ -1468,51 +1226,15 @@ def parse_args():
         pass
     args.keyname += '_hybrid' + args.hybrid
     
-    if args.boundaryLoss != 1:
-        args.keyname += '_bl' + str(args.boundaryLoss)
-        pass
-    if args.diverseLoss == 0:
-        args.keyname += '_dl0'
-        pass
-    if args.labelLoss == 1:
-        args.keyname += '_ll1'
-        pass    
-    if args.planeLoss == 0:
-        args.keyname += '_pl0'
-        pass
     if args.deepSupervision != 1:
         args.keyname += '_ds' + str(args.deepSupervision)
         pass
-    if args.crf > 0:
-        args.keyname += '_crf' + str(args.crf)
-        pass
-    if args.crfrnn != 0:
-        args.keyname += '_crfrnn' + str(args.crfrnn)
-        pass
-    if args.backwardLossWeight > 0:
-        args.keyname += '_bw' + str(args.backwardLossWeight)
-        pass
-    if args.predictBoundary == 1:
-        args.keyname += '_pb'
-        pass
-    if args.predictConfidence == 1:
-        args.keyname += '_pc'
-        pass        
-    # if args.predictLocal == 1:
-    #     args.keyname += '_pl'
-    #     pass
-    if args.predictPixelwise == 1:
+    if args.predictPlanes == 1:
         args.keyname += '_pp'
         pass
     if args.predictSemantics == 1:
         args.keyname += '_ps'
         pass    
-    if args.sameMatching == 0:
-        args.keyname += '_sm0'
-        pass
-    if args.anchorPlanes == 1:
-        args.keyname += '_ap1'
-        pass
 
     #args.predictSemantics = 0
     #args.predictBoundary = 0

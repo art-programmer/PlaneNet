@@ -61,6 +61,8 @@ class RecordReaderAll():
         normal = features['normal']
         normal = tf.reshape(normal, [HEIGHT, WIDTH, 3])
         
+        normal = tf.nn.l2_normalize(normal, dim=2)
+        
         #normal = tf.stack([normal[:, :, 1], normal[:, :, 0], normal[:, :, 2]], axis=2)
 
 

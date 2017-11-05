@@ -128,27 +128,34 @@ def writeRecordFile(split, dataset):
                         exit(1)                        
                         pass
 
+                    
+                    #if _ * batchSize + batchIndex < 29:
+                    #continue
+                    
+                    
                     pred_s = np.concatenate([pred_dict['segmentation'][batchIndex], pred_dict['non_plane_mask'][batchIndex]], axis=-1)
                     #pred_s[:, :, numOutputPlanes] -= 0.1
                     pred_s = one_hot(np.argmax(pred_s, axis=-1), numOutputPlanes + 1)
-                    planes, segmentation, numPlanes = mergePlanes(planes, gt_s, global_gt['depth'][batchIndex].squeeze(), global_gt['info'][batchIndex], pred_s)
-                    segmentation = segmentation.astype(np.uint8)
+                    #planes, segmentation, numPlanes = filterPlanes(planes, gt_s, global_gt['depth'][batchIndex].squeeze(), global_gt['info'][batchIndex], pred_s)
+                    planes, segmentation, numPlanes = filterPlanes(planes, gt_s, global_gt['depth'][batchIndex].squeeze(), global_gt['info'][batchIndex])
 
-                    # cv2.imwrite('test/segmentation_' + str(batchIndex) + '_ori.png', drawSegmentationImage(gt_s, blackIndex=20))
-                    # cv2.imwrite('test/segmentation_' + str(batchIndex) + '_pred.png', drawSegmentationImage(pred_s, blackIndex=20))
-                    # cv2.imwrite('test/segmentation_' + str(batchIndex) + '_new.png', drawSegmentationImage(segmentation, blackIndex=20))
+
+                    #cv2.imwrite('test/segmentation_' + str(batchIndex) + '_ori.png', drawSegmentationImage(gt_s, blackIndex=20))
+                    #cv2.imwrite('test/segmentation_' + str(batchIndex) + '_pred.png', drawSegmentationImage(pred_s, blackIndex=20))
+                    #cv2.imwrite('test/segmentation_' + str(batchIndex) + '_new.png', drawSegmentationImage(segmentation, blackIndex=20))
 
                     # plane_depths = calcPlaneDepths(planes, WIDTH, HEIGHT, global_gt['info'][batchIndex])
                     # all_depths = np.concatenate([plane_depths, global_gt['depth'][batchIndex]], axis=2)
                     # depth = np.sum(all_depths * one_hot(segmentation.astype(np.int32), numOutputPlanes + 1), axis=2)
                     # cv2.imwrite('test/segmentation_' + str(batchIndex) + '_depth.png', drawDepthImage(depth))
-                    
+
+
                     # if batchIndex == 6:
                     #     print(planes)
                     #     exit(1)
                     #continue
 
-                    if numPlanes <= 1:
+                    if numPlanes == 0:
                         continue
 
                     #print(global_gt['num_planes'][batchIndex], numPlanes)
@@ -192,5 +199,5 @@ if __name__=='__main__':
     # writeRecordFile('train', 'matterport')    
     #writeRecordFile('train', 'scannet')
     #writeRecordFile('train', 'nyu_rgbd')
-    writeRecordFile('train', 'scannet')    
+    writeRecordFile('train', 'scannet')
 
