@@ -2770,8 +2770,8 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
     vanishingPoints[:, 0] *= width / info[16]
     vanishingPoints[:, 1] *= height / info[17]
 
-    print(dominantNormals)
-    print(vanishingPoints)
+    #print(dominantNormals)
+    #print(vanishingPoints)
     #us = np.tile(np.expand_dims(np.arange(width), 0), [height, 1])
     #vs = np.tile(np.expand_dims(np.arange(height), -1), [1, width])
     indices = np.arange(width * height, dtype=np.int32)
