@@ -1285,6 +1285,7 @@ def getPrediction(options):
             predDepths = []
             predPlanes = []
             predSegmentations = []
+            predSemantics = []            
             predNonPlaneDepths = []
             predNonPlaneNormals = []            
             predNonPlaneMasks = []
@@ -1325,7 +1326,8 @@ def getPrediction(options):
 
                 segmentation = np.argmax(all_segmentations, 2)
                 pred_d = all_depths.reshape(-1, options.numOutputPlanes + 1)[np.arange(WIDTH * HEIGHT), segmentation.reshape(-1)].reshape(HEIGHT, WIDTH)
-                        
+
+                predSemantics.append(np.argmax(global_pred['semantics'][0], axis=-1))
                 
                 predDepths.append(pred_d)
                 predPlanes.append(pred_p)
@@ -1334,6 +1336,7 @@ def getPrediction(options):
                 continue
             pred_dict['plane'] = np.array(predPlanes)
             pred_dict['segmentation'] = np.array(predSegmentations)
+            pred_dict['semantics'] = np.array(predSemantics)            
             pred_dict['depth'] = np.array(predDepths)
             pred_dict['np_depth'] = np.array(predNonPlaneDepths)
             pred_dict['np_normal'] = np.array(predNonPlaneNormals)
