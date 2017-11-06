@@ -33,7 +33,7 @@ ALL_TITLES = ['PlaneNet', 'Oracle NYU toolbox', 'NYU toolbox', 'Oracle Manhattan
 #ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_crfrnn10_sm0', ''), ('bl0_dl0_ll1_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', '')]
 
 #ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', '', 0), ('bl0_dl0_ll1_pb_pp_sm0', 'crfrnn', 0), ('bl0_dl0_crfrnn10_sm0', '')]
-ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', '', 0), ('bl0_dl0_ll1_bw0.5_pb_pp', 'pixelwise_4', 0), ('bl0_dl0_crfrnn-10_sm0', '')]
+ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', '', 0, 2), ('bl0_dl0_ll1_bw0.5_pb_pp', '', 0, 2)]
 
 
 #ALL_METHODS = [('ll1_pb_pp', 'pixelwise_1'), ('crf1_pb_pp', 'pixelwise_2'), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', 'pixelwise_3'), ('ll1_bw0.5_pb_pp_sm0', 'pixelwise_4')]
@@ -117,15 +117,7 @@ def evaluatePlanes(options):
         os.system("mkdir -p %s"%options.test_dir)
         pass
 
-    if options.useCache == 1 and os.path.exists(options.test_dir + '/results.npy'):
-        results = np.load(options.test_dir + '/results.npy')
-        results = results[()]
-    else:
-        results = getResults(options)
-        if options.useCache != -2:
-            np.save(options.test_dir + '/results.npy', results)
-            pass
-        pass
+    results = getResults(options)
     
     gt_dict = results['gt']
     predictions = results['pred']
@@ -187,6 +179,8 @@ def evaluatePlanes(options):
     #post processing
     for method_index, method in enumerate(options.methods):
         if method[1] == '':
+            continue
+        if len(method) < 4 or method[3] == 0:
             continue
         if len(method) == 3:
             pred_dict = predictions[method[2]]
@@ -499,9 +493,8 @@ def evaluatePlanes(options):
                 predictions.append(new_pred_dict)
                 pass
             pass
+        np.save(options.result_filename, {'gt': gt_dict, 'pred': predictions})        
         continue
-
-    np.save(options.test_dir + '/results.npy', {'gt': gt_dict, 'pred': predictions})
     
     #exit(1)
     
@@ -513,8 +506,6 @@ def evaluatePlanes(options):
     # cv2.imwrite(options.test_dir + '/test_depth.png', drawDepthImage(pred_d))
     # cv2.imwrite(options.test_dir + '/test_segmentation.png', drawSegmentationImage(pred_s))
     # exit(1)
-
-
     
     
     pixel_metric_curves = []
@@ -594,8 +585,8 @@ def gridSearch(options):
     #writeHTML(options)
     #exit(1)
 
-    if os.path.exists(options.test_dir + '/results.npy'):
-        results = np.load(options.test_dir + '/results.npy')
+    if os.path.exists(options.result_filename):
+        results = np.load(options.result_filename)
         results = results[()]
     else:
         assert(False)
@@ -899,13 +890,13 @@ def evaluateDepthPrediction(options):
         os.system("mkdir -p %s"%options.test_dir)
         pass
 
-    if options.useCache == 1 and os.path.exists(options.test_dir + '/results.npy'):
-        results = np.load(options.test_dir + '/results.npy')
+    if options.useCache == 1 and os.path.exists(options.result_filename):
+        results = np.load(options.result_filename)
         results = results[()]
     else:
         results = getResults(options)
         if options.useCache != -2:
-            np.save(options.test_dir + '/results.npy', results)
+            np.save(options.result_filename, results)
             pass
         pass
     
@@ -1170,20 +1161,31 @@ def getResults(options):
     checkpoint_prefix = options.rootFolder + '/checkpoint/planenet_'
 
     methods = options.methods
+    predictions = []
 
-    if options.useCache == 0 and os.path.exists(options.test_dir + '/results.npy'):
-        results = np.load(options.test_dir + '/results.npy')
-        results = results[()]
-        gt_dict = results['gt']
+    if os.path.exists(options.result_filename):
+        if options.useCache == 1:
+            results = np.load(options.result_filename)
+            results = results[()]
+            return results
+        elif options.useCache == 2:
+            results = np.load(options.result_filename)
+            results = results[()]
+            gt_dict = results['gt']
+            predictions = results['pred']
+        else:
+            gt_dict = getGroundTruth(options)
+            pass
     else:
         gt_dict = getGroundTruth(options)
         pass
     
     
-    predictions = []
-
 
     for method_index, method in enumerate(methods):
+        if len(method) < 4 or method[3] < 2:
+            continue
+        
         if 'ds0' not in method[0]:
             options.deepSupervisionLayers = ['res4b22_relu', ]
         else:
@@ -1225,10 +1227,20 @@ def getResults(options):
         #     cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_pred_' + str(method_index) + '.png', drawSegmentationImage())
         #     continue
 
-        predictions.append(pred_dict)
+        if method_index < len(predictions):
+            predictions[method_index] = pred_dict
+        else:
+            predictions.append(pred_dict)
+            pass
         continue
     #np.save(options.test_dir + '/curves.npy', curves)
     results = {'gt': gt_dict, 'pred': predictions}
+
+    if options.useCache != -1:
+        np.save(options.result_filename, results)
+        pass
+    pass
+    
     return results
 
 def getPrediction(options):
@@ -1543,7 +1555,7 @@ if __name__=='__main__':
 
     args.titles = [ALL_TITLES[int(method)] for method in args.methods]
     args.methods = [ALL_METHODS[int(method)] for method in args.methods]
-    
+    args.result_filename = args.test_dir + '/results_' + str(args.startIndex) + '_' + str(args.startIndex + args.numImages) + '.npy'
     print(args.titles)
     
     if args.task == 'plane':
