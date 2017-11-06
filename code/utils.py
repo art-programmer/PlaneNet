@@ -2624,6 +2624,19 @@ def getSegmentationsGraphCut(planes, image, depth, normal, semantics, info, para
     #print(pairwise_matrix)
     #refined_segmentation = inference_ogm(unaries * 5, -pairwise_matrix, edges, return_energy=False, alg='alphaexp')
     refined_segmentation = refined_segmentation.reshape([height, width])
+
+    if 'semantics' in parameters and parameters['semantics']:
+        for semanticIndex in xrange(semantics.max() + 1):
+            mask = semantics == semanticIndex
+            segmentInds = refined_segmentation[mask]
+            uniqueSegments, counts = np.unique(segmentInds, return_counts)
+            for index, count in enumerate(counts):
+                if count > segmentInds.shape[0] * 0.9:
+                    refined_segmentation[mask] = uniqueSegments[index]
+                    pass
+                continue
+            continue
+        pass
     
     return refined_segmentation
 
@@ -2689,10 +2702,11 @@ def readProposalInfo(info, proposals):
 
 
 def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageIndex=1, parameters={}):
-    #import sklearn.cluster
-    #meanshift = sklearn.cluster.MeanShift(0.05)
-    #import sklearn.neighbors    
-    #meanshift = sklearn.neighbors.KernelDensity(0.05)
+    if 'meanshift' in parameters and parameters['meanshift'] > 0:
+        import sklearn.cluster
+        meanshift = sklearn.cluster.MeanShift(parameters['meanshift'])
+        pass
+
     
     height = depth.shape[0]
     width = depth.shape[1]
@@ -2776,9 +2790,15 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
     for dominantNormal in dominantNormals:
         offsets = np.tensordot(valid_points, dominantNormal, axes=([1], [0]))
         #offsets = np.sort(offsets)
-        
-        #offsets = np.expand_dims(offsets, -1)
-        #clusters = meanshift.fit_predict(np.expand_dims(offsets, -1))
+
+        if 'meanshift' in parameters and parameters['meanshift'] > 0:
+            sampleInds = np.arange(offsets.shape[0])
+            np.random.shuffle(sampleInds)
+            meanshift.fit(np.expand_dims(offsets[sampleInds[:int(offsets.shape[0] * 0.02)]], -1))
+            for offset in meanshift.cluster_centers_:
+                planes.append(dominantNormal * offset)
+                continue
+            
         #clusters = meanshift.fit_predict(offsets)
         #print(clusters.score_samples(offsets))
         #print(offsets)
@@ -3114,8 +3134,11 @@ def calcVanishingPoints(allLines, numVPs):
     return VPs, VPLines, lines
     
 def fitPlanesPiecewise(image, depth, normal, info, numOutputPlanes=20, imageIndex=1, parameters={}):
-    #import sklearn.cluster
-    #meanshift = sklearn.cluster.MeanShift(0.05)
+    if 'meanshift' in parameters and parameters['meanshift'] > 0:
+        import sklearn.cluster
+        meanshift = sklearn.cluster.MeanShift(parameters['meanshift'])
+        pass
+    
     #import sklearn.neighbors    
     #meanshift = sklearn.neighbors.KernelDensity(0.05)
     from pylsd import lsd
@@ -3195,41 +3218,32 @@ def fitPlanesPiecewise(image, depth, normal, info, numOutputPlanes=20, imageInde
         if np.linalg.norm(dominantNormal) < 1e-4:
             continue
         offsets = np.tensordot(valid_points, dominantNormal, axes=([1], [0]))
-        #offsets = np.sort(offsets)
-        
-        #offsets = np.expand_dims(offsets, -1)
-        #clusters = meanshift.fit_predict(np.expand_dims(offsets, -1))
-        #clusters = meanshift.fit_predict(offsets)
-        #print(clusters.score_samples(offsets))
-        #print(offsets)
-        #print(np.argmax(offsets))
-        #print(clusters.score_samples(np.array([[offsets.max()]])))
-        #print(clusters.sample(10))
-        #exit(1)
-        # for clusterIndex in xrange(clusters.max()):
-        #     clusterMask = clusters == clusterIndex
-        #     print(clusterMask.sum())
-        #     if clusterMask.sum() < planeHypothesisAreaThreshold:
-        #         continue
-        #     planeD = offsets[clusterMask].mean()
-        #     planes.append(dominantNormal * planeD)
-        #     continue
-        
-        offset = offsets.min()
-        maxOffset = offsets.max()
-        while offset < maxOffset:
-            planeMask = np.logical_and(offsets >= offset, offsets < offset + offsetGap)
-            segmentOffsets = offsets[np.logical_and(offsets >= offset, offsets < offset + offsetGap)]
-            if segmentOffsets.shape[0] < planeHypothesisAreaThreshold:
-                offset += offsetGap
-                continue
-            planeD = segmentOffsets.mean()
-            planes.append(dominantNormal * planeD)
-            offset = planeD + offsetGap
 
-            #print(planeD, segmentOffsets.shape[0])            
-            #cv2.imwrite('test/mask_' + str(len(planes) - 1) + '.png', drawMaskImage(planeMask.reshape((height, width))))
-            continue
+        if 'meanshift' in parameters and parameters['meanshift'] > 0:
+            sampleInds = np.arange(offsets.shape[0])
+            np.random.shuffle(sampleInds)
+            meanshift.fit(np.expand_dims(offsets[sampleInds[:int(offsets.shape[0] * 0.02)]], -1))
+            for offset in meanshift.cluster_centers_:
+                planes.append(dominantNormal * offset)
+                continue
+        else:
+            offset = offsets.min()
+            maxOffset = offsets.max()
+            while offset < maxOffset:
+                planeMask = np.logical_and(offsets >= offset, offsets < offset + offsetGap)
+                segmentOffsets = offsets[np.logical_and(offsets >= offset, offsets < offset + offsetGap)]
+                if segmentOffsets.shape[0] < planeHypothesisAreaThreshold:
+                    offset += offsetGap
+                    continue
+                planeD = segmentOffsets.mean()
+                planes.append(dominantNormal * planeD)
+                offset = planeD + offsetGap
+
+                #print(planeD, segmentOffsets.shape[0])            
+                #cv2.imwrite('test/mask_' + str(len(planes) - 1) + '.png', drawMaskImage(planeMask.reshape((height, width))))
+                continue
+            pass
+        
 
         vpPlaneIndices.append(np.arange(planeIndexOffset, len(planes)))
         planeIndexOffset = len(planes)
