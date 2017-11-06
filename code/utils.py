@@ -1216,7 +1216,12 @@ def fitPlanesNYU(image, depth, normal, semantics, info, numOutputPlanes=20, loca
     else:
         distanceThreshold = 0.05
         pass
-
+    if 'local' in parameters:
+        local = parameters['local']
+    else:
+        local = 0.2
+        pass
+    
     for y in xrange(5, height, 10):
         for x in xrange(5, width, 10):
             if invalidDepthMask[y][x]:

@@ -33,7 +33,7 @@ ALL_TITLES = ['PlaneNet', 'Oracle NYU toolbox', 'NYU toolbox', 'Oracle Manhattan
 #ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_crfrnn10_sm0', ''), ('bl0_dl0_ll1_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', '')]
 
 #ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', '', 0), ('bl0_dl0_ll1_pb_pp_sm0', 'crfrnn', 0), ('bl0_dl0_crfrnn10_sm0', '')]
-ALL_METHODS = [('planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0', '', 0, 2), ('pixelwise_hybrid3_ps', '', 0, 2)]
+ALL_METHODS = [('planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0', '', 0, 2), ('pixelwise_hybrid3_ps', 'pixelwise_2', 0, 2)]
 
 
 #ALL_METHODS = [('ll1_pb_pp', 'pixelwise_1'), ('crf1_pb_pp', 'pixelwise_2'), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', 'pixelwise_3'), ('ll1_bw0.5_pb_pp_sm0', 'pixelwise_4')]
@@ -654,10 +654,11 @@ def gridSearch(options):
             bestScore = 0
             configurationIndex = 0
             for distanceCostThreshold in [0.1, 0.2]:
-                for smoothnessWeight in [30, 50, 20]:
+                for smoothnessWeight in [0.02, 0.1, 0.05]:
                     parameters = {'distanceCostThreshold': distanceCostThreshold, 'smoothnessWeight': smoothnessWeight}
                     score = 0
-                    for image_index in xrange(options.numImages):                    
+                    for image_index in xrange(options.numImages):
+                        #cv2.imwrite('test/normal.png', drawNormalImage(gt_dict['normal'][image_index]))
                         if '_2' in method[1]:
                             pred_p, pred_s = fitPlanesNYU(gt_dict['image'][image_index], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['semantics'][image_index], gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
                         else:
@@ -680,7 +681,7 @@ def gridSearch(options):
                         score += accuracy
 
                         #cv2.imwrite(options.test_dir + '/' + str(image_index) + '_depth_pred_' + str(method_index) + '.png', drawDepthImage(pred_d))            
-                        #cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_pred_' + str(method_index) + '.png', drawSegmentationImage(pred_s, blackIndex=options.numOutputPlanes))
+                        cv2.imwrite('test/segmentation_pred_' + str(image_index) + '.png', drawSegmentationImage(pred_s, blackIndex=options.numOutputPlanes))
                         #exit(1)
                         continue
                     score /= options.numImages
@@ -1456,6 +1457,7 @@ def getGroundTruth(options):
                 if global_gt['info'][0][19] == 3:
                     gt_n = calcNormal(gt_d, global_gt['info'][0])
                     #cv2.imwrite('test/normal.png', drawNormalImage(gt_n))
+                    #exit(1)
                 else:
                     gt_n = global_gt['normal'][0]
                     pass    
@@ -1559,7 +1561,7 @@ if __name__=='__main__':
 
     args.titles = [ALL_TITLES[int(method)] for method in args.methods]
     args.methods = [ALL_METHODS[int(method)] for method in args.methods]
-    args.result_filename = args.test_dir + '/results_' + str(args.startIndex) + '_' + str(args.startIndex + args.numImages) + '.npy'
+    args.result_filename = args.test_dir + '/results_' + str(args.startIndex) + '.npy'
     print(args.titles)
     
     if args.task == 'plane':
