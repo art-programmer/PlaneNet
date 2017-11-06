@@ -625,12 +625,6 @@ def gridSearch(options):
     titles = options.titles
 
 
-
-            
-    #predictions[2] = predictions[3]
-
-
-            
     
     for image_index in xrange(options.visualizeImages):
         cv2.imwrite(options.test_dir + '/' + str(image_index) + '_image.png', gt_dict['image'][image_index])
@@ -638,7 +632,6 @@ def gridSearch(options):
         cv2.imwrite(options.test_dir + '/' + str(image_index) + '_normal_gt.png', drawNormalImage(gt_dict['normal'][image_index]))        
         cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_gt.png', drawSegmentationImage(np.concatenate([gt_dict['segmentation'][image_index], 1 - np.expand_dims(gt_dict['plane_mask'][image_index], -1)], axis=2), blackIndex=options.numOutputPlanes))
         cv2.imwrite(options.test_dir + '/' + str(image_index) + '_semantics_gt.png', drawSegmentationImage(gt_dict['semantics'][image_index], blackIndex=0))
-
         
         plane_depths = calcPlaneDepths(gt_dict['plane'][image_index], WIDTH, HEIGHT, gt_dict['info'][image_index])
         all_depths = np.concatenate([plane_depths, np.expand_dims(gt_dict['depth'][image_index], -1)], axis=2)
@@ -665,103 +658,149 @@ def gridSearch(options):
         else:
             pred_dict = predictions[method_index]
             pass
-        
 
-        if 'pixelwise_4' in method[1] or 'pixelwise_5' in method[1]:
-            parameterConfigurations = [{'dominantLineThreshold': 3.5, 'distanceCostThreshold': 0.05, 'numProposals': 3, 'smoothnessWeight': 30},
-                                       {'dominantLineThreshold': 4, 'distanceCostThreshold': 0.05, 'numProposals': 3, 'smoothnessWeight': 30},
-                                       {'dominantLineThreshold': 3, 'distanceCostThreshold': 0.05, 'numProposals': 3, 'smoothnessWeight': 30},
-                                       {'dominantLineThreshold': 3.5, 'distanceCostThreshold': 0.05, 'numProposals': 5, 'smoothnessWeight': 30},
-                                       {'dominantLineThreshold': 3.5, 'distanceCostThreshold': 0.05, 'numProposals': 3, 'smoothnessWeight': 20},
-                                       {'dominantLineThreshold': 3.5, 'distanceCostThreshold': 0.03, 'numProposals': 3, 'smoothnessWeight': 30}]
-            
+        if 'pixelwise_2' in method[1] or 'pixelwise_3' in method[1]:
             bestScore = 0
-            for parameters in parameterConfigurations:
-                score = 0
-                for image_index in xrange(options.numImages):
-                    if '_4' in method[1]:
-                        pred_p, pred_s = fitPlanesManhattan(gt_dict['image'][image_index], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
-                    else:
-                        pred_d = pred_dict['np_depth'][image_index].squeeze()                
-                        pred_n = pred_dict['np_normal'][image_index].squeeze()                
-                        pred_p, pred_s = fitPlanesManhattan(gt_dict['image'][image_index], pred_d, pred_n, gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
-                        pass
-
-                    predNumPlanes = pred_p.shape[0]
-                    gtDepths = calcPlaneDepths(gt_dict['plane'][image_index], WIDTH, HEIGHT, gt_dict['info'][image_index])
-                    planeDepths = calcPlaneDepths(pred_p, WIDTH, HEIGHT, gt_dict['info'][image_index])
-                    pixelStatistics, planeStatistics = evaluatePlanePrediction(planeDepths, pred_s, predNumPlanes, gtDepths, gt_dict['segmentation'][image_index], gt_dict['num_planes'][image_index])
-                    #print(pixelStatistics)
-                    #exit(1)
-                    #planeStatistics = np.array(planeStatistics)[1]
-                    #accuracy = (planeStatistics[3:8, 0].astype(np.float32) / np.maximum(planeStatistics[3:8, 1], 1e-4)).mean()
-                    
-                    pixelStatistics = np.array(pixelStatistics)[1]
-                    accuracy = pixelStatistics[3:8].mean()
-                    score += accuracy
+            configurationIndex = 0
+            for distanceCostThreshold in [0.1, 0.2]:
+                for smoothnessWeight in [30, 50, 20]:
+                    parameters = {'distanceCostThreshold': distanceCostThreshold, 'smoothnessWeight': smoothnessWeight}
+                    score = 0
+                    for image_index in xrange(options.numImages):                    
+                        if '_2' in method[1]:
+                            pred_p, pred_s = fitPlanesNYU(gt_dict['image'][image_index], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['semantics'][image_index], gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
+                        else:
+                            pred_d = pred_dict['np_depth'][image_index].squeeze()
+                            pred_n = pred_dict['np_normal'][image_index].squeeze()
+                            pred_p, pred_s = fitPlanesNYU(gt_dict['image'][image_index], pred_d, pred_n, pred_dict['semantics'][image_index], gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
+                            pass
                         
-                    #cv2.imwrite(options.test_dir + '/' + str(image_index) + '_depth_pred_' + str(method_index) + '.png', drawDepthImage(pred_d))            
-                    #cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_pred_' + str(method_index) + '.png', drawSegmentationImage(pred_s, blackIndex=options.numOutputPlanes))
+                        predNumPlanes = pred_p.shape[0]
+                        gtDepths = calcPlaneDepths(gt_dict['plane'][image_index], WIDTH, HEIGHT, gt_dict['info'][image_index])
+                        planeDepths = calcPlaneDepths(pred_p, WIDTH, HEIGHT, gt_dict['info'][image_index])
+                        pixelStatistics, planeStatistics = evaluatePlanePrediction(planeDepths, pred_s, predNumPlanes, gtDepths, gt_dict['segmentation'][image_index], gt_dict['num_planes'][image_index])
+                        #print(pixelStatistics)
+                        #exit(1)
+                        #planeStatistics = np.array(planeStatistics)[1]
+                        #accuracy = (planeStatistics[3:8, 0].astype(np.float32) / np.maximum(planeStatistics[3:8, 1], 1e-4)).mean()
+
+                        pixelStatistics = np.array(pixelStatistics)[1]
+                        accuracy = pixelStatistics[3:8].mean()
+                        score += accuracy
+
+                        #cv2.imwrite(options.test_dir + '/' + str(image_index) + '_depth_pred_' + str(method_index) + '.png', drawDepthImage(pred_d))            
+                        #cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_pred_' + str(method_index) + '.png', drawSegmentationImage(pred_s, blackIndex=options.numOutputPlanes))
+                        #exit(1)
+                        continue
+                    score /= options.numImages
+                    print(score, parameters)
+                    configurationIndex += 1                    
                     #exit(1)
+                    if score > bestScore:
+                        bestScore = score
+                        bestParameters = parameters
+                        pass
                     continue
-                score /= options.numImages
-                print(score, parameters)
-                #exit(1)
-                if score > bestScore:
-                    bestScore = score
-                    bestParameters = parameters
-                    pass
-                continue                
+                continue
+            print(bestScore)
+            print(bestParameters)
+            exit(1)
+                    
+        if 'pixelwise_4' in method[1] or 'pixelwise_5' in method[1]:
+            bestScore = 0
+            configurationIndex = 0
+            for distanceCostThreshold in [0.1, 0.2]:
+                for smoothnessWeight in [30, 50, 20]:
+                    parameters = {'distanceCostThreshold': distanceCostThreshold, 'smoothnessWeight': smoothnessWeight}
+
+                    score = 0
+                    for image_index in xrange(options.numImages):
+                        if '_4' in method[1]:
+                            pred_p, pred_s = fitPlanesManhattan(gt_dict['image'][image_index], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
+                        else:
+                            pred_d = pred_dict['np_depth'][image_index].squeeze()
+                            pred_n = pred_dict['np_normal'][image_index].squeeze()
+                            pred_p, pred_s = fitPlanesManhattan(gt_dict['image'][image_index], pred_d, pred_n, gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
+                            pass
+
+                        predNumPlanes = pred_p.shape[0]
+                        gtDepths = calcPlaneDepths(gt_dict['plane'][image_index], WIDTH, HEIGHT, gt_dict['info'][image_index])
+                        planeDepths = calcPlaneDepths(pred_p, WIDTH, HEIGHT, gt_dict['info'][image_index])
+                        pixelStatistics, planeStatistics = evaluatePlanePrediction(planeDepths, pred_s, predNumPlanes, gtDepths, gt_dict['segmentation'][image_index], gt_dict['num_planes'][image_index])
+                        #print(pixelStatistics)
+                        #exit(1)
+                        #planeStatistics = np.array(planeStatistics)[1]
+                        #accuracy = (planeStatistics[3:8, 0].astype(np.float32) / np.maximum(planeStatistics[3:8, 1], 1e-4)).mean()
+
+                        pixelStatistics = np.array(pixelStatistics)[1]
+                        accuracy = pixelStatistics[3:8].mean()
+                        score += accuracy
+
+                        #cv2.imwrite(options.test_dir + '/' + str(image_index) + '_depth_pred_' + str(method_index) + '.png', drawDepthImage(pred_d))            
+                        #cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_pred_' + str(method_index) + '.png', drawSegmentationImage(pred_s, blackIndex=options.numOutputPlanes))
+                        #exit(1)
+                        continue
+                    score /= options.numImages
+                    print(score, parameters)
+                    configurationIndex += 1                    
+                    #exit(1)
+                    if score > bestScore:
+                        bestScore = score
+                        bestParameters = parameters
+                        pass
+                    continue
+                continue
             print(bestScore)
             print(bestParameters)
             exit(1)
 
         if 'pixelwise_6' in method[1] or 'pixelwise_7' in method[1]:
-            parameterConfigurations = [{'distanceCostThreshold': 0.05, 'numProposals': 3, 'smoothnessWeight': 30, 'offsetGap': 0.1},
-                                       {'distanceCostThreshold': 0.05, 'numProposals': 3, 'smoothnessWeight': 50, 'offsetGap': 0.1},
-                                       {'distanceCostThreshold': 0.05, 'numProposals': 3, 'smoothnessWeight': 15, 'offsetGap': 0.1},
-                                       {'distanceCostThreshold': 0.05, 'numProposals': 3, 'normalWeight': 2, 'numProposals': 3, 'smoothnessWeight': 30, 'offsetGap': 0.1},
-                                       {'distanceCostThreshold': 0.05, 'numProposals': 3, 'normalWeight': 0.5, 'smoothnessWeight': 20, 'offsetGap': 0.1},
-                                       {'distanceCostThreshold': 0.1, 'numProposals': 3, 'smoothnessWeight': 30, 'offsetGap': 0.1}]
-            
             bestScore = 0
-            for configurationIndex, parameters in enumerate(parameterConfigurations):
-                score = 0
-                for image_index in xrange(options.numImages):
-                    if '_6' in method[1]:
-                        pred_p, pred_s = fitPlanesPiecewise(gt_dict['image'][image_index], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
-                    else:
-                        pred_d = pred_dict['np_depth'][image_index].squeeze()                
-                        pred_n = pred_dict['np_normal'][image_index].squeeze()                
-                        pred_p, pred_s = fitPlanesPiecewise(gt_dict['image'][image_index], pred_d, pred_n, gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
-                        pass
+            configurationIndex = 0            
+            for distanceCostThreshold in [0.1]:
+                for smoothnessWeight in [300]:
+                    for normalWeight in [0.5, 1, 2]:                    
+                        parameters = {'distanceCostThreshold': distanceCostThreshold, 'smoothnessWeight': smoothnessWeight, 'numProposals': 5, 'normalWeight': normalWeight}
+                    
+                        score = 0
+                        for image_index in xrange(options.numImages):
+                            if '_6' in method[1]:
+                                pred_p, pred_s = fitPlanesPiecewise(gt_dict['image'][image_index], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
+                            else:
+                                pred_d = pred_dict['np_depth'][image_index].squeeze()                
+                                pred_n = pred_dict['np_normal'][image_index].squeeze()                
+                                pred_p, pred_s = fitPlanesPiecewise(gt_dict['image'][image_index], pred_d, pred_n, gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
+                                pass
 
-                    predNumPlanes = pred_p.shape[0]
-                    gtDepths = calcPlaneDepths(gt_dict['plane'][image_index], WIDTH, HEIGHT, gt_dict['info'][image_index])
-                    planeDepths = calcPlaneDepths(pred_p, WIDTH, HEIGHT, gt_dict['info'][image_index])
-                    pixelStatistics, planeStatistics = evaluatePlanePrediction(planeDepths, pred_s, predNumPlanes, gtDepths, gt_dict['segmentation'][image_index], gt_dict['num_planes'][image_index])
-                    #print(pixelStatistics)
-                    #exit(1)
-                    #planeStatistics = np.array(planeStatistics)[1]
-                    #accuracy = (planeStatistics[3:8, 0].astype(np.float32) / np.maximum(planeStatistics[3:8, 1], 1e-4)).mean()
-                    
-                    pixelStatistics = np.array(pixelStatistics)[1]
-                    accuracy = pixelStatistics[3:8].mean()
-                    score += accuracy
-                        
-                    #cv2.imwrite('test/depth_pred_' + str(configurationIndex) + '.png', drawDepthImage(pred_d))
-                    cv2.imwrite('test/segmentation_pred_' + str(configurationIndex) + '.png', drawSegmentationImage(pred_s, blackIndex=options.numOutputPlanes))
-                    #exit(1)
-                    
+                            predNumPlanes = pred_p.shape[0]
+                            gtDepths = calcPlaneDepths(gt_dict['plane'][image_index], WIDTH, HEIGHT, gt_dict['info'][image_index])
+                            planeDepths = calcPlaneDepths(pred_p, WIDTH, HEIGHT, gt_dict['info'][image_index])
+                            pixelStatistics, planeStatistics = evaluatePlanePrediction(planeDepths, pred_s, predNumPlanes, gtDepths, gt_dict['segmentation'][image_index], gt_dict['num_planes'][image_index])
+                            #print(pixelStatistics)
+                            #exit(1)
+                            #planeStatistics = np.array(planeStatistics)[1]
+                            #accuracy = (planeStatistics[3:8, 0].astype(np.float32) / np.maximum(planeStatistics[3:8, 1], 1e-4)).mean()
+
+                            pixelStatistics = np.array(pixelStatistics)[1]
+                            accuracy = pixelStatistics[3:8].mean()
+                            score += accuracy
+
+                            #cv2.imwrite('test/depth_pred_' + str(configurationIndex) + '.png', drawDepthImage(pred_d))
+                            cv2.imwrite('test/segmentation_pred_' + str(image_index) + '.png', drawSegmentationImage(pred_s, blackIndex=options.numOutputPlanes))
+                            #exit(1)
+                            continue
+                        score /= options.numImages
+                        print(score, parameters)
+                        configurationIndex += 1
+
+                        #exit(1)
+                        if score > bestScore:
+                            bestScore = score
+                            bestParameters = parameters
+                            pass
+                        continue
                     continue
-                score /= options.numImages
-                print(score, parameters)
-                #exit(1)
-                if score > bestScore:
-                    bestScore = score
-                    bestParameters = parameters
-                    pass
-                continue                
+                continue
             print(bestScore)
             print(bestParameters)
             exit(1)            

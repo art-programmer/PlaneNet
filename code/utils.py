@@ -1178,7 +1178,7 @@ def fitPlanesSegmentation(depth, segmentation, info, numPlanes=50, numPlanesPerS
     return planes, planeSegmentation, depthPred
 
 
-def fitPlanesNYU(image, depth, normal, semantics, info, numOutputPlanes=20, planeAreaThreshold=500, distanceThreshold=0.05, local=-1):
+def fitPlanesNYU(image, depth, normal, semantics, info, numOutputPlanes=20, local=-1, parameters={}):
     camera = getCameraFromInfo(info)
     width = depth.shape[1]
     height = depth.shape[0]
@@ -1205,6 +1205,18 @@ def fitPlanesNYU(image, depth, normal, semantics, info, numOutputPlanes=20, plan
     planes = []
     planeMasks = []
     invalidDepthMask = depth < 1e-4
+
+    if 'planeAreaThreshold' in parameters:
+        planeAreaThreshold = parameters['planeAreaThreshold']
+    else:
+        planeAreaThreshold = 500
+        pass
+    if 'distanceThreshold' in parameters:
+        distanceThreshold = parameters['distanceThreshold']
+    else:
+        distanceThreshold = 0.05
+        pass
+
     for y in xrange(5, height, 10):
         for x in xrange(5, width, 10):
             if invalidDepthMask[y][x]:
@@ -1265,7 +1277,7 @@ def fitPlanesNYU(image, depth, normal, semantics, info, numOutputPlanes=20, plan
 
     print('number of planes: ' + str(planes.shape[0]))
     
-    planeSegmentation = getSegmentationsGraphCut(planes, image, depth, normal, semantics, info)
+    planeSegmentation = getSegmentationsGraphCut(planes, image, depth, normal, semantics, info, parameters=parameters)
 
     cv2.imwrite('test/segmentation_refined.png', drawSegmentationImage(planeSegmentation))
 
@@ -2389,13 +2401,10 @@ def getSegmentationsTRWS(planes, image, depth, normal, semantics, info, useSeman
     distanceCost = np.concatenate([distanceCost, np.ones((height, width, 1))], axis=2)
     #cv2.imwrite('test/mask.png', drawMaskImage(np.minimum(distanceCost[:, :, 2] /  5, 1)))
     #distanceCost[:, :, numPlanes:numOutputPlanes] = 10000
-    normalCost = 0
-    if info[19] <= 1 or info[19] == 4:
-        normalCostThreshold = 1 - np.cos(np.deg2rad(30))        
-        normalCost = (1 - np.tensordot(normal, planeNormals, axes=([2, 1]))) / normalCostThreshold
-        #normalCost[:, :, numPlanes:] = 10000
-        normalCost = np.concatenate([normalCost, np.ones((height, width, 1))], axis=2)
-        pass
+    normalCostThreshold = 1 - np.cos(np.deg2rad(30))        
+    normalCost = (1 - np.tensordot(normal, planeNormals, axes=([2, 1]))) / normalCostThreshold
+    #normalCost[:, :, numPlanes:] = 10000
+    normalCost = np.concatenate([normalCost, np.ones((height, width, 1))], axis=2)
 
 
     unaryCost = distanceCost
@@ -2477,7 +2486,7 @@ def getSegmentationsTRWS(planes, image, depth, normal, semantics, info, useSeman
     refined_segmentation[refined_segmentation == numPlanes] = numOutputPlanes
     return refined_segmentation
 
-def getSegmentationsGraphCut(planes, image, depth, normal, semantics, info):
+def getSegmentationsGraphCut(planes, image, depth, normal, semantics, info, parameters={}):
 
     height = depth.shape[0]
     width = depth.shape[1]
@@ -2525,19 +2534,21 @@ def getSegmentationsGraphCut(planes, image, depth, normal, semantics, info):
     planesD = np.linalg.norm(planes, axis=1, keepdims=True)
     planeNormals = planes / np.maximum(planesD, 1e-4)
 
-    distanceCostThreshold = 0.05
+    if 'distanceCostThreshold' in parameters:
+        distanceCostThreshold = parameters['distanceCostThreshold']
+    else:
+        distanceCostThreshold = 0.05
+        pass
 
     #distanceCost = 1 - np.exp(-np.abs(np.tensordot(points, planeNormals, axes=([2, 1])) - np.reshape(planesD, [1, 1, -1])) / distanceCostThreshold)
     #distanceCost = np.concatenate([distanceCost, np.ones((height, width, 1)) * (1 - np.exp(-1))], axis=2)
-    distanceCost = np.minimum(np.abs(np.tensordot(points, planeNormals, axes=([2, 1])) - np.reshape(planesD, [1, 1, -1])) / distanceCostThreshold, 1)
+    distanceCost = np.abs(np.tensordot(points, planeNormals, axes=([2, 1])) - np.reshape(planesD, [1, 1, -1])) / distanceCostThreshold
     distanceCost = np.concatenate([distanceCost, np.ones((height, width, 1))], axis=2)
     #cv2.imwrite('test/mask.png', drawMaskImage(np.minimum(distanceCost[:, :, 2] /  5, 1)))
     #distanceCost[:, :, numPlanes:numOutputPlanes] = 10000
 
-    normalCost = 0
-    #if info[19] <= 1 or info[19] == 4:
-    normalCostThreshold = 1 - np.cos(np.deg2rad(30))        
-    normalCost = np.minimum((1 - np.abs(np.tensordot(normal, planeNormals, axes=([2, 1])))) / normalCostThreshold, 1)
+    normalCostThreshold = 1 - np.cos(np.deg2rad(30))
+    normalCost = (1 - np.abs(np.tensordot(normal, planeNormals, axes=([2, 1])))) / normalCostThreshold
     #normalCost[:, :, numPlanes:] = 10000
     normalCost = np.concatenate([normalCost, np.ones((height, width, 1))], axis=2)
 
@@ -2547,9 +2558,7 @@ def getSegmentationsGraphCut(planes, image, depth, normal, semantics, info):
     unaries = -unaryCost.reshape((-1, numPlanes + 1))
 
     cv2.imwrite('test/distance_cost.png', drawSegmentationImage(-distanceCost.reshape((height, width, -1)), unaryCost.shape[-1] - 1))
-    if info[19] <= 1 or info[19] == 4:
-        cv2.imwrite('test/normal_cost.png', drawSegmentationImage(-normalCost.reshape((height, width, -1)), unaryCost.shape[-1] - 1))
-        pass
+    cv2.imwrite('test/normal_cost.png', drawSegmentationImage(-normalCost.reshape((height, width, -1)), unaryCost.shape[-1] - 1))
     cv2.imwrite('test/unary_cost.png', drawSegmentationImage(-unaryCost.reshape((height, width, -1)), blackIndex=unaryCost.shape[-1] - 1))
     
     
@@ -2569,28 +2578,7 @@ def getSegmentationsGraphCut(planes, image, depth, normal, semantics, info):
     nodes = np.arange(height * width).reshape((height, width))
 
     image = image.astype(np.float32)
-    colors = image.reshape((-1, 3))
-    #deltas = [(0, 1), (1, 0), (-1, 1), (1, 1), (1, 1), (1, -1), (-1, 1), (-1, -1)]
-    # intensityDifference = np.zeros((height * width))
-    # for delta in deltas:
-    #     deltaX = delta[0]
-    #     deltaY = delta[1]
-    #     partial_nodes = nodes[max(-deltaY, 0):min(height - deltaY, height), max(-deltaX, 0):min(width - deltaX, width)].reshape(-1)
-    #     intensityDifference[partial_nodes] += np.sum(pow(colors[partial_nodes] - colors[partial_nodes + (deltaY * width + deltaX)], 2), axis=1)
-    #     continue
-
-    # intensityDifference = intensityDifference.reshape((height, width))
-    # intensityDifference[1:height - 1, 1:width - 1] /= 8
-    # intensityDifference[1:height - 1, 0] /= 5
-    # intensityDifference[1:height - 1, width - 1] /= 5
-    # intensityDifference[0, 1:width - 1] /= 5
-    # intensityDifference[height - 1, 1:width - 1] /= 5    
-    # intensityDifference[0][0] /= 3
-    # intensityDifference[0][width - 1] /= 3
-    # intensityDifference[height - 1][0] /= 3
-    # intensityDifference[height - 1][width - 1] /= 3
-    # intensityDifference = intensityDifference.reshape(-1)
-    
+    colors = image.reshape((-1, 3))    
 
     deltas = [(0, 1), (1, 0), (-1, 1), (1, 1)]    
     
@@ -2626,7 +2614,13 @@ def getSegmentationsGraphCut(planes, image, depth, normal, semantics, info):
     edges = np.concatenate(edges, axis=0)
     edges_features = np.concatenate(edges_features, axis=0)
 
-    refined_segmentation = inference_ogm(unaries * 50, edges_features, edges, return_energy=False, alg='alphaexp')    
+    if 'smoothnessWeight' in parameters:
+        smoothnessWeight = parameters['smoothnessWeight']
+    else:
+        smoothnessWeight = 0.02
+        pass
+    
+    refined_segmentation = inference_ogm(unaries, edges_features * smoothnessWeight, edges, return_energy=False, alg='alphaexp')    
     #print(pairwise_matrix)
     #refined_segmentation = inference_ogm(unaries * 5, -pairwise_matrix, edges, return_energy=False, alg='alphaexp')
     refined_segmentation = refined_segmentation.reshape([height, width])
@@ -2777,7 +2771,7 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
     if 'offsetGap' in parameters:
         offsetGap = parameters['offsetGap']
     else:
-        offsetGap = 0.05
+        offsetGap = 0.1
         pass
     for dominantNormal in dominantNormals:
         offsets = np.tensordot(valid_points, dominantNormal, axes=([1], [0]))
@@ -2897,7 +2891,7 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
     if 'dominantLineThreshold' in parameters:
         dominantLineThreshold = parameters['dominantLineThreshold']
     else:
-        dominantLineThreshold = 5
+        dominantLineThreshold = 3
         pass
     
     if imageIndex >= 0:
@@ -2919,12 +2913,12 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
         distanceCostThreshold = 0.05
         pass
     
-    distanceCost = np.minimum(np.abs(np.tensordot(points, planeNormals, axes=([1, 1])) - np.reshape(planesD, [1, -1])) / distanceCostThreshold, 1)
+    distanceCost = np.abs(np.tensordot(points, planeNormals, axes=([1, 1])) - np.reshape(planesD, [1, -1])) / distanceCostThreshold
     #distanceCost = np.concatenate([distanceCost, np.ones((height * width, 1))], axis=1)
 
     normalCost = 0
     normalCostThreshold = 1 - np.cos(np.deg2rad(30))        
-    normalCost = np.minimum((1 - np.abs(np.tensordot(normals, planeNormals, axes=([1, 1])))) / normalCostThreshold, 1)
+    normalCost = (1 - np.abs(np.tensordot(normals, planeNormals, axes=([1, 1])))) / normalCostThreshold
     
     unaryCost = distanceCost + normalCost
     unaryCost *= np.expand_dims(validMask.astype(np.float32), -1)
@@ -3193,7 +3187,7 @@ def fitPlanesPiecewise(image, depth, normal, info, numOutputPlanes=20, imageInde
     if 'offsetGap' in parameters:
         offsetGap = parameters['offsetGap']
     else:
-        offsetGap = 0.05
+        offsetGap = 0.1
         pass
     planeIndexOffset = 0
 
@@ -3259,13 +3253,13 @@ def fitPlanesPiecewise(image, depth, normal, info, numOutputPlanes=20, imageInde
     # print(np.abs(np.tensordot(points, planeNormals, axes=([1, 1])) - np.reshape(planesD, [1, -1])).min())
     # print(distanceCostThreshold)
 
-    distanceCost = np.minimum(np.abs(np.tensordot(points, planeNormals, axes=([1, 1])) - np.reshape(planesD, [1, -1])) / distanceCostThreshold, 1)
+    distanceCost = np.abs(np.tensordot(points, planeNormals, axes=([1, 1])) - np.reshape(planesD, [1, -1])) / distanceCostThreshold
     #distanceCost = np.concatenate([distanceCost, np.ones((height * width, 1))], axis=1)
 
 
     #valid_normals = normals[validMask]
     normalCostThreshold = 1 - np.cos(np.deg2rad(30))        
-    normalCost = np.minimum((1 - np.abs(np.tensordot(normals, planeNormals, axes=([1, 1])))) / normalCostThreshold, 1)
+    normalCost = (1 - np.abs(np.tensordot(normals, planeNormals, axes=([1, 1])))) / normalCostThreshold
 
     if 'normalWeight' in parameters:
         normalWeight = parameters['normalWeight']
