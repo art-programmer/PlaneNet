@@ -238,22 +238,23 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
         validDepthMask = tf.cast(tf.greater(global_gt_dict['depth'], 1e-4), tf.float32)
         depth_loss = tf.reduce_mean(tf.reduce_sum(tf.squared_difference(all_depths, global_gt_dict['depth']) * all_segmentations_softmax, axis=3, keep_dims=True) * validDepthMask) * 10000
 
-        #if options.predictPixelwise == 1:
-        depth_diff = global_pred_dict['non_plane_depth'] - global_gt_dict['depth']
-        depth_diff_gx = depth_diff - tf.concat([tf.ones([options.batchSize, HEIGHT, 1, 1]), depth_diff[:, :, :WIDTH - 1]], axis=2)
-        depth_diff_gy = depth_diff - tf.concat([tf.ones([options.batchSize, 1, WIDTH, 1]), depth_diff[:, :HEIGHT - 1]], axis=1)
+        if options.predictPixelwise == 1:
+            depth_diff = global_pred_dict['non_plane_depth'] - global_gt_dict['depth']
+            depth_diff_gx = depth_diff - tf.concat([tf.ones([options.batchSize, HEIGHT, 1, 1]), depth_diff[:, :, :WIDTH - 1]], axis=2)
+            depth_diff_gy = depth_diff - tf.concat([tf.ones([options.batchSize, 1, WIDTH, 1]), depth_diff[:, :HEIGHT - 1]], axis=1)
 
-        numValidPixels = tf.reduce_sum(validDepthMask, axis=[1, 2, 3])
-        depth_loss += tf.reduce_mean(tf.reduce_sum(tf.pow(depth_diff * validDepthMask, 2), axis=[1, 2, 3]) / numValidPixels - 0.5 * tf.pow(tf.reduce_sum(depth_diff * validDepthMask, axis=[1, 2, 3]) / numValidPixels, 2) + tf.reduce_sum((tf.pow(depth_diff_gx, 2) + tf.pow(depth_diff_gy, 2)) * validDepthMask, axis=[1, 2, 3]) / numValidPixels) * 1000
+            numValidPixels = tf.reduce_sum(validDepthMask, axis=[1, 2, 3])
+            depth_loss += tf.reduce_mean(tf.reduce_sum(tf.pow(depth_diff * validDepthMask, 2), axis=[1, 2, 3]) / numValidPixels - 0.5 * tf.pow(tf.reduce_sum(depth_diff * validDepthMask, axis=[1, 2, 3]) / numValidPixels, 2) + tf.reduce_sum((tf.pow(depth_diff_gx, 2) + tf.pow(depth_diff_gy, 2)) * validDepthMask, axis=[1, 2, 3]) / numValidPixels) * 1000
         
-        #depth_loss += tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_depth'], global_gt_dict['depth']) * validDepthMask) * 10000
+            #depth_loss += tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_depth'], global_gt_dict['depth']) * validDepthMask) * 10000
 
 
-        valid_normal_mask = tf.squeeze(tf.cast(tf.less(tf.slice(global_gt_dict['info'], [0, 19], [options.batchSize, 1]), 2), tf.float32))
-        normal_gt = tf.nn.l2_normalize(global_gt_dict['normal'], dim=-1)
-        normal_loss = tf.reduce_mean(tf.reduce_sum(-global_pred_dict['non_plane_normal'] * normal_gt * validDepthMask, axis=[1, 2, 3]) / numValidPixels * valid_normal_mask) * 1000
-        #normal_loss = tf.reduce_mean(tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_normal'], global_gt_dict['normal']) * validDepthMask, axis=[1, 2, 3]) * valid_normal_mask) * 1000
-        #normal_loss = tf.constant(0.0)
+            valid_normal_mask = tf.squeeze(tf.cast(tf.less(tf.slice(global_gt_dict['info'], [0, 19], [options.batchSize, 1]), 2), tf.float32))
+            normal_gt = tf.nn.l2_normalize(global_gt_dict['normal'], dim=-1)
+            normal_loss = tf.reduce_mean(tf.reduce_sum(-global_pred_dict['non_plane_normal'] * normal_gt * validDepthMask, axis=[1, 2, 3]) / numValidPixels * valid_normal_mask) * 1000
+            #normal_loss = tf.reduce_mean(tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_normal'], global_gt_dict['normal']) * validDepthMask, axis=[1, 2, 3]) * valid_normal_mask) * 1000
+            #normal_loss = tf.constant(0.0)
+            pass
 
         if options.predictSemantics:
             valid_semantics_mask = tf.squeeze(tf.cast(tf.not_equal(tf.slice(global_gt_dict['info'], [0, 19], [options.batchSize, 1]), 1), tf.float32))
