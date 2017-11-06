@@ -2042,11 +2042,7 @@ def refitPlanes(planes, segmentation, depth, info, numOutputPlanes=20, planeArea
                 pass
             pass
         continue
-    
-    numPlanes = len(newPlaneInfo)
-    if numPlanes == 0:
-        return np.zeros((numOutputPlanes, 3)), newSegmentation, numPlanes
-    
+
     newPlaneInfo = sorted(newPlaneInfo, key=lambda x: -x[2])
 
     newPlanes = []
@@ -2055,6 +2051,10 @@ def refitPlanes(planes, segmentation, depth, info, numOutputPlanes=20, planeArea
         newPlanes.append(planeInfo[0])
         newSegmentation[planeInfo[1]] = planeIndex
         continue
+    
+    numPlanes = len(newPlaneInfo)
+    if numPlanes == 0:
+        return np.zeros((numOutputPlanes, 3)), newSegmentation, numPlanes    
     
     newPlanes = np.array(newPlanes)
     if numPlanes < numOutputPlanes:
@@ -2608,7 +2608,10 @@ def calcNormal(depth, info):
 
     points = np.stack([X, Y, Z], axis=2).reshape(-1, 3)
 
-    grids = np.array([-9, -6, -3, -1, 0, 1, 3, 6, 9])
+    if width > 300:
+        grids = np.array([-9, -6, -3, -1, 0, 1, 3, 6, 9])
+    else:
+        grids = np.array([-5, -3, -1, 0, 1, 3, 5])
 
     normals = []
     for index in xrange(width * height):
@@ -2617,8 +2620,10 @@ def calcNormal(depth, info):
         vs = index / width + grids
         vs = vs[np.logical_and(vs >= 0, vs < height)]
         indices = (np.expand_dims(vs, -1) * width + np.expand_dims(us, 0)).reshape(-1)
+        planePoints = points[indices]
+        planePoints = planePoints[np.linalg.norm(planePoints, axis=-1) > 1e-4]
         try:
-            plane = fitPlane(points[indices])
+            plane = fitPlane(planePoints)
             normals.append(-plane / np.maximum(np.linalg.norm(plane), 1e-4))
         except:
             if len(normals) > 0:
@@ -2719,13 +2724,17 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
 
     dominantNormals = np.stack([dominantNormal_1, dominantNormal_2, dominantNormal_3], axis=0)
 
-    #dominantNormalImage = np.abs(np.matmul(normal, dominantNormals.transpose()))
-    #cv2.imwrite('test/dominant_normal.png', drawMaskImage(dominantNormalImage))
+    dominantNormalImage = np.abs(np.matmul(normal, dominantNormals.transpose()))
+    cv2.imwrite('test/dominant_normal.png', drawMaskImage(dominantNormalImage))
     
     planeHypothesisAreaThreshold = width * height * 0.01
     
     planes = []
-    offsetGap = 0.05
+    if 'offsetGap' in parameters:
+        offsetGap = parameters['offsetGap']
+    else:
+        offsetGap = 0.05
+        pass
     for dominantNormal in dominantNormals:
         offsets = np.tensordot(valid_points, dominantNormal, axes=([1], [0]))
         #offsets = np.sort(offsets)
@@ -2826,7 +2835,7 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
         # exit(1)
         for pixels in windowIndices:
             gradientSums = colorDiffs[pixels].sum(0)
-            dominantLineMap.append(gradientSums[1] / gradientSums[0])
+            dominantLineMap.append(gradientSums[1] / max(gradientSums[0], 1e-4))
             continue
         dominantLineMaps.append(np.array(dominantLineMap).reshape((height, width)))
         # dominantLines = []
