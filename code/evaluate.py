@@ -33,7 +33,7 @@ ALL_TITLES = ['PlaneNet', 'Oracle NYU toolbox', 'NYU toolbox', 'Oracle Manhattan
 #ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_crfrnn10_sm0', ''), ('bl0_dl0_ll1_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', '')]
 
 #ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', '', 0), ('bl0_dl0_ll1_pb_pp_sm0', 'crfrnn', 0), ('bl0_dl0_crfrnn10_sm0', '')]
-ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', '', 0), ('bl0_dl0_ll1_bw0.5_pb_pp', 'pixelwise_6', 0), ('bl0_dl0_crfrnn-10_sm0', '')]
+ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', '', 0), ('bl0_dl0_ll1_bw0.5_pb_pp', 'pixelwise_4', 0), ('bl0_dl0_crfrnn-10_sm0', '')]
 
 
 #ALL_METHODS = [('ll1_pb_pp', 'pixelwise_1'), ('crf1_pb_pp', 'pixelwise_2'), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', 'pixelwise_3'), ('ll1_bw0.5_pb_pp_sm0', 'pixelwise_4')]
@@ -394,15 +394,15 @@ def evaluatePlanes(options):
                     pred_p, pred_s = fitPlanesManhattan(gt_dict['image'][image_index], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
                     pred_d = np.zeros((HEIGHT, WIDTH))
                 elif '_5' in method[1]:
-                    parameters = {'numProposals': 5, 'distanceCostThreshold': 0.05, 'smoothnessWeight': 30, 'dominantLineThreshold': 3, 'offsetGap': 0.05}                    
+                    parameters = {'numProposals': 5, 'distanceCostThreshold': 0.1, 'smoothnessWeight': 100, 'dominantLineThreshold': 3, 'offsetGap': 0.6}
                     pred_p, pred_s = fitPlanesManhattan(gt_dict['image'][image_index], pred_d, pred_n, gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
                     pred_d = np.zeros((HEIGHT, WIDTH))
                 elif '_6' in method[1]:
-                    parameters = {'distanceCostThreshold': 0.1, 'smoothnessWeight': 300, 'numProposals': 5, 'normalWeight': 1}                    
+                    parameters = {'distanceCostThreshold': 0.1, 'smoothnessWeight': 300, 'numProposals': 5, 'normalWeight': 1, 'meanshift': 0.2}
                     pred_p, pred_s = fitPlanesPiecewise(gt_dict['image'][image_index], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
                     pred_d = np.zeros((HEIGHT, WIDTH))
                 elif '_7' in method[1]:
-                    parameters = {'numProposals': 5, 'distanceCostThreshold': 0.05, 'smoothnessWeight': 30, 'dominantLineThreshold': 3, 'offsetGap': 0.05}                    
+                    parameters = {'numProposals': 5, 'distanceCostThreshold': 0.1, 'smoothnessWeight': 300, 'normalWeight': 1, 'meanshift': 0.2}
                     pred_p, pred_s = fitPlanesPiecewise(gt_dict['image'][image_index], pred_d, pred_n, gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
                     pred_d = np.zeros((HEIGHT, WIDTH))
                     pass
@@ -709,9 +709,9 @@ def gridSearch(options):
         if 'pixelwise_4' in method[1] or 'pixelwise_5' in method[1]:
             bestScore = 0
             configurationIndex = 0
-            for distanceCostThreshold in [0.1, 0.2]:
-                for smoothnessWeight in [30, 50, 20]:
-                    for offsetGap in [0.1, 0.3, 0.5]:
+            for distanceCostThreshold in [0.05, 0.1]:
+                for smoothnessWeight in [30]:
+                    for offsetGap in [0.05, 0.1, 0.2]:
                         parameters = {'distanceCostThreshold': distanceCostThreshold, 'smoothnessWeight': smoothnessWeight, 'offsetGap': offsetGap}
 
                         score = 0
@@ -760,10 +760,10 @@ def gridSearch(options):
             bestScore = 0
             configurationIndex = 0            
             for distanceCostThreshold in [0.1]:
-                for smoothnessWeight in [300, 500, 1000]:
+                for smoothnessWeight in [300]:
                     for normalWeight in [1]:
-                        for offsetGap in [0.1, 0.3, 0.5]:
-                            parameters = {'distanceCostThreshold': distanceCostThreshold, 'smoothnessWeight': smoothnessWeight, 'numProposals': 5, 'normalWeight': normalWeight, 'offsetGap': offsetGap, 'meanshift': 0.1}
+                        for offset in [0.2]:
+                            parameters = {'distanceCostThreshold': distanceCostThreshold, 'smoothnessWeight': smoothnessWeight, 'numProposals': 5, 'normalWeight': normalWeight, 'offsetGap': abs(offset), 'meanshift': offset}
 
                             score = 0
                             for image_index in xrange(options.numImages):
