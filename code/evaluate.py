@@ -33,7 +33,7 @@ ALL_TITLES = ['PlaneNet', 'Oracle NYU toolbox', 'NYU toolbox', 'Oracle Manhattan
 #ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_crfrnn10_sm0', ''), ('bl0_dl0_ll1_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', '')]
 
 #ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', '', 0), ('bl0_dl0_ll1_pb_pp_sm0', 'crfrnn', 0), ('bl0_dl0_crfrnn10_sm0', '')]
-ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', '', 0, 2), ('bl0_dl0_ll1_bw0.5_pb_pp', '', 0, 2)]
+ALL_METHODS = [('planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0', '', 0, 2), ('pixelwise_hybrid3_ps', '', 0, 2)]
 
 
 #ALL_METHODS = [('ll1_pb_pp', 'pixelwise_1'), ('crf1_pb_pp', 'pixelwise_2'), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', 'pixelwise_3'), ('ll1_bw0.5_pb_pp_sm0', 'pixelwise_4')]
@@ -1158,7 +1158,7 @@ def evaluateDepthPrediction(options):
     return
 
 def getResults(options):
-    checkpoint_prefix = options.rootFolder + '/checkpoint/planenet_'
+    checkpoint_prefix = options.rootFolder + '/checkpoint/'
 
     methods = options.methods
     predictions = []
@@ -1207,7 +1207,7 @@ def getResults(options):
             options.anchorPlanes = 1            
             pass
         
-        options.checkpoint_dir = checkpoint_prefix + 'hybrid' + options.hybrid + '_' + method[0]
+        options.checkpoint_dir = checkpoint_prefix + method[0]
         print(options.checkpoint_dir)
         
         options.suffix = method[1]
@@ -1339,8 +1339,12 @@ def getPrediction(options):
                 segmentation = np.argmax(all_segmentations, 2)
                 pred_d = all_depths.reshape(-1, options.numOutputPlanes + 1)[np.arange(WIDTH * HEIGHT), segmentation.reshape(-1)].reshape(HEIGHT, WIDTH)
 
-                predSemantics.append(np.argmax(global_pred['semantics'][0], axis=-1))
-                
+                if 'semantics' in global_pred:
+                    predSemantics.append(np.argmax(global_pred['semantics'][0], axis=-1))
+                else:
+                    predSemantics.append(np.zeros((HEIGHT, WIDTH)))
+                    pass
+                                         
                 predDepths.append(pred_d)
                 predPlanes.append(pred_p)
                 predSegmentations.append(pred_s)
