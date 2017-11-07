@@ -1612,8 +1612,8 @@ if __name__=='__main__':
     #args.methods = [ALL_METHODS[int(method)] for method in args.methods]
     args.titles = ALL_TITLES
     methods = ALL_METHODS
-    for methodIndex, flag in args.methods:
-        methods[methodIndex][3] = flag
+    for methodIndex, flag in enumerate(args.methods):
+        methods[methodIndex][3] = int(flag)
         pass
     args.methods = methods
     
