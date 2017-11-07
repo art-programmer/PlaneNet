@@ -2835,7 +2835,12 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
             #cv2.imwrite('test/mask_' + str(len(planes) - 1) + '.png', drawMaskImage(planeMask.reshape((height, width))))
             continue
         continue
+    
+    if len(planes) == 0:
+        return np.array([]), np.zeros(segmentation.shape).astype(np.int32)
+    
     planes = np.array(planes)
+    print('number of planes ', planes.shape[0])
 
     #transformedDominantNormals = np.matmul(info[:16].reshape(4, 4), np.transpose([np.concatenate(dominantNormals, np.ones((3, 1))], axis=1)))
     vanishingPoints = np.stack([dominantNormals[:, 0] / np.maximum(dominantNormals[:, 1], 1e-4) * info[0] + info[2], -dominantNormals[:, 2] / np.maximum(dominantNormals[:, 1], 1e-4) * info[5] + info[6]], axis=1)
@@ -2949,7 +2954,6 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
     unaryCost *= np.expand_dims(validMask.astype(np.float32), -1)
     unaries = unaryCost.reshape((width * height, -1))
 
-    print('number of planes ', planes.shape[0])
     cv2.imwrite('test/distance_cost.png', drawSegmentationImage(-distanceCost.reshape((height, width, -1)), unaryCost.shape[-1] - 1))
     cv2.imwrite('test/normal_cost.png', drawSegmentationImage(-normalCost.reshape((height, width, -1)), unaryCost.shape[-1] - 1))
     cv2.imwrite('test/unary_cost.png', drawSegmentationImage(-unaryCost.reshape((height, width, -1)), blackIndex=unaryCost.shape[-1] - 1))
@@ -2964,8 +2968,7 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
     else:
         numProposals = 3
         pass
-    numProposals = min(numProposals, unaries.shape[-1])
-    
+    numProposals = min(numProposals, unaries.shape[-1] - 1)
     proposals = np.argpartition(unaries, numProposals)[:, :numProposals]
     proposals[np.logical_not(validMask)] = 0
     
@@ -3254,7 +3257,9 @@ def fitPlanesPiecewise(image, depth, normal, info, numOutputPlanes=20, imageInde
         vpPlaneIndices.append(np.arange(planeIndexOffset, len(planes)))
         planeIndexOffset = len(planes)
         continue
-    
+
+    if len(planes) == 0:
+        return np.array([]), np.zeros(segmentation.shape).astype(np.int32)    
     planes = np.array(planes)
 
     
@@ -3311,7 +3316,8 @@ def fitPlanesPiecewise(image, depth, normal, info, numOutputPlanes=20, imageInde
         numProposals = 3
         pass
 
-    numProposals = min(numProposals, unaries.shape[-1])    
+    numProposals = min(numProposals, unaries.shape[-1] - 1)
+    
     proposals = np.argpartition(unaries, numProposals)[:, :numProposals]
     unaries = -readProposalInfo(unaries, proposals).reshape((-1, numProposals))
     
