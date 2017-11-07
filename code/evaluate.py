@@ -1611,7 +1611,11 @@ if __name__=='__main__':
     #args.titles = [ALL_TITLES[int(method)] for method in args.methods]
     #args.methods = [ALL_METHODS[int(method)] for method in args.methods]
     args.titles = ALL_TITLES
-    args.methods = ALL_METHODS
+    methods = ALL_METHODS
+    for methodIndex, flag in args.methods:
+        methods[methodIndex][3] = flag
+        pass
+    args.methods = methods
     
     args.result_filename = args.test_dir + '/results_' + str(args.startIndex) + '.npy'
     print(args.titles)
