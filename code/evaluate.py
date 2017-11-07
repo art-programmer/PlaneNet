@@ -33,7 +33,7 @@ ALL_TITLES = ['PlaneNet', 'Oracle NYU toolbox', 'NYU toolbox', 'Oracle Manhattan
 #ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_crfrnn10_sm0', ''), ('bl0_dl0_ll1_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', '')]
 
 #ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', '', 0), ('bl0_dl0_ll1_pb_pp_sm0', 'crfrnn', 0), ('bl0_dl0_crfrnn10_sm0', '')]
-ALL_METHODS = [('planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0', '', 0, 3), ('planenet_hybrid3_bl0_dl0_ll1_pb_pp_ps_sm0', 'pixelwise_4', 1, 2), ('', 'pixelwise_3', 1, 2), ('', 'pixelwise_4', 1, 2), ('', 'pixelwise_5', 1, 2), ('', 'pixelwise_6', 1, 2), ('', 'pixelwise_7', 1, 2)]
+ALL_METHODS = [('planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0', '', 0, 3), ('planenet_hybrid3_bl0_dl0_ll1_pb_pp_ps_sm0', 'pixelwise_2', 1, 2), ('', 'pixelwise_3', 1, 2), ('', 'pixelwise_4', 1, 2), ('', 'pixelwise_5', 1, 2), ('', 'pixelwise_6', 1, 2), ('', 'pixelwise_7', 1, 2)]
 
 
 #ALL_METHODS = [('ll1_pb_pp', 'pixelwise_1'), ('crf1_pb_pp', 'pixelwise_2'), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', 'pixelwise_3'), ('ll1_bw0.5_pb_pp_sm0', 'pixelwise_4')]
