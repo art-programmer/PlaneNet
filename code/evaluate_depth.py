@@ -1650,6 +1650,12 @@ def evaluateAll(options):
                 
                 planeMask = gt_s < options.numOutputPlanes
                 edgeMap = calcEdgeMap(segmentation, edgeWidth=5)
+                if edgeMap.sum() == 0:
+                    edges[0] = True
+                    edges[-1] = True
+                    edges[:, 0] = True
+                    edges[:, -1] = True
+                    pass
 
                 planenet_result = []
                 print('image')

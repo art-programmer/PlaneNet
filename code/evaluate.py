@@ -738,9 +738,9 @@ def gridSearch(options):
         if 'pixelwise_4' in method[1] or 'pixelwise_5' in method[1]:
             bestScore = 0
             configurationIndex = 0
-            for distanceCostThreshold in [0.1]:
+            for distanceCostThreshold in [0.05]:
                 for smoothnessWeight in [30]:
-                    for offsetGap in [0.05, 0.1, 0.2]:
+                    for offsetGap in [-0.1]:
                         parameters = {'distanceCostThreshold': distanceCostThreshold, 'smoothnessWeight': smoothnessWeight, 'offsetGap': abs(offsetGap), 'meanshift': offsetGap}
 
                         score = 0
