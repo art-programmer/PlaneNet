@@ -600,7 +600,7 @@ def evaluateDepths(predDepths, gtDepths, validMasks, planeMasks=True, printInfo=
     if printInfo:
         print(('evaluate', rel, rel_sqr, log10, rmse, rmse_log, accuracy_1, accuracy_2, accuracy_3, recall))
         pass
-    return rmse, accuracy_1
+    return rel, rel_sqr, log10, rmse, rmse_log, accuracy_1, accuracy_2, accuracy_3, recall
     #return rel, log10, rms, accuracy_1, accuracy_2, accuracy_3, recall
 
 def drawDepthImage(depth):
@@ -2964,7 +2964,8 @@ def fitPlanesManhattan(image, depth, normal, info, numOutputPlanes=20, imageInde
     else:
         numProposals = 3
         pass
-        
+    numProposals = min(numProposals, unaries.shape[-1])
+    
     proposals = np.argpartition(unaries, numProposals)[:, :numProposals]
     proposals[np.logical_not(validMask)] = 0
     
@@ -3309,7 +3310,8 @@ def fitPlanesPiecewise(image, depth, normal, info, numOutputPlanes=20, imageInde
     else:
         numProposals = 3
         pass
-    
+
+    numProposals = min(numProposals, unaries.shape[-1])    
     proposals = np.argpartition(unaries, numProposals)[:, :numProposals]
     unaries = -readProposalInfo(unaries, proposals).reshape((-1, numProposals))
     
@@ -3644,5 +3646,21 @@ def estimateFocalLength():
     numVPs = 3
     VPs, VPLines, remainingLines = calcVanishingPoints(lines, numVPs=numVPs)
     focalLength = (np.sqrt((VPs[0] * VPs[1]).sum()) + np.sqrt((VPs[0] * VPs[2]).sum()) + np.sqrt((VPs[1] * VPs[2]).sum())) / 3
-    
+    return focalLength
+
+def calcEdgeMap(segmentation, edgeWidth=3):
+    edges = np.zeros(segmentation.shape, np.bool)
+    for shift in [-1, 1]:
+        for c in [0, 1]:
+            edges = np.logical_or(edges, segmentation != np.roll(segmentation, shift, axis=c))
+            continue
+        continue
+    edges = edges.astype(np.float32)
+    edges[0] = 0
+    edges[-1] = 0
+    edges[:, 0] = 0
+    edges[:, -1] = 0
+    edges = cv2.dilate(edges, np.ones((3, 3)), iterations=edgeWidth)
+    return edges > 0.5
+            
 #testPlaneExtraction()

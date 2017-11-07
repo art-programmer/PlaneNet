@@ -33,7 +33,7 @@ ALL_TITLES = ['PlaneNet', 'Oracle NYU toolbox', 'NYU toolbox', 'Oracle Manhattan
 #ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_crfrnn10_sm0', ''), ('bl0_dl0_ll1_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', '')]
 
 #ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', '', 0), ('bl0_dl0_ll1_pb_pp_sm0', 'crfrnn', 0), ('bl0_dl0_crfrnn10_sm0', '')]
-ALL_METHODS = [('planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0', '', 0, 3), ('planenet_hybrid3_bl0_dl0_ll1_pb_pp_ps_sm0', 'pixelwise_2', 1, 2), ('', 'pixelwise_3', 1, 2), ('', 'pixelwise_4', 1, 2), ('', 'pixelwise_5', 1, 2), ('', 'pixelwise_6', 1, 2), ('', 'pixelwise_7', 1, 2)]
+ALL_METHODS = [('planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0', '', 0, 3), ('planenet_hybrid3_bl0_dl0_ll1_pb_pp_ps_sm0', 'pixelwise_4', 1, 2), ('', 'pixelwise_3', 1, 2), ('', 'pixelwise_4', 1, 2), ('', 'pixelwise_5', 1, 2), ('', 'pixelwise_6', 1, 2), ('', 'pixelwise_7', 1, 2)]
 
 
 #ALL_METHODS = [('ll1_pb_pp', 'pixelwise_1'), ('crf1_pb_pp', 'pixelwise_2'), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', 'pixelwise_3'), ('ll1_bw0.5_pb_pp_sm0', 'pixelwise_4')]
@@ -385,7 +385,7 @@ def evaluatePlanes(options):
                     parameters = {'distanceCostThreshold': 0.1, 'smoothnessWeight': 0.03, 'semantics': True, 'distanceThreshold': 0.2}
                     pred_p, pred_s = fitPlanesNYU(gt_dict['image'], pred_d, pred_n, pred_dict['semantics'][image_index], gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
                 elif '_4' in method[1]:
-                    parameters = {'numProposals': 5, 'distanceCostThreshold': 0.05, 'smoothnessWeight': 30, 'dominantLineThreshold': 3, 'offsetGap': 0.05}
+                    parameters = {'numProposals': 5, 'distanceCostThreshold': 0.1, 'smoothnessWeight': 30, 'dominantLineThreshold': 3, 'offsetGap': 0.1}
                     pred_p, pred_s = fitPlanesManhattan(gt_dict['image'][image_index], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
                     pred_d = np.zeros((HEIGHT, WIDTH))
                 elif '_5' in method[1]:
@@ -738,10 +738,10 @@ def gridSearch(options):
         if 'pixelwise_4' in method[1] or 'pixelwise_5' in method[1]:
             bestScore = 0
             configurationIndex = 0
-            for distanceCostThreshold in [0.05, 0.1]:
+            for distanceCostThreshold in [0.1]:
                 for smoothnessWeight in [30]:
                     for offsetGap in [0.05, 0.1, 0.2]:
-                        parameters = {'distanceCostThreshold': distanceCostThreshold, 'smoothnessWeight': smoothnessWeight, 'offsetGap': offsetGap}
+                        parameters = {'distanceCostThreshold': distanceCostThreshold, 'smoothnessWeight': smoothnessWeight, 'offsetGap': abs(offsetGap), 'meanshift': offsetGap}
 
                         score = 0
                         for image_index in xrange(options.numImages):
@@ -1608,8 +1608,11 @@ if __name__=='__main__':
         args.numImages = 1            
         pass
 
-    args.titles = [ALL_TITLES[int(method)] for method in args.methods]
-    args.methods = [ALL_METHODS[int(method)] for method in args.methods]
+    #args.titles = [ALL_TITLES[int(method)] for method in args.methods]
+    #args.methods = [ALL_METHODS[int(method)] for method in args.methods]
+    args.titles = ALL_TITLES
+    args.methods = ALL_METHODS
+    
     args.result_filename = args.test_dir + '/results_' + str(args.startIndex) + '.npy'
     print(args.titles)
     
