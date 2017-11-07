@@ -2613,7 +2613,7 @@ def getSegmentationsGraphCut(planes, image, depth, normal, semantics, info, para
         
         pairwise_cost = np.expand_dims(pairwise_matrix, 0) * np.reshape(1 + 45 * np.exp(-colorDiff / intensityDifference), [-1, 1, 1])
         #pairwise_cost = np.expand_dims(pairwise_matrix, 0) * np.ones(np.reshape(1 + 45 * np.exp(-colorDiff / np.maximum(intensityDifference[partial_nodes], 1e-4)), [-1, 1, 1]).shape)
-        edges_features.append(-pairwise_cost)
+        edges_features.append(pairwise_cost)
         continue
 
     edges = np.concatenate(edges, axis=0)
@@ -2625,7 +2625,7 @@ def getSegmentationsGraphCut(planes, image, depth, normal, semantics, info, para
         smoothnessWeight = 0.02
         pass
     
-    refined_segmentation = inference_ogm(unaries, edges_features * smoothnessWeight, edges, return_energy=False, alg='alphaexp')    
+    refined_segmentation = inference_ogm(unaries, -edges_features * smoothnessWeight, edges, return_energy=False, alg='alphaexp')    
     #print(pairwise_matrix)
     #refined_segmentation = inference_ogm(unaries * 5, -pairwise_matrix, edges, return_energy=False, alg='alphaexp')
     refined_segmentation = refined_segmentation.reshape([height, width])
@@ -2634,7 +2634,7 @@ def getSegmentationsGraphCut(planes, image, depth, normal, semantics, info, para
         for semanticIndex in xrange(semantics.max() + 1):
             mask = semantics == semanticIndex
             segmentInds = refined_segmentation[mask]
-            uniqueSegments, counts = np.unique(segmentInds, return_counts)
+            uniqueSegments, counts = np.unique(segmentInds, return_counts=True)
             for index, count in enumerate(counts):
                 if count > segmentInds.shape[0] * 0.9:
                     refined_segmentation[mask] = uniqueSegments[index]
