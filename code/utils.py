@@ -677,7 +677,7 @@ def calcPlaneNormals(planes, width, height):
     return np.tile(planeNormals.reshape([1, 1, -1, 3]), [height, width, 1, 1])
 
 
-def writePLYFile(folder, index, image, depth, segmentation, boundaries):
+def writePLYFile(folder, index, image, depth, segmentation):
     imageFilename = str(index) + '_image.png'
     cv2.imwrite(folder + '/' + imageFilename, image)
 
@@ -688,7 +688,7 @@ def writePLYFile(folder, index, image, depth, segmentation, boundaries):
     faces = []
     minDepthDiff = 0.15
     maxDepthDiff = 0.3
-    occlusionBoundary = boundaries[:, :, 1]
+    #occlusionBoundary = boundaries[:, :, 1]
         
     for y in xrange(height - 1):
         for x in xrange(width - 1):
@@ -725,6 +725,7 @@ def writePLYFile(folder, index, image, depth, segmentation, boundaries):
         continue
 
     #print(len(faces))
+    print(folder)
     with open(folder + '/' + str(index) + '_model.ply', 'w') as f:
         header = """ply
 format ascii 1.0
@@ -2006,7 +2007,7 @@ def evaluatePlanePrediction(predDepths, predSegmentations, predNumPlanes, gtDept
         return
 
     
-def plotCurves(x, ys, filename = 'test/test.png', xlabel='', ylabel='', title='', labels=[], final=True):
+def plotCurves(x, ys, filename = 'test/test.png', xlabel='', ylabel='', title='', labels=[]):
     import matplotlib.pyplot as plt
     fig = plt.figure()
     ax = plt.gca()
@@ -2035,13 +2036,8 @@ def plotCurves(x, ys, filename = 'test/test.png', xlabel='', ylabel='', title=''
             pass        
         continue
 
-    if final:
-        ordering = [1, 2, 3, 4, 5, 6, 0]
-        final_labels = ['PlaneNet', '[25]+depth', '[25]', '[9]+depth', '[9]', '[26]+depth', '[26]'] 
-    else:
-        ordering = np.arange(len(labels)).tolist()
-        final_labels = labels
-        pass
+    ordering = [1, 2, 3, 4, 5, 6, 0]
+    final_labels = ['PlaneNet', '[25]+depth', '[25]', '[9]+depth', '[9]', '[26]+depth', '[26]'] 
     
     #for index, y in enumerate(ys):
     for order in ordering:
@@ -2049,6 +2045,35 @@ def plotCurves(x, ys, filename = 'test/test.png', xlabel='', ylabel='', title=''
         continue
     #plt.legend(loc='upper right')
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.05), ncol=4, fancybox=True, shadow=True, handletextpad=0.1)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel + ' %')
+    ax.set_yticklabels(np.arange(0, 101, 20))
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.get_xaxis().tick_bottom()
+    ax.get_yaxis().tick_left()    
+    #ax.xaxis.set_label_coords(1.1, -0.025)
+    #plt.title(title)
+    plt.xlim((x[0], x[-1] + 0.01))
+    plt.ylim((0, 1))
+    plt.tight_layout(w_pad=0.3)
+    plt.savefig(filename)
+    return
+
+
+def plotCurvesSimple(x, ys, filename = 'test/test.png', xlabel='', ylabel='', title='', labels=[]):
+    import matplotlib.pyplot as plt
+    fig = plt.figure()
+    ax = plt.gca()
+
+    ordering = np.arange(len(labels)).tolist()
+    final_labels = labels
+        
+    #for index, y in enumerate(ys):
+    for order in ordering:
+        plt.plot(x, ys[order], figure=fig, label=final_labels[order])
+        continue
+    plt.legend(loc='upper right', ncol=2)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel + ' %')
     ax.set_yticklabels(np.arange(0, 101, 20))

@@ -22,27 +22,30 @@ from RecordReaderAll import *
 from SegmentationRefinement import *
 from crfasrnn_layer import CrfRnnLayer
 
-#ALL_TITLES = ['planenet', 'pixelwise', 'pixelwise+RANSAC', 'depth observation+RANSAC', 'pixelwise+semantics+RANSAC', 'gt']
-#ALL_METHODS = [('bl2_ll1_bw0.5_pb_pp_sm0', ''), ('pb_pp', 'pixelwise_1'), ('pb_pp', 'pixelwise_2'), ('pb_pp', 'pixelwise_3'), ('pb_pp', 'semantics'), ('pb_pp', 'gt')]
+#ALL_METHODS = [('', ''), ('pb_pp', 'pixelwise_1'), ('pb_pp', 'pixelwise_2'), ('pb_pp', 'pixelwise_3'), ('pb_pp', 'semantics'), ('pb_pp', 'gt')]
 
 ALL_TITLES = ['PlaneNet', 'Oracle NYU toolbox', 'NYU toolbox', 'Oracle Manhattan', 'Manhattan', 'Piecewise', 'Oracle Piecewise']
-#ALL_METHODS = [('bl0_dl0_bw0.5_pb_pp_ps_sm0', ''), ('ll1_pb_pp', ''), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', ''), ('ll1_bw0.5_pb_pp_sm0', '')]
-#ALL_METHODS = [('bl0_dl0_ll1_bw0.5_pb_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_ps', ''), ('bl0_dl0_ll1_ds0_pb_pp', '')]
 
-#ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', 'pixelwise_2'), ('bl0_dl0_ll1_pb_pp_sm0', 'pixelwise_3'), ('bl0_dl0_ll1_pb_pp_sm0', 'pixelwise_6'), ('bl0_dl0_ll1_pb_pp_sm0', 'pixelwise_5')]
-#ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_crfrnn10_sm0', ''), ('bl0_dl0_ll1_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', '')]
+#bl0_dl0_ll1_pb_pp_sm0
+#bl0_dl0_ll1_ds0_pb_pp
+#ll1_pb_pp
+#bl0_dl0_ll1_ds0_pb_pp
+#ll1_pb_pp
+#bl0_dl0_crfrnn10_sm0
+#bl0_dl0_crfrnn-10_sm0
+#bl2_ll1_bw0.5_pb_pp_sm0
+#crf1_pb_pp
+#bl0_dl0_bw0.5_pb_pp_ps_sm0
 
-#ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', '', 0), ('bl0_dl0_ll1_pb_pp_sm0', 'crfrnn', 0), ('bl0_dl0_crfrnn10_sm0', '')]
-ALL_METHODS = [['planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0', '', 0, 0], ['planenet_hybrid3_bl0_dl0_crfrnn-10_sm0', '', 1, 0], ['planenet_hybrid3_bl0_dl0_crfrnn10_sm0', '', 1, 0], ['planenet_hybrid3_bl0_dl0_ll1_ds0_pb_pp', '', 1, 0], ['planenet_hybrid3_bl0_ll1_bw0.5_pb_pp_ps_sm0', '', 1, 0], ['planenet_hybrid3_ll1_pb_pp', '', 1, 0], ['planenet_hybrid3_ll1_bw0.5_pb_pp_sm0', '', 1, 0]]
+#bl0_dl0_bw0.5_pb_pp_ps_sm0
+#bl0_ll1_bw0.5_pb_pp_ps_sm0
+#ll1_bw0.5_pb_pp_sm0
+#pb_pp_sm0
+#bl0_dl0_ll1_bw0.5_pb_pp_sm0
+#pb_pp
 
+ALL_METHODS = [['planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0', '', 0, 0], ['planenet_hybrid3_bl0_dl0_crfrnn-10_sm0', '', 1, 0], ['planenet_hybrid3_bl0_dl0_crfrnn10_sm0', '', 1, 0], ['planenet_hybrid3_bl0_dl0_ll1_ds0_pb_pp', '', 1, 0], ['planenet_hybrid3_bl0_ll1_bw0.5_pb_pp_ps_sm0', '', 1, 0], ['planenet_hybrid3_ll1_pb_pp', '', 1, 0], ['planenet_hybrid3_bl0_dl0_ll1_ds0_crfrnn5_sm0', '', 1, 0]]
 
-#ALL_METHODS = [('ll1_pb_pp', 'pixelwise_1'), ('crf1_pb_pp', 'pixelwise_2'), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', 'pixelwise_3'), ('ll1_bw0.5_pb_pp_sm0', 'pixelwise_4')]
-
-
-#ALL_TITLES = ['planenet', 'pixelwise']
-#ALL_METHODS = [('bl0_ll1_bw0.5_pb_pp_ps_sm0', ''), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', 'pixelwise_1')]
-#ALL_TITLES = ['crf', 'different matching']
-#ALL_METHODS = [('pb_pp_sm0', 'crf'), ('pb_pp_sm0', '')]
 
 def writeHTML(options):
     from html import HTML
@@ -607,12 +610,12 @@ def plotResults(gt_dict, predictions, options):
     curve_labels = [title for title in titles if title != 'pixelwise']
     for metric_index, curves in enumerate(pixel_metric_curves):
         filename = options.test_dir + '/curve_pixel_' + curve_titles[metric_index].replace(' ', '_') + '.png'
-        plotCurves(xs[metric_index], curves, filename = filename, xlabel=xlabels[metric_index], ylabel='pixel coverage', title=curve_titles[metric_index], labels=curve_labels, final=False)
+        plotCurvesSimple(xs[metric_index], curves, filename = filename, xlabel=xlabels[metric_index], ylabel='pixel coverage', title=curve_titles[metric_index], labels=curve_labels)
         continue
     for metric_index, curves in enumerate(plane_metric_curves):
         filename = options.test_dir + '/curve_plane_' + curve_titles[metric_index].replace(' ', '_') + '.png'
         curves = [curve[:, 0] / curve[:, 1] for curve in curves]
-        plotCurves(xs[metric_index], curves, filename = filename, xlabel=xlabels[metric_index], ylabel='plane accuracy', title=curve_titles[metric_index], labels=curve_labels, final=False)
+        plotCurvesSimple(xs[metric_index], curves, filename = filename, xlabel=xlabels[metric_index], ylabel='plane accuracy', title=curve_titles[metric_index], labels=curve_labels)
         continue
 
     
@@ -1369,7 +1372,7 @@ def getPrediction(options):
                 pred_np_d = global_pred['non_plane_depth'][0]
                 pred_np_n = global_pred['non_plane_normal'][0]
                 
-                if global_gt['info'][0][19] > 1 and global_gt['info'][0][19] < 4:
+                if global_gt['info'][0][19] > 1 and global_gt['info'][0][19] < 4 and False:
                     pred_np_n = calcNormal(pred_np_d.squeeze(), global_gt['info'][0])
                     pass
 
@@ -1503,7 +1506,7 @@ def getGroundTruth(options):
                 gt_d = global_gt['depth'].squeeze()
                 gtDepths.append(gt_d)
 
-                if global_gt['info'][0][19] == 3:
+                if global_gt['info'][0][19] == 3 and False:
                     gt_n = calcNormal(gt_d, global_gt['info'][0])
                     #cv2.imwrite('test/normal.png', drawNormalImage(gt_n))
                     #exit(1)
@@ -1628,7 +1631,7 @@ if __name__=='__main__':
         pass
     args.methods = methods
     
-    args.result_filename = args.test_dir + '/results_' + str(args.startIndex) + '.npy'
+    args.result_filename = args.test_dir + '/results_' + str(0) + '.npy'
     print(args.titles)
     
     if args.task == 'compare':
