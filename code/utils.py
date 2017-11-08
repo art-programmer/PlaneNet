@@ -2006,7 +2006,7 @@ def evaluatePlanePrediction(predDepths, predSegmentations, predNumPlanes, gtDept
         return
 
     
-def plotCurves(x, ys, filename = 'test/test.png', xlabel='', ylabel='', title='', labels=[]):
+def plotCurves(x, ys, filename = 'test/test.png', xlabel='', ylabel='', title='', labels=[], final=True):
     import matplotlib.pyplot as plt
     fig = plt.figure()
     ax = plt.gca()
@@ -2035,8 +2035,14 @@ def plotCurves(x, ys, filename = 'test/test.png', xlabel='', ylabel='', title=''
             pass        
         continue
 
-    ordering = [1, 2, 3, 4, 5, 6, 0]
-    final_labels = ['PlaneNet', '[25]+depth', '[25]', '[9]+depth', '[9]', '[26]+depth', '[26]']    
+    if final:
+        ordering = [1, 2, 3, 4, 5, 6, 0]
+        final_labels = ['PlaneNet', '[25]+depth', '[25]', '[9]+depth', '[9]', '[26]+depth', '[26]'] 
+    else:
+        ordering = np.arange(len(labels)).tolist()
+        final_labels = labels
+        pass
+    
     #for index, y in enumerate(ys):
     for order in ordering:
         plt.plot(x, ys[order], figure=fig, label=final_labels[order], color=colors[order], marker=markers[order], linewidth=sizes[order])

@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-np.set_printoptions(precision=2, linewidth=200)
+#np.set_printoptions(precision=2, linewidth=200)
 import cv2
 import os
 import time
@@ -33,7 +33,7 @@ ALL_TITLES = ['PlaneNet', 'Oracle NYU toolbox', 'NYU toolbox', 'Oracle Manhattan
 #ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_crfrnn10_sm0', ''), ('bl0_dl0_ll1_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', '')]
 
 #ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', '', 0), ('bl0_dl0_ll1_pb_pp_sm0', 'crfrnn', 0), ('bl0_dl0_crfrnn10_sm0', '')]
-ALL_METHODS = [('planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0', '', 0, 0), ('planenet_hybrid3_bl0_dl0_ll1_pb_pp_ps_sm0', 'pixelwise_2', 1, 0), ('', 'pixelwise_3', 1, 0), ('', 'pixelwise_4', 1, 2), ('', 'pixelwise_5', 1, 2), ('', 'pixelwise_6', 1, 2), ('', 'pixelwise_7', 1, 2)]
+ALL_METHODS = [['planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0', '', 0, 0], ['planenet_hybrid3_bl0_dl0_crfrnn-10_sm0', '', 1, 0], ['planenet_hybrid3_bl0_dl0_crfrnn10_sm0', '', 1, 0], ['planenet_hybrid3_bl0_dl0_ll1_ds0_pb_pp', '', 1, 0], ['planenet_hybrid3_bl0_ll1_bw0.5_pb_pp_ps_sm0', '', 1, 0], ['planenet_hybrid3_ll1_pb_pp', '', 1, 0], ['planenet_hybrid3_ll1_bw0.5_pb_pp_sm0', '', 1, 0]]
 
 
 #ALL_METHODS = [('ll1_pb_pp', 'pixelwise_1'), ('crf1_pb_pp', 'pixelwise_2'), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', 'pixelwise_3'), ('ll1_bw0.5_pb_pp_sm0', 'pixelwise_4')]
@@ -607,12 +607,12 @@ def plotResults(gt_dict, predictions, options):
     curve_labels = [title for title in titles if title != 'pixelwise']
     for metric_index, curves in enumerate(pixel_metric_curves):
         filename = options.test_dir + '/curve_pixel_' + curve_titles[metric_index].replace(' ', '_') + '.png'
-        plotCurves(xs[metric_index], curves, filename = filename, xlabel=xlabels[metric_index], ylabel='pixel coverage', title=curve_titles[metric_index], labels=curve_labels)
+        plotCurves(xs[metric_index], curves, filename = filename, xlabel=xlabels[metric_index], ylabel='pixel coverage', title=curve_titles[metric_index], labels=curve_labels, final=False)
         continue
     for metric_index, curves in enumerate(plane_metric_curves):
         filename = options.test_dir + '/curve_plane_' + curve_titles[metric_index].replace(' ', '_') + '.png'
         curves = [curve[:, 0] / curve[:, 1] for curve in curves]
-        plotCurves(xs[metric_index], curves, filename = filename, xlabel=xlabels[metric_index], ylabel='plane accuracy', title=curve_titles[metric_index], labels=curve_labels)
+        plotCurves(xs[metric_index], curves, filename = filename, xlabel=xlabels[metric_index], ylabel='plane accuracy', title=curve_titles[metric_index], labels=curve_labels, final=False)
         continue
 
     
@@ -1221,7 +1221,7 @@ def getResults(options):
     
 
     for method_index, method in enumerate(methods):
-        if len(method) < 4 or method[3] < 2:
+        if options.useCache == 2 and (len(method) < 4 or method[3] < 2):
             continue
         if method[0] == '':
             continue
@@ -1610,13 +1610,28 @@ if __name__=='__main__':
 
     #args.titles = [ALL_TITLES[int(method)] for method in args.methods]
     #args.methods = [ALL_METHODS[int(method)] for method in args.methods]
-    args.titles = ALL_TITLES
-    args.methods = ALL_METHODS
+    titles = []
+    for methodIndex, flag in enumerate(args.methods):
+        if int(flag) == 0:
+            continue
+        titles.append(ALL_TITLES[methodIndex])
+        pass
+    args.titles = titles
+
+    methods = []
+    for methodIndex, flag in enumerate(args.methods):
+        if int(flag) == 0:
+            continue
+        method = ALL_METHODS[methodIndex]
+        method[3] = int(flag)
+        methods.append(method)
+        pass
+    args.methods = methods
     
     args.result_filename = args.test_dir + '/results_' + str(args.startIndex) + '.npy'
     print(args.titles)
     
-    if args.task == 'plane':
+    if args.task == 'compare':
         evaluatePlanes(args)
     elif args.task == 'depth':
         evaluateDepthPrediction(args)

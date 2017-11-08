@@ -40,7 +40,7 @@ ALL_TITLES = ['planenet', 'pixelwise']
 #ALL_METHODS = [('pb_pp_sm0', 'crf'), ('pb_pp_sm0', '')]
 
 #ALL_METHODS = [('planenet_hybrid1_bl0_ll1_ds0_pp_ps', ''), ('pixelwise_hybrid1_ps', '')]
-ALL_METHODS = [('hybrid_hybrid1_bl0_dl0_ll1_pp_ps_sm0', ''), ('finetuning_hybrid1_ps', '')]
+ALL_METHODS = [('hybrid_hybrid1_bl0_dl0_ll1_sm0', ''), ('finetuning_hybrid1_ps', '')]
 
 def writeHTML(options):
     from html import HTML
@@ -1653,10 +1653,10 @@ def evaluateAll(options):
                 planeMask = gt_s < options.numOutputPlanes
                 edgeMap = calcEdgeMap(segmentation, edgeWidth=5)
                 if edgeMap.sum() == 0:
-                    edges[0] = True
-                    edges[-1] = True
-                    edges[:, 0] = True
-                    edges[:, -1] = True
+                    edgeMap[0] = True
+                    edgeMap[-1] = True
+                    edgeMap[:, 0] = True
+                    edgeMap[:, -1] = True
                     pass
 
                 planenet_result = []
