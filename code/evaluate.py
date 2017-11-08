@@ -25,7 +25,8 @@ from crfasrnn_layer import CrfRnnLayer
 #ALL_TITLES = ['planenet', 'pixelwise', 'pixelwise+RANSAC', 'depth observation+RANSAC', 'pixelwise+semantics+RANSAC', 'gt']
 #ALL_METHODS = [('bl2_ll1_bw0.5_pb_pp_sm0', ''), ('pb_pp', 'pixelwise_1'), ('pb_pp', 'pixelwise_2'), ('pb_pp', 'pixelwise_3'), ('pb_pp', 'semantics'), ('pb_pp', 'gt')]
 
-ALL_TITLES = ['PlaneNet', 'Oracle NYU toolbox', 'NYU toolbox', 'Oracle Manhattan', 'Manhattan', 'Piecewise', 'Oracle Piecewise']
+ALL_TITLES = ['PlaneNet', 'Oracle NYU toolbox', 'NYU toolbox', 'Oracle Manhattan', 'Manhattan', 'Oracle Piecewise', 'Piecewise']
+#ALL_TITLES = ['PlaneNet', '[25] + depth', '[25]', '[9] + depth', '[9]', '[26] + depth', '[26]']
 #ALL_METHODS = [('bl0_dl0_bw0.5_pb_pp_ps_sm0', ''), ('ll1_pb_pp', ''), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', ''), ('ll1_bw0.5_pb_pp_sm0', '')]
 #ALL_METHODS = [('bl0_dl0_ll1_bw0.5_pb_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_ps', ''), ('bl0_dl0_ll1_ds0_pb_pp', '')]
 
@@ -33,7 +34,7 @@ ALL_TITLES = ['PlaneNet', 'Oracle NYU toolbox', 'NYU toolbox', 'Oracle Manhattan
 #ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_crfrnn10_sm0', ''), ('bl0_dl0_ll1_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', ''), ('bl0_dl0_ll1_pb_pp_sm0', '')]
 
 #ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', '', 0), ('bl0_dl0_ll1_pb_pp_sm0', 'crfrnn', 0), ('bl0_dl0_crfrnn10_sm0', '')]
-ALL_METHODS = [['planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0', '', 0, 0], ['planenet_hybrid3_bl0_dl0_ll1_pb_pp_ps_sm0', 'pixelwise_2', 1, 0], ['', 'pixelwise_3', 1, 0], ['', 'pixelwise_4', 1, 2], ['', 'pixelwise_5', 1, 2], ['', 'pixelwise_6', 1, 2], ['', 'pixelwise_7', 1, 2]]
+ALL_METHODS = [['planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0', '', 0, 0], ['planenet_hybrid3_bl0_dl0_ll1_pb_pp_ps_sm0', 'pixelwise_2', 1, 0], ['', 'pixelwise_3', 1, 0], ['', 'pixelwise_4', 1, 0], ['', 'pixelwise_5', 1, 0], ['', 'pixelwise_6', 1, 0], ['', 'pixelwise_7', 1, 0]]
 
 
 #ALL_METHODS = [('ll1_pb_pp', 'pixelwise_1'), ('crf1_pb_pp', 'pixelwise_2'), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', 'pixelwise_3'), ('ll1_bw0.5_pb_pp_sm0', 'pixelwise_4')]
@@ -511,11 +512,16 @@ def evaluatePlanes(options):
     # exit(1)
     
     
-    plotResults(gt_dict, predictions, options)
+    #plotResults(gt_dict, predictions, options)
+    if options.numImages > gt_dict['image'].shape[0]:
+        plotAll(options)
+    else:
+        plotResults(gt_dict, predictions, options)
+        pass
     writeHTML(options)
     return
 
-def plotAll():
+def plotAll(options):
     result_filenames = glob.glob(options.test_dir + '/results_*.npy')
     assert(len(result_filenames) > 0)
     results = np.load(result_filenames[0])
@@ -602,7 +608,7 @@ def plotResults(gt_dict, predictions, options):
     xs.append((np.arange(11) * 0.05).tolist())
     xs.append((np.arange(11) * 0.05).tolist())
     xs.append((np.arange(11) * 0.05).tolist())
-    xlabels = ['IOU', 'IOU', 'IOU', 'plane diff', 'plane diff', 'plane diff']
+    xlabels = ['IOU threshold', 'IOU threshold', 'IOU threshold', 'depth error tolerance', 'depth error tolerance', 'depth error tolerance']
     curve_titles = ['depth error 0.1', 'depth error 0.2', 'depth error 0.3', 'IOU 0.3', 'IOU 0.5', 'IOU 0.7']
     curve_labels = [title for title in titles if title != 'pixelwise']
     for metric_index, curves in enumerate(pixel_metric_curves):

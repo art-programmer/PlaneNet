@@ -2009,14 +2009,52 @@ def evaluatePlanePrediction(predDepths, predSegmentations, predNumPlanes, gtDept
 def plotCurves(x, ys, filename = 'test/test.png', xlabel='', ylabel='', title='', labels=[]):
     import matplotlib.pyplot as plt
     fig = plt.figure()
-    for index, y in enumerate(ys):
-        plt.plot(x, y, figure=fig, label=labels[index])
+    ax = plt.gca()
+    colors = []
+    markers = []
+    sizes = []
+    for label in labels:
+        if 'PlaneNet' in label:
+            colors.append('blue')
+        elif 'NYU' in label:
+            colors.append('red')
+        elif 'Manhattan' in label:
+            colors.append('orange')
+        else:
+            colors.append('brown')
+            pass
+        if 'Oracle' in label:
+            markers.append('o')
+        else:
+            markers.append('')
+            pass
+        if 'PlaneNet' in label:
+            sizes.append(2)
+        else:
+            sizes.append(1)
+            pass        
         continue
-    plt.legend(loc='upper right')
+
+    ordering = [1, 2, 3, 4, 5, 6, 0]
+    final_labels = ['PlaneNet', '[25]+depth', '[25]', '[9]+depth', '[9]', '[26]+depth', '[26]']    
+    #for index, y in enumerate(ys):
+    for order in ordering:
+        plt.plot(x, ys[order], figure=fig, label=final_labels[order], color=colors[order], marker=markers[order], linewidth=sizes[order])
+        continue
+    #plt.legend(loc='upper right')
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.05), ncol=4, fancybox=True, shadow=True, handletextpad=0.1)
     plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.title(title)    
-    plt.ylim((-0.1, 1.1))
+    plt.ylabel(ylabel + ' %')
+    ax.set_yticklabels(np.arange(0, 101, 20))
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.get_xaxis().tick_bottom()
+    ax.get_yaxis().tick_left()    
+    #ax.xaxis.set_label_coords(1.1, -0.025)
+    #plt.title(title)
+    plt.xlim((x[0], x[-1] + 0.01))
+    plt.ylim((0, 1))
+    plt.tight_layout(w_pad=0.3)
     plt.savefig(filename)
     return
     

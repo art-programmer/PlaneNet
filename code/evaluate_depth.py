@@ -36,9 +36,11 @@ import csv
 ALL_TITLES = ['planenet', 'pixelwise']
 #ALL_METHODS = [('bl0_ll1_bw0.5_pp_ps_sm0', ''), ('bl0_ll1_bw0.5_pp_ps_sm0', 'pixelwise_1')]
 #ALL_METHODS = [('planenet_hybrid1_bl0_ll1_ds0_pp_ps', ''), ('pixelwise_hybrid1_ps', 'pixelwise_1')]
-ALL_METHODS = [('planenet_hybrid1_bl0_ll1_ds0_pp_ps', ''), ('pixelwise_hybrid1_ps', '')]
 #ALL_TITLES = ['crf', 'different matching']
 #ALL_METHODS = [('pb_pp_sm0', 'crf'), ('pb_pp_sm0', '')]
+
+#ALL_METHODS = [('planenet_hybrid1_bl0_ll1_ds0_pp_ps', ''), ('pixelwise_hybrid1_ps', '')]
+ALL_METHODS = [('hybrid_hybrid1_bl0_dl0_ll1_pp_ps_sm0', ''), ('finetuning_hybrid1_ps', '')]
 
 def writeHTML(options):
     from html import HTML
@@ -860,7 +862,7 @@ def getResults(options):
         options.predictPixelwise = 1
         options.predictBoundary = 0
         options.anchorPlanes = 0
-        if 'ps' in method[0]:
+        if 'ps' in method[0] and 'hybrid_' not in method[0]:
             options.predictSemantics = 1
         else:
             options.predictSemantics = 0
@@ -1485,7 +1487,7 @@ def evaluateAll(options):
     options.predictPixelwise = 1
     options.predictBoundary = 0
     options.anchorPlanes = 0
-    if 'ps' in method[0]:
+    if 'ps' in method[0] and 'hybrid_' not in method[0]:    
         options.predictSemantics = 1
     else:
         options.predictSemantics = 0
@@ -1637,15 +1639,15 @@ def evaluateAll(options):
                 #predNonPlaneNormals.append(pred_np_n)
                 #predBoundaries.append(pred_b)
                 
-                all_segmentations = np.concatenate([pred_np_m, pred_s], axis=2)
+                all_segmentations = np.concatenate([pred_s, pred_np_m], axis=2)
                 plane_depths = calcPlaneDepths(pred_p, width_high_res, height_high_res, info)
-                all_depths = np.concatenate([pred_np_d, plane_depths], axis=2)
+                all_depths = np.concatenate([plane_depths, pred_np_d], axis=2)
 
                 segmentation = np.argmax(all_segmentations, 2)
                 pred_d = all_depths.reshape(-1, options.numOutputPlanes + 1)[np.arange(width_high_res * height_high_res), segmentation.reshape(-1)].reshape((height_high_res, width_high_res))
 
                 #plane_normals = calcPlaneNormals(pred_p, width_high_res, height_high_res)
-                #all_normals = np.concatenate([np.expand_dims(pred_np_n, 2), plane_normals], axis=2)
+                #all_normals = np.concatenate([plane_normals, np.expand_dims(pred_np_n, 2)], axis=2)
                 #pred_n = all_normals.reshape(-1, options.numOutputPlanes + 1, 3)[np.arange(width_high_res * height_high_res), segmentation.reshape(-1)].reshape((height_high_res, width_high_res, 3))
                 
                 planeMask = gt_s < options.numOutputPlanes
@@ -1675,7 +1677,11 @@ def evaluateAll(options):
                 pixelwise_results.append(pixelwise_result)
                 #exit(1)
 
-                #cv2.imwrite('test/segmentation.png', drawSegmentationImage(segmentation, blackIndex=options.numOutputPlanes))
+                if index < options.visualizeImages:
+                    cv2.imwrite(options.test_dir + '/' + str(index) + '_image.png', ((img + 0.5) * 255).astype(np.uint8))
+                    cv2.imwrite(options.test_dir + '/' + str(index) + '_segmentation.png', drawSegmentationImage(segmentation, blackIndex=options.numOutputPlanes))
+                    cv2.imwrite(options.test_dir + '/' + str(index) + '_depth.png', drawDepthImage(pred_d))
+                    continue
                 #cv2.imwrite('test/mask.png', drawMaskImage(edgeMap))
                 
                 #predDepthNormals.append(calcNormal(pred_d, info))
@@ -1713,7 +1719,7 @@ def evaluateAll(options):
         coord.join(threads)
         sess.close()
         pass
-    return pred_dict
+    return
 
 if __name__=='__main__':
     """
