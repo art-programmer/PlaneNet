@@ -240,13 +240,13 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
 
         depth_loss = tf.constant(0.0)
         if options.depthLoss == 1:
-            tf.reduce_mean(tf.reduce_sum(tf.squared_difference(all_depths, global_gt_dict['depth']) * all_segmentations_softmax, axis=3, keep_dims=True) * validDepthMask) * 10000
+            depth_loss += tf.reduce_mean(tf.reduce_sum(tf.squared_difference(all_depths, global_gt_dict['depth']) * all_segmentations_softmax, axis=3, keep_dims=True) * validDepthMask) * 10000
         elif options.depthLoss == 2:
             depthDiff = tf.abs(all_depths - global_gt_dict['depth'])
             c = 0.3
-            absMask = tf.cast(tf.less(depthDiff, c), , tf.float32)
+            absMask = tf.cast(tf.less(depthDiff, c), tf.float32)
             depthDiff = depthDiff * absMask + (tf.pow(depthDiff, 2) + tf.pow(c, 2)) / (2 * c) * (1 - absMask)
-            tf.reduce_mean(tf.reduce_sum(depthDiff * all_segmentations_softmax, axis=3, keep_dims=True) * validDepthMask) * 10000
+            depth_loss += tf.reduce_mean(tf.reduce_sum(depthDiff * all_segmentations_softmax, axis=3, keep_dims=True) * validDepthMask) * 10000
             pass
         
         if options.predictPixelwise == 1:
@@ -444,7 +444,7 @@ def main(options):
     
     reader_train = RecordReaderAll()
     filename_queue_train = tf.train.string_input_producer(train_inputs, num_epochs=10000)    
-    img_inp_train, global_gt_dict_train, local_gt_dict_train = reader_train.getBatch(filename_queue_train, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
+    img_inp_train, global_gt_dict_train, local_gt_dict_train = reader_train.getBatch(filename_queue_train, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True)
 
     reader_val = RecordReaderAll()
     filename_queue_val = tf.train.string_input_producer(val_inputs, num_epochs=10000)
