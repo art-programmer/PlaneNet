@@ -438,7 +438,7 @@ def main(options):
         val_inputs.append(options.rootFolder + '/planes_matterport_val.tfrecords')
         pass
     if '3' in options.hybrid:
-        train_inputs.append(options.rootFolder + '/planes_scannet_train_sample.tfrecords')
+        train_inputs.append(options.rootFolder + '/planes_scannet_train_sample_5000.tfrecords')
         val_inputs.append(options.rootFolder + '/planes_scannet_val.tfrecords')
         pass
     
@@ -543,7 +543,7 @@ def main(options):
                 hybrid = str(3)
                 pass
             #loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + hybrid + '_bl0_ll1_bw0.5_pb_pp_ps_sm0/checkpoint.ckpt')
-            loader.restore(sess, options.rootFolder + '/checkpoint/sample_np10_hybrid3_bl0_dl0_ds0_sm0/checkpoint.ckpt')            
+            loader.restore(sess, options.rootFolder + '/checkpoint/sample_np10_hybrid3_bl0_dl0_ds0_crfrnn5_sm0/checkpoint.ckpt')            
             #loader.restore(sess,"checkpoint/planenet/checkpoint.ckpt")
             sess.run(batchno.assign(1))
         elif options.restore == 4:
@@ -585,7 +585,7 @@ def main(options):
                     batchType = 0
                     _, total_loss, losses, summary_str, pred, debug, img, gt = sess.run([train_op, loss, loss_dict, summary_op, global_pred_dict, debug_dict, img_inp_train, global_gt_dict_train], feed_dict = {training_flag: batchType == 0})
 
-                    if bno % 500 == 50:
+                    if bno % (100 + 400 * int(options.crfrnn == 0)) == 50:
                         for batchIndex in xrange(options.batchSize):
                             #print(losses)
                             #print(debug['plane'][batchIndex])
