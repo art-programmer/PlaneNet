@@ -371,7 +371,7 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
         if options.labelLoss == 1:
             #label_loss = tf.reduce_mean(tf.reduce_max(all_segmentations_softmax, axis=[1, 2]) * tf.concat([tf.cast(tf.equal(tf.squeeze(num_matches, axis=2), 0), tf.float32), tf.ones([options.batchSize, 1])], axis=1)) * 1000
             #label_loss = tf.reduce_mean(tf.log(1 + tf.reduce_sum(all_segmentations_softmax, axis=[1, 2]))) * 100
-            label_loss = tf.reduce_mean(tf.sqrt(tf.reduce_sum(all_segmentations_softmax, axis=[1, 2]))) * 50
+            label_loss = tf.reduce_mean(tf.sqrt(tf.reduce_sum(all_segmentations_softmax, axis=[1, 2]))) * 0
             #label_loss = tf.reduce_mean(tf.reduce_max(all_segmentations_softmax, axis=[1, 2])) * 1000
             pass
         
