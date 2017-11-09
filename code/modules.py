@@ -1139,3 +1139,65 @@ def calcMessages(planeSegmentations, planeDepths, planesY, numOutputPlanes = 21,
     # messages = tf.nn.depthwise_conv2d(messages, tf.tile(neighbor_kernel, [1, 1, numOutputPlanes, 1]), strides=[1, 1, 1, 1], padding='SAME')
 
     return messages
+
+
+def crfrnnModule(inputs, image_dims, num_classes, theta_alpha, theta_beta, theta_gamma, num_iterations):
+    custom_module = tf.load_op_library('./cpp/high_dim_filter.so')
+    import high_dim_filter_grad  # Register gradients for the custom op
+
+    weights = np.load('weights.npy')
+    weights = [weights[0], weights[1], weights[2]]
+    spatial_ker_weights = tf.Variable(weights[0][:num_classes, :num_classes], name='spatial_ker_weights', trainable=True)
+    bilateral_ker_weights = tf.Variable(weights[1][:num_classes, :num_classes], name='bilateral_ker_weights', trainable=True)
+    compatibility_matrix = tf.Variable(weights[2][:num_classes, :num_classes], name='compatibility_matrix', trainable=True)
+    
+
+    batchSize = int(inputs[0].shape[0])
+    c, h, w = num_classes, image_dims[0], image_dims[1]
+    all_ones = np.ones((c, h, w), dtype=np.float32)
+
+    outputs = []
+    for batchIndex in xrange(batchSize):
+        unaries = tf.transpose(inputs[0][batchIndex, :, :, :], perm=(2, 0, 1))
+        rgb = tf.transpose(inputs[1][batchIndex, :, :, :], perm=(2, 0, 1))
+
+
+        # Prepare filter normalization coefficients
+        spatial_norm_vals = custom_module.high_dim_filter(all_ones, rgb, bilateral=False,
+                                                          theta_gamma=theta_gamma)
+        bilateral_norm_vals = custom_module.high_dim_filter(all_ones, rgb, bilateral=True,
+                                                            theta_alpha=theta_alpha,
+                                                            theta_beta=theta_beta)
+        q_values = unaries
+
+        for i in range(num_iterations):
+            softmax_out = tf.nn.softmax(q_values, dim=0)
+
+            # Spatial filtering
+            spatial_out = custom_module.high_dim_filter(softmax_out, rgb, bilateral=False,
+                                                        theta_gamma=theta_gamma)
+            spatial_out = spatial_out / spatial_norm_vals
+
+            # Bilateral filtering
+            bilateral_out = custom_module.high_dim_filter(softmax_out, rgb, bilateral=True,
+                                                          theta_alpha=theta_alpha,
+                                                          theta_beta=theta_beta)
+            bilateral_out = bilateral_out / bilateral_norm_vals
+
+            # Weighting filter outputs
+            message_passing = (tf.matmul(spatial_ker_weights,
+                                         tf.reshape(spatial_out, (c, -1))) +
+                               tf.matmul(bilateral_ker_weights,
+                                         tf.reshape(bilateral_out, (c, -1))))
+
+            # Compatibility transform
+            pairwise = tf.matmul(compatibility_matrix, message_passing)
+
+            # Adding unary potentials
+            pairwise = tf.reshape(pairwise, (c, h, w))
+            q_values = unaries - pairwise
+            continue
+        outputs.append(tf.transpose(tf.reshape(q_values, (1, c, h, w)), perm=(0, 2, 3, 1)))
+        continue
+    outputs = tf.concat(outputs, axis=0)
+    return outputs
