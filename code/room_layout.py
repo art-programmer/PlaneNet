@@ -19,12 +19,50 @@ from modules import *
 from train_planenet import *
 from planenet import PlaneNet
 
+def getGroundTruth():
+    if os.path.exists('dump/room_layout_gt.npy'):
+        results = np.load('dump/room_layout_gt.npy')
+        results = results[()]
+        return results['index'], results['layout']
+
+    import scipy.io as sio
+    image_indices = sio.loadmat('../../Data/NYU_RGBD/room_layout/index_303.mat')['index'].squeeze()
+    print(image_indices.shape)
+    test_indices = sio.loadmat('../../Data/NYU_RGBD/room_layout/data_split.mat')['test'].squeeze()
+    train_indices = sio.loadmat('../../Data/NYU_RGBD/room_layout/data_split.mat')['train'].squeeze()
+    indices = image_indices.nonzero()[0][test_indices - 1]
+    room_layouts = sio.loadmat('../../Data/NYU_RGBD/room_layout/layout_GT.mat')['layout_GT'].squeeze()
+    room_layouts = room_layouts[:, :, test_indices - 1]
+
+    np.save('dump/room_layout_gt.npy', {'index': indices, 'layout': room_layouts})
+    print(room_layouts.shape)
+    print(room_layouts.max())
+    print(room_layouts.min())        
+    return indices, room_layouts
+    
 
 def getResults(options):
+
+    
     checkpoint_prefix = options.rootFolder + '/checkpoint/'
 
     
     method = ('hybrid_hybrid1_bl0_dl0_ll1_sm0', '')
+    #method = ('finetuning_hybrid1_ps', '')
+    #method = ('planenet_hybrid1_bl0_ll1_ds0_pp_ps', '')
+    left_walls = [0, 5, 6, 11, 18]
+    right_walls = [4, 10, 7, 19]
+    floors = [14]
+    ceilings = []    
+    layout_planes = [ceilings, floors, left_walls + right_walls]
+    
+    # method = ('planenet_hybrid3_bl0_dl0_crfrnn-10_sm0', '')
+    # left_walls = [0, 5, 6, 11, 18]
+    # right_walls = [4, 10]
+    # floors = [14]
+    # ceilings = []    
+    # layout_planes = [ceilings, floors, left_walls + right_walls]
+    
     
     if 'ds0' not in method[0]:
         options.deepSupervisionLayers = ['res4b22_relu', ]
@@ -50,25 +88,29 @@ def getResults(options):
         
     options.checkpoint_dir = checkpoint_prefix + method[0]
     print(options.checkpoint_dir)
-        
+    
     options.suffix = method[1]
 
 
-    pred_dict = getPrediction(options)
+    pred_dict = getPrediction(options, layout_planes)
     #np.save(options.test_dir + '/curves.npy', curves)
     return
 
-def getPrediction(options):
+def getPrediction(options, layout_planes):
     if not os.path.exists(options.test_dir):
         os.system("mkdir -p %s"%options.test_dir)
         pass
 
+    indices, room_layouts = getGroundTruth()
+    
     
     tf.reset_default_graph()
     
 
     #image_list = glob.glob('/home/chenliu/Projects/Data/LSUN/images/*.jpg')
-    image_list = glob.glob('/mnt/vision/NYU_RGBD/images/*.png')
+    #image_list = glob.glob('/mnt/vision/NYU_RGBD/images/*.png')
+
+    image_list = ['/mnt/vision/NYU_RGBD/images/' + ('%08d' % (image_index + 1)) + '.png' for image_index in indices]
     
     training_flag = tf.constant(False, tf.bool)
 
@@ -100,11 +142,13 @@ def getPrediction(options):
     info[19] = 1
     
     pred_dict = {}
-    left_walls = [0, 5, 11]
-    right_walls = [4, 10]    
-    floors = [14]
 
-    layout_planes = [left_walls, right_walls, floors]
+    print(np.concatenate([np.expand_dims(np.arange(22), 1), ColorPalette(22).getColorMap()], axis=1))
+
+    planeAreaThresholds = [WIDTH * HEIGHT / 400, WIDTH * HEIGHT / 400, WIDTH * HEIGHT / 400]
+    dotThreshold = np.cos(np.deg2rad(60))
+    width_high_res = 640
+    height_high_res = 480
     
     with tf.Session(config=config) as sess:
         sess.run(init_op)
@@ -115,12 +159,15 @@ def getPrediction(options):
         
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
-        
+
         
         try:
+            total_accuracy = 0
             for index in xrange(options.startIndex + options.numImages):
                 if index < options.startIndex:
-                    continue                                
+                    continue
+                if options.imageIndex >= 0 and index != options.imageIndex:
+                    continue
                 if index % 10 == 0:
                     print(('image', index))
                     pass
@@ -153,50 +200,214 @@ def getPrediction(options):
                 pred_b = global_pred['boundary'][0]
 
                 
-                #all_segmentations = np.concatenate([pred_s, pred_np_m], axis=2)
-                all_segmentations = np.concatenate([pred_s], axis=2)
-                plane_depths = calcPlaneDepths(pred_p, WIDTH, HEIGHT, info)
-                # all_depths = np.concatenate([pred_np_d, plane_depths], axis=2)
+                all_segmentations = np.concatenate([pred_s, pred_np_m], axis=2)
+                #all_segmentations = pred_s
+                plane_depths = calcPlaneDepths(pred_p, width_high_res, height_high_res, info)
 
+                all_segmentations = softmax(all_segmentations)
+                #segmentation = np.argmax(all_segmentations[:, :, :pred_s.shape[-1]], 2)
                 segmentation = np.argmax(all_segmentations, 2)
-                # pred_d = all_depths.reshape(-1, options.numOutputPlanes + 1)[np.arange(WIDTH * HEIGHT), segmentation.reshape(-1)].reshape(HEIGHT, WIDTH)
-                        
+
+                planeNormals = pred_p / np.maximum(np.linalg.norm(pred_p, axis=-1, keepdims=True), 1e-4)
 
                 #print(pred_p)
-                if index - options.startIndex < options.visualizeImages:
+                if True:
+
+                    #all_depths = np.concatenate([plane_depths, np.expand_dims(cv2.resize(pred_np_d.squeeze(), (width_high_res, height_high_res)), -1)], axis=2)
+                    #pred_d = all_depths.reshape(-1, options.numOutputPlanes + 1)[np.arange(WIDTH * HEIGHT), segmentation.reshape(-1)].reshape(HEIGHT, WIDTH)                    
                     #cv2.imwrite(options.test_dir + '/' + str(index) + '_depth_pred.png', drawDepthImage(pred_d))
-                    #cv2.imwrite(options.test_dir + '/' + str(index) + '_segmentation_pred.png', drawSegmentationImage(segmentation, blackIndex=options.numOutputPlanes))
+                    if options.imageIndex >= 0:
+                        for planeIndex in xrange(options.numOutputPlanes):
+                            cv2.imwrite(options.test_dir + '/mask_' + str(planeIndex) + '.png', drawMaskImage(all_segmentations[:, :, planeIndex]))
+                            cv2.imwrite(options.test_dir + '/mask_' + str(planeIndex) + '_depth.png', drawDepthImage(plane_depths[:, :, planeIndex]))                        
+                            continue
+                        pass
+                    
+                    cv2.imwrite(options.test_dir + '/' + str(index) + '_segmentation_pred.png', drawSegmentationImage(segmentation, blackIndex=options.numOutputPlanes))
                     cv2.imwrite(options.test_dir + '/' + str(index) + '_image.png', img_ori)
 
                     layout_plane_depths = []
-                    for planeInds in layout_planes:
+                    for layoutIndex, planeInds in enumerate(layout_planes[:2]):
                         maxArea = 0
                         for planeIndex in planeInds:
-                            area = (segmentation == planeIndex).sum()
+                            area = (all_segmentations[:, :, planeIndex]).sum()
+                            #area = (segmentation == planeIndex).sum()
                             if area > maxArea:
                                 layout_plane_index = planeIndex
                                 maxArea = area
                                 pass
                             continue
-                        
-                        if maxArea > WIDTH * HEIGHT / 400:
+                        if maxArea > planeAreaThresholds[layoutIndex]:
                             layout_plane_depths.append(plane_depths[:, :, layout_plane_index])
                         else:
-                            layout_plane_depths.append(np.ones((HEIGHT, WIDTH)) * 10)
+                            layout_plane_depths.append(np.ones((height_high_res, width_high_res)) * 10)
                             pass
                         continue
 
+                    wallPlanes = []
+                    for planeIndex in layout_planes[2]:
+                        area = (all_segmentations[:, :, planeIndex]).sum()                        
+                        #area = (segmentation == planeIndex).sum()
+                        if area > planeAreaThresholds[2]:
+                            wallPlanes.append([planeIndex, area])
+                            pass
+                        #print(planeIndex, area)
+                        continue
+                    if options.imageIndex >= 0:
+                        print(wallPlanes)                        
+                        print(all_segmentations.sum(axis=(0, 1)))
+                        pass
+                    
+                    while True:
+                        hasChange = False
+                        newWallPlanes = []
+                        for wallPlaneIndex, wallPlane in enumerate(wallPlanes):
+                            invalid = False
+                            for otherWallPlane in wallPlanes[wallPlaneIndex + 1:]:
+                                if np.dot(planeNormals[otherWallPlane[0]], planeNormals[wallPlane[0]]) > dotThreshold and otherWallPlane[1] > wallPlane[0]:
+                                    invalid = True
+                                    break
+                                continue
+                            if not invalid:
+                                newWallPlanes.append(wallPlane)
+                            else:
+                                hasChange = True
+                                newWallPlanes += wallPlanes[wallPlaneIndex + 1:]
+                                break
+                                pass
+                            continue
+                        if not hasChange:
+                            break
+                        wallPlanes = newWallPlanes
+                        continue
+
+                    if len(wallPlanes) > 3:
+                        wallPlanes = sorted(wallPlanes, key=lambda x:-len(x[1]))
+                        wallPlanes = wallPlanes[:3]
+                        pass
+                    angleWallPlanes = []
+                    for wallPlane in wallPlanes:
+                        planeNormal = planeNormals[wallPlane[0]]
+                        angle = np.rad2deg(np.arctan2(planeNormal[1], planeNormal[0]))
+                        angleWallPlanes.append((angle, wallPlane))
+                        #direction = min(max(int(angle / 45), 0), 3)
+                        #directionPlaneMask[direction] = wallPlane[0]
+                        continue
+
+                    walls = [-1, -1, -1]
+                    minAngleDiff = 90
+                    for angle, wallPlane in angleWallPlanes:
+                        if abs(angle - 90) < minAngleDiff:
+                            walls[1] = wallPlane[0]
+                            minAngleDiff = abs(angle - 90)
+                            middleAngle = angle
+                            pass
+                        continue
+                    if walls[1] >= 0:
+                        maxScore = 0
+                        for angle, wallPlane in angleWallPlanes:
+                            if angle > middleAngle + 1e-4:
+                                if wallPlane[1] > maxScore:
+                                    walls[0] = wallPlane[0]
+                                    maxScore = wallPlane[1]
+                                    pass
+                                pass
+                            continue
+                        maxScore = 0
+                        for angle, wallPlane in angleWallPlanes:
+                            if angle < middleAngle - 1e-4:
+                                if wallPlane[1] > maxScore:
+                                    walls[2] = wallPlane[0]
+                                    maxScore = wallPlane[1]
+                                    pass
+                                pass
+                            continue
+                        pass
+                    
+                    for wall in walls:
+                        if wall >= 0:
+                            layout_plane_depths.append(plane_depths[:, :, wall])
+                        else:
+                            layout_plane_depths.append(np.ones((height_high_res, width_high_res)) * 10)
+                            pass
+                        continue
+
+                    # walls = [-1, -1, -1]
+                    # if directionPlaneMask[0] >= 0:
+                    #     if directionPlaneMask[1] >= 0:
+                    #         if directionPlaneMask[2] >= 0:
+                    #             walls = [directionPlaneMask[0], directionPlaneMask[1], directionPlaneMask[2]]
+                    #         elif directionPlaneMask[3] >= 0:
+                    #             walls = [directionPlaneMask[0], directionPlaneMask[1], directionPlaneMask[3]]
+                    #         else:
+                    #             walls = [directionPlaneMask[0], directionPlaneMask[1], -1]
+                    #             pass
+                    #     else:
+                    #         if directionPlaneMask[2] >= 0:
+                    #             if directionPlaneMask[3] >= 0:
+                    #                 walls = [directionPlaneMask[0], directionPlaneMask[2], directionPlaneMask[3]]
+                    #             else:
+                    #                 walls = [directionPlaneMask[0], directionPlaneMask[2], -1]
+                    #                 pass
+                    #         else:
+                    #             if directionPlaneMask[3] >= 0:
+                    #                 walls = [directionPlaneMask[0], -1, directionPlaneMask[3]]
+                    #             else:
+                    #                 walls = [directionPlaneMask[0], -1, -1]
+                    #                 pass
+                        
+                        
                     layout_plane_depths = np.stack(layout_plane_depths, axis=2)
                     #print(layout_plane_depths.shape)
                     #print(np.argmin(layout_plane_depths, axis=-1).shape)
-                    cv2.imwrite(options.test_dir + '/' + str(index) + '_layout_pred.png', drawSegmentationImage(np.argmin(layout_plane_depths, axis=-1)))
-                    # for planeIndex in xrange(options.numOutputPlanes):
-                    #     cv2.imwrite(options.test_dir + '/mask_' + str(planeIndex) + '.png', drawMaskImage(segmentation == planeIndex))
-                    #     continue
+                    layout_pred = np.argmin(layout_plane_depths, axis=-1) + 1
+                    layout_gt = room_layouts[:, :, index]
+                    
+                    numWalls = 0
+                    for wall in walls:
+                        if wall >= 0:
+                            numWalls += 1
+                            pass
+                        continue
+                    if numWalls == 2:
+                        gtMiddleWallMask = layout_gt == 4
+                        leftWallScore = np.logical_and(layout_pred == 3, gtMiddleWallMask).sum()
+                        middleWallScore = np.logical_and(layout_pred == 4, gtMiddleWallMask).sum()                        
+                        rightWallScore = np.logical_and(layout_pred == 5, gtMiddleWallMask).sum()
+
+                        if leftWallScore > middleWallScore:
+                            layout_pred[layout_pred >= 3] += 1
+                            pass
+                        if rightWallScore > middleWallScore:                        
+                            layout_pred[layout_pred >= 3] -= 1
+                            pass
+                        pass
+
+                    # leftWallMask = layout_gt == 3
+                    # middleWallMask = layout_gt == 4
+                    # rightWallMask = layout_gt == 5
+                    # if leftWallMask.sum() > middleWallMask.sum() and rightWallMask.sum() == 0:
+                    #     layout_gt[np.logical_or(leftWallMask, middleWallMask)] += 1
+                    #     pass
+                    # if rightWallMask.sum() > middleWallMask.sum() and leftWallMask.sum() == 0:
+                    #     layout_gt[np.logical_or(rightWallMask, middleWallMask)] -= 1
+                    #     pass
+                    # pass
+
+                    accuracy = float((layout_pred == layout_gt).sum()) / (width_high_res * height_high_res)
+                    print((index, accuracy))
+                    total_accuracy += accuracy
+
+                    layout_pred_img = drawSegmentationImage(layout_pred + 3)
+                    #cv2.imwrite(options.test_dir + '/' + str(index) + '_layout_pred.png', layout_pred_img)
+                    cv2.imwrite(options.test_dir + '/' + str(index) + '_layout_pred.png', img_ori / 2 + layout_pred_img / 2)
+                    cv2.imwrite(options.test_dir + '/' + str(index) + '_layout_gt.png', drawSegmentationImage(layout_gt + 3, blackIndex=0))
                     pass
-                #exit(1)
-                pass    
+                if options.imageIndex >= 0:                    
+                    exit(1)
+                    pass
                 continue
+            print('accuracy', total_accuracy / options.numImages)
             pass
         except tf.errors.OutOfRangeError:
             print('Done training -- epoch limit reached')
@@ -264,11 +475,6 @@ if __name__=='__main__':
     args = parser.parse_args()
     #args.hybrid = 'hybrid' + args.hybrid
     args.test_dir = 'evaluate/' + args.task + '/' + args.dataset + '/hybrid' + args.hybrid + '/'
-    args.visualizeImages = min(args.visualizeImages, args.numImages)
-    if args.imageIndex >= 0:
-        args.visualizeImages = 1
-        args.numImages = 1            
-        pass
-
+    args.visualizeImages = args.numImages
 
     getResults(args)

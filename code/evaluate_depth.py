@@ -1651,7 +1651,7 @@ def evaluateAll(options):
                 #pred_n = all_normals.reshape(-1, options.numOutputPlanes + 1, 3)[np.arange(width_high_res * height_high_res), segmentation.reshape(-1)].reshape((height_high_res, width_high_res, 3))
                 
                 planeMask = gt_s < options.numOutputPlanes
-                edgeMap = calcEdgeMap(segmentation, edgeWidth=5)
+                edgeMap = calcEdgeMap(gt_s, edgeWidth=5)
                 if edgeMap.sum() == 0:
                     edgeMap[0] = True
                     edgeMap[-1] = True
