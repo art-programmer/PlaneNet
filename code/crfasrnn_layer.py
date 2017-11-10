@@ -47,30 +47,30 @@ class CrfRnnLayer(Layer):
         super(CrfRnnLayer, self).__init__(**kwargs)
 
     def build(self, input_shape):
-        # Weights of the spatial kernel
-        self.spatial_ker_weights = self.add_weight(name='spatial_ker_weights',
-                                                   shape=(self.num_classes, self.num_classes),
-                                                   initializer='uniform',
-                                                   trainable=True)
+        # # Weights of the spatial kernel
+        # self.spatial_ker_weights = self.add_weight(name='spatial_ker_weights',
+        #                                            shape=(self.num_classes, self.num_classes),
+        #                                            initializer='uniform',
+        #                                            trainable=True)
 
-        # Weights of the bilateral kernel
-        self.bilateral_ker_weights = self.add_weight(name='bilateral_ker_weights',
-                                                     shape=(self.num_classes, self.num_classes),
-                                                     initializer='uniform',
-                                                     trainable=True)
+        # # Weights of the bilateral kernel
+        # self.bilateral_ker_weights = self.add_weight(name='bilateral_ker_weights',
+        #                                              shape=(self.num_classes, self.num_classes),
+        #                                              initializer='uniform',
+        #                                              trainable=True)
 
-        # Compatibility matrix
-        self.compatibility_matrix = self.add_weight(name='compatibility_matrix',
-                                                    shape=(self.num_classes, self.num_classes),
-                                                    initializer='uniform',
-                                                    trainable=True)
+        # # Compatibility matrix
+        # self.compatibility_matrix = self.add_weight(name='compatibility_matrix',
+        #                                             shape=(self.num_classes, self.num_classes),
+        #                                             initializer='uniform',
+        #                                             trainable=True)
 
 
         weights = np.load('weights.npy')
         weights = [weights[0], weights[1], weights[2]]
-        self.spatial_ker_weights = tf.Variable(weights[0], name='spatial_ker_weights', trainable=True)
-        self.bilateral_ker_weights = tf.Variable(weights[1], name='bilateral_ker_weights', trainable=True)
-        self.compatibility_ker_weights = tf.Variable(weights[2], name='compatibility_ker_weights', trainable=True)
+        self.spatial_ker_weights = tf.Variable(weights[0][:self.num_classes, :self.num_classes], name='spatial_ker_weights', trainable=True)
+        self.bilateral_ker_weights = tf.Variable(weights[1][:self.num_classes, :self.num_classes], name='bilateral_ker_weights', trainable=True)
+        self.compatibility_matrix = tf.Variable(weights[2][:self.num_classes, :self.num_classes], name='compatibility_matrix', trainable=True)
 
         
         # self.spatial_ker_weights = tf.constant(weights[0].reshape(-1), name='spatial_ker_weights', shape=(self.num_classes, self.num_classes))
