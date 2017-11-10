@@ -383,7 +383,7 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
             #label_loss = tf.reduce_mean(tf.reduce_max(all_segmentations_softmax, axis=[1, 2]) * tf.concat([tf.cast(tf.equal(tf.squeeze(num_matches, axis=2), 0), tf.float32), tf.ones([options.batchSize, 1])], axis=1)) * 1000
             #label_loss = tf.reduce_mean(tf.log(1 + tf.reduce_sum(all_segmentations_softmax, axis=[1, 2]))) * 100
             segmentations_gt = tf.concat([global_gt_dict['segmentation'], global_gt_dict['non_plane_mask']], axis=3)
-            label_loss = tf.reduce_mean(np.maximum(tf.reduce_sum(tf.sqrt(tf.reduce_sum(all_segmentations_softmax, axis=[1, 2])), axis=1) - tf.reduce_sum(tf.sqrt(tf.reduce_sum(segmentations_gt, axis=[1, 2])), axis=1), 0)) * 5
+            label_loss = tf.reduce_mean(tf.maximum(tf.reduce_sum(tf.sqrt(tf.reduce_sum(all_segmentations_softmax, axis=[1, 2])), axis=1) - tf.reduce_sum(tf.sqrt(tf.reduce_sum(segmentations_gt, axis=[1, 2])), axis=1), 0.0)) * 5
             #label_loss = tf.reduce_mean(tf.reduce_max(all_segmentations_softmax, axis=[1, 2])) * 1000
             pass
         
@@ -439,7 +439,7 @@ def main(options):
         val_inputs.append(options.rootFolder + '/planes_matterport_val.tfrecords')
         pass
     if '3' in options.hybrid:
-        train_inputs.append(options.rootFolder + '/planes_scannet_train_sample_5000.tfrecords')
+        train_inputs.append(options.rootFolder + '/planes_scannet_train.tfrecords')
         val_inputs.append(options.rootFolder + '/planes_scannet_val.tfrecords')
         pass
     
@@ -544,7 +544,7 @@ def main(options):
                 hybrid = str(3)
                 pass
             #loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + hybrid + '_bl0_ll1_bw0.5_pb_pp_ps_sm0/checkpoint.ckpt')
-            loader.restore(sess, options.rootFolder + '/checkpoint/sample_np10_hybrid3_bl0_dl0_ds0_crfrnn5_sm0/checkpoint.ckpt')            
+            loader.restore(sess, options.rootFolder + '/checkpoint/sample_np10_hybrid3_bl0_dl0_hl2_ds0_crfrnn5_sm0/checkpoint.ckpt')            
             #loader.restore(sess,"checkpoint/planenet/checkpoint.ckpt")
             sess.run(batchno.assign(1))
         elif options.restore == 4:

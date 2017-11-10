@@ -542,24 +542,33 @@ def getProbabilityMax(segmentation):
     return probabilities
 
 def evaluateNormal(predNormal, gtSegmentations, numPlanes):
-    var = 0
     numImages = predNormal.shape[0]
-    totalNumPlanes = 0
     normal = np.linalg.norm(predNormal, axis=-1)
+    errors = []
     for imageIndex in xrange(numImages):
+        var = 0
+        count = 0
+        
+        invalidNormalMask = np.linalg.norm(predNormal[imageIndex], axis=-1) > 1 - 1e-4
         for planeIndex in xrange(numPlanes[imageIndex]):
-            mask = gtSegmentations[imageIndex, :, :, planeIndex]
+            #mask = gtSegmentations[imageIndex, :, :, planeIndex].astype(np.bool)
+            mask = gtSegmentations[imageIndex] == planeIndex
+            mask = cv2.erode(mask.astype(np.float32), np.ones((5, 5))) > 0.5
+            mask = np.logical_and(mask, invalidNormalMask)
             if mask.sum() == 0:
                 continue
-            normals = predNormal[imageIndex][mask.astype(np.bool)]
+            normals = predNormal[imageIndex][mask]
             averageNormal = np.mean(normals, axis=0, keepdims=True)
             averageNormal /= np.linalg.norm(averageNormal)
             degrees = np.rad2deg(np.arccos(np.minimum(np.sum(normals * averageNormal, axis=-1), 1)))
             #degrees = np.rad2deg(np.arccos(np.sum(normals * averageNormal, axis=-1)))
             degrees = np.minimum(degrees, 180 - degrees)
-            var += degrees.mean()
-            totalNumPlanes += 1
-
+            var += degrees.sum()
+            count += degrees.shape[0]
+            #var += degrees.mean()
+            #totalNumPlanes += 1
+            #print(np.sum(normals * averageNormal, axis=-1))
+            print(planeIndex, degrees.sum() / degrees.shape[0])
             cv2.imwrite('test/mask_' + str(planeIndex) + '.png', drawMaskImage(mask))
             #print(normals)
             # if planeIndex == 4:
@@ -573,11 +582,12 @@ def evaluateNormal(predNormal, gtSegmentations, numPlanes):
             # print(normals[degrees > 90])
             
             continue
-        
+        var /= count
+        errors.append(var)
         #print(var / totalNumPlanes)
         #exit(1)
         continue
-    var /= totalNumPlanes
+    var = np.array(errors).mean()
     print(var)
     return var
         
@@ -2745,6 +2755,18 @@ def calcNormal(depth, info):
         indices = (np.expand_dims(vs, -1) * width + np.expand_dims(us, 0)).reshape(-1)
         planePoints = points[indices]
         planePoints = planePoints[np.linalg.norm(planePoints, axis=-1) > 1e-4]
+
+        planePoints = planePoints[np.abs(planePoints[:, 1] - points[index][1]) < 0.05]
+        # if index == 53 * width + 183 or index == 58 * width + 183:
+        #     print(np.stack([indices % width, indices / width], axis=-1))
+        #     print(index)
+        #     print(planePoints)
+        #     print(planePoints.shape)
+        #     plane = fitPlane(planePoints)
+        #     print(plane)
+        #     print(plane / np.maximum(np.linalg.norm(plane), 1e-4))
+        #     pass
+            
         try:
             plane = fitPlane(planePoints)
             normals.append(-plane / np.maximum(np.linalg.norm(plane), 1e-4))
