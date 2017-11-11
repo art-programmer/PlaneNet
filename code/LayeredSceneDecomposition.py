@@ -2,38 +2,46 @@ import numpy as np
 from pystruct.inference import get_installed, inference_ogm, inference_dispatch
 from utils import *
 
-NUM_LAYERS = 3
-NUM_PLANES = 15
-
-def getConcaveHullProposal(solution, segmentations, planeDepths):
-    height = solution.shape[0]
-    width = solution.shape[1]
-    
-    LEFT_WALLS = [0, 5, 6, 11, 18]
-    RIGHT_WALLS = [4, 10, 7, 19]
-    FLOORS = [14]
-    CEILINGS = []    
-    LAYOUT_PLANES = [CEILINGS, FLOORS, LEFT_WALLS + RIGHT_WALLS]
-
-    planeAreaThresholds = [WIDTH * HEIGHT / 400, WIDTH * HEIGHT / 400, WIDTH * HEIGHT / 400]
-
+def getConcaveHullProposal(solution, depth, segmentations, planeDepths, NUM_LAYERS=3, NUM_PLANES=15, height=192, width=256, ):
     layoutPlanes = []
-    for layoutIndex, planeInds in enumerate(LAYOUT_PLANES):
-        planeCandidates = []
-        for planeIndex in planeInds:
-            area = (segmentations[:, :, planeIndex]).sum()
-            #area = (segmentation == planeIndex).sum()
-            if area > planeAreaThresholds[layoutIndex]:
-                planeCandidates.append(planeIndex)
+    if False:
+        LEFT_WALLS = [0, 5, 6, 11, 18]
+        RIGHT_WALLS = [4, 10, 7, 19]
+        FLOORS = [14]
+        CEILINGS = []    
+        LAYOUT_PLANES = [CEILINGS, FLOORS, LEFT_WALLS + RIGHT_WALLS]
+
+        planeAreaThresholds = [WIDTH * HEIGHT / 400, WIDTH * HEIGHT / 400, WIDTH * HEIGHT / 400]
+
+        for layoutIndex, planeInds in enumerate(LAYOUT_PLANES):
+            planeCandidates = []
+            for planeIndex in planeInds:
+                area = (segmentations[:, :, planeIndex]).sum()
+                #area = (segmentation == planeIndex).sum()
+                if area > planeAreaThresholds[layoutIndex]:
+                    planeCandidates.append(planeIndex)
+                    pass
+                continue
+            if len(planeCandidates) == 0:
+                continue
+            numSelectedPlanes = min(int(layoutIndex == 2) * 2 + 1, len(planeCandidates))
+            planeInds = np.random.choice(planeCandidates, numSelectedPlanes, replace=np.random.random() > 0.5)
+            layoutPlanes += planeInds.tolist()
+            continue    
+    else:
+        conflictAreaThreshold = width * height / 100
+        depthGap = 0.05
+        for planeIndex in xrange(planeDepths.shape[-1]):
+            planeDepth = planeDepths[:, :, planeIndex]
+            if np.logical_and(np.logical_and(planeDepth < depth - depthGap, depth > 1e-4), planeDepth > 1e-4).sum() < conflictAreaThreshold:
+                layoutPlanes.append(planeIndex)
                 pass
             continue
-        if len(planeCandidates) == 0:
-            continue
-        numSelectedPlanes = min(int(layoutIndex == 2) * 2 + 1, len(planeCandidates))
-        planeInds = np.random.choice(planeCandidates, numSelectedPlanes, replace=np.random.random() > 0.5)
-        selectedPlanes += planeInds.tolist()
-        continue
-    layoutPlanes = np.array(selectedPlanes)
+        layoutPlanes = np.random.choice(layoutPlanes, min(5 - int(np.floor(pow(np.random.random(), 2) * 5)), len(layoutPlanes)), replace=False)
+        pass
+                
+            
+    layoutPlanes = np.array(layoutPlanes)
     layoutPlaneDepths = planeDepths[:, :, layoutPlanes]
     layoutSegmentation = np.argmin(layoutPlaneDepths, axis=-1)
     #remainingPlaneInds = np.arange(numPlanes).tolist()
@@ -53,13 +61,11 @@ def getConcaveHullProposal(solution, segmentations, planeDepths):
             proposal[:, :, layer][backgroundMask] = proposal[:, :, layer - 1][backgroundMask]
             continue
         pass
-    proposal[0] = layoutSegmentation
+    proposal[:, :, 0] = layoutSegmentation
     return proposal
 
     
-def getProposals(solution, planes, segmentation, segmentations, planeDepths, iteration):
-    height = solution.shape[1]
-    width = solution.shape[2]
+def getProposals(solution, planes, segmentation, segmentations, planeDepths, iteration, NUM_LAYERS=3, NUM_PLANES=15, height=192, width=256):
     
     numProposals = 3
     if iteration == 0:
@@ -67,21 +73,21 @@ def getProposals(solution, planes, segmentation, segmentations, planeDepths, ite
         proposal[:, :, 0] = segmentation
         return [proposal, ]
     elif iteration == 1:
-        return [solution, getConcaveHullProposal()]
+        return [solution, getConcaveHullProposal(solution, depth, segmentations, planeDepths, NUM_LAYERS, NUM_PLANES, height, width)]
     else:
         return
     
 def decompose(image, depth, normal, info, planes, segmentation):
-    numPlanes = planes.shape[0]
-    NUM_PLANES = max(NUM_PLANES, numPlanes)
-    segmentation[segmentation == numPlanes] = NUM_PLANES
+    NUM_PLANES = planes.shape[0]
+    #segmentation[segmentation == numPlanes] = 
+    NUM_LAYERS = 3
     
     height = depth.shape[0]
     width = depth.shape[1]
-    segmentations = (np.expand_dims(segmentation, -1) == np.arange(numPlanes).reshape([1, 1, -1])).astype(np.float32)
+    segmentations = (np.expand_dims(segmentation, -1) == np.arange(NUM_PLANES).reshape([1, 1, -1])).astype(np.float32)
     
     planeDepths = calcPlaneDepths(planes, width, height, info)    
-    allDepths = np.concatenate([planeDepths, np.zeros(height, width, 1)], axis=2)
+    allDepths = np.concatenate([planeDepths, np.zeros((height, width, 1))], axis=2)
     
     camera = getCameraFromInfo(info)
     urange = (np.arange(width, dtype=np.float32) / (width) * (camera['width']) - camera['cx']) / camera['fx']
@@ -113,10 +119,13 @@ def decompose(image, depth, normal, info, planes, segmentation):
     normalWeight = 1    
     
     unaryCost = distanceCost + normalCost * normalWeight
-    unaryCost *= np.expand_dims(validMask.astype(np.float32), -1)    
+    unaryCost *= np.expand_dims(validMask.astype(np.float32), -1)
+    unaryCost = np.concatenate([unaryCost, np.full((unaryCost.shape[0], 1), 100)], axis=1)
     #unaryCost = unaryCost.reshape((height * width, -1))
 
 
+    nodes = np.arange(height * width).reshape((height, width))    
+    
     image = image.astype(np.float32)
     colors = image.reshape((-1, 3))
     deltas = [(0, 1), (1, 0)]    
@@ -135,7 +144,7 @@ def decompose(image, depth, normal, info, planes, segmentation):
     
     solution = []
     for iteration in xrange(2):
-        proposals = getProposals(solution, planes, segmentation, segmentations, planeDepths, iteration)
+        proposals = getProposals(solution, planes, segmentation, segmentations, planeDepths, iteration, NUM_LAYERS=NUM_LAYERS, NUM_PLANES=NUM_PLANES, height=height, width=width)
         numProposals = len(proposals)
         if numProposals == 1:
             solution = proposals[0]
@@ -143,22 +152,23 @@ def decompose(image, depth, normal, info, planes, segmentation):
         
         visibleSegmentations = []
         for proposal in proposals:
-            visibleSegmentation = proposal[0]
+            visibleSegmentation = proposal[:, :, 0]
             for layer in xrange(1, NUM_LAYERS):
                 mask = proposal[:, :, layer] < NUM_PLANES
                 visibleSegmentation[mask] = proposal[:, :, layer][mask]
                 continue
             visibleSegmentations.append(visibleSegmentation)
             continue
-        visibleSegmentations = np.stack(visibleSegmentations, axis=2).reshape((-1, numProposals))
+        visibleSegmentations = np.stack(visibleSegmentations, axis=-1).reshape((-1, numProposals))
+
         unaries = -readProposalInfo(unaryCost, visibleSegmentations)
 
         proposalDepths = []
         for proposal in proposals:
-            proposalDepths.append(readProposalInfo(proposalDepths, proposal))
+            proposalDepths.append(readProposalInfo(allDepths, proposal))
             continue
         proposalDepths = np.stack(proposalDepths, axis=-1)
-        proposalDepths.reshape((width * height, NUM_LAYERS, numProposals))
+        proposalDepths = proposalDepths.reshape((width * height, NUM_LAYERS, numProposals))
 
         conflictDepthMask = np.zeros((width * height, numProposals), dtype=np.bool)
         for layer in xrange(1, NUM_LAYERS):
@@ -168,8 +178,6 @@ def decompose(image, depth, normal, info, planes, segmentation):
         
         proposals = np.stack(proposals, axis=-1).reshape((width * height, NUM_LAYERS, numProposals))
         #cv2.imwrite('test/segmentation.png', drawSegmentationImage(unaries.reshape((height, width, -1)), blackIndex=numOutputPlanes))
-
-        nodes = np.arange(height * width).reshape((height, width))
 
     
         edges = []
@@ -198,7 +206,7 @@ def decompose(image, depth, normal, info, planes, segmentation):
             #depth_2_2 = proposalDepths[max(deltaY, 0):min(height + deltaY, height), max(deltaX, 0):min(width + deltaX, width)].reshape((-1, numProposals))
             
             pairwise_cost = (labelDiff * depthDiff).sum(1) + visibleLabelDiff * np.reshape(0.02 + np.exp(-colorDiff / intensityDifference), [-1, 1, 1])
-             np.reshape(1 + 45 * np.exp(-colorDiff / intensityDifference), [-1, 1, 1])
+            np.reshape(1 + 45 * np.exp(-colorDiff / intensityDifference), [-1, 1, 1])
             #pairwise_cost = np.expand_dims(pairwise_matrix, 0) * np.ones(np.reshape(1 + 45 * np.exp(-colorDiff / np.maximum(intensityDifference[partial_nodes], 1e-4)), [-1, 1, 1]).shape)
             edges_features.append(-pairwise_cost)
             continue
@@ -214,3 +222,11 @@ def decompose(image, depth, normal, info, planes, segmentation):
     return solution
 
 
+planes = np.load('test/planes.npy')
+segmentation = np.load('test/segmentation.npy')
+image = cv2.imread('test/image.png')
+depth = np.load('test/depth.npy')
+normal = np.load('test/normal.npy')
+info = np.load('test/info.npy')
+
+layeredSegmentations = decompose(image, depth, normal, info, planes, segmentation)
