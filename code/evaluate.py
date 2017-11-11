@@ -848,7 +848,15 @@ def gridSearch(options):
 
         if method[1] == 'crfrnn':
 
-            parameterConfigurations = [(160., 3., 3.), (80., 3., 3.), (40., 3., 3.), (120., 3., 3.)]
+            parameterConfigurations = []
+            for alpha in [15]:
+                for beta in [10]:
+                    for gamma in [3]:
+                        parameterConfigurations.append((alpha, beta, gamma))
+                        continue
+                    continue
+                continue
+            print(parameterConfigurations)
 
             bestScore = 0
             for parameters in parameterConfigurations:
@@ -915,7 +923,7 @@ def gridSearch(options):
                         #exit(1)
                         continue
                     score /= options.numImages
-                    print(score)
+                    print(score, parameters)
                     #exit(1)
                     if score > bestScore:
                         bestScore = score
@@ -923,8 +931,7 @@ def gridSearch(options):
                         pass
                     pass
                 continue
-            print(bestScore)
-            print(bestParameters)
+            print(bestScore, bestParameters)
             pass
         continue
     return

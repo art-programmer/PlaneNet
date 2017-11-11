@@ -1940,29 +1940,17 @@ def evaluatePlanePrediction(predDepths, predSegmentations, predNumPlanes, gtDept
     planeDiffs = np.abs(depthDiffs * intersectionMask).sum(axis=(0, 1)) / np.maximum(intersection, 1e-4)
     planeDiffs[intersection < 1e-4] = 1
     
-    union = np.sum((np.expand_dims(gtSegmentations, -1) + np.expand_dims(predSegmentations, 2) > 0.5).astype(np.float32), axis=(0, 1))
+    union = np.sum(((np.expand_dims(gtSegmentations, -1) + np.expand_dims(predSegmentations, 2)) > 0.5).astype(np.float32), axis=(0, 1))
     planeIOUs = intersection / np.maximum(union, 1e-4)
 
     
     planeDiffs[gtNumPlanes:] = 1000000
     planeIOUs[gtNumPlanes:] = -1
 
+    numPredictions = int(predSegmentations.max(axis=(0, 1)).sum())
     
-    numPredictions = predSegmentations.max(axis=(0, 1)).sum()
-
     numPixels = planeAreas.sum()
     
-    # planeDistanceThreshold = 0.5
-    # diffMask = (planeDiffs < planeDistanceThreshold).astype(np.float32)
-    # maxIOU = np.max(planeIOUs * diffMask, axis=2)
-    # IOU = 0.5
-    # print(maxIOU[0])
-    # print(planeMask[0])
-    # print(((maxIOU >= IOU) * planeMask).sum(1).astype(np.float32))
-    # print(gtNumPlanes)
-    # print(float(((maxIOU >= IOU) * planeMask).sum()) / totalNumPlanes)
-    
-    # exit(1)
 
     # print(gtNumPlanes)
     # #print('IOU')
@@ -1972,6 +1960,7 @@ def evaluatePlanePrediction(predDepths, predSegmentations, predNumPlanes, gtDept
     # #print(np.maximum(intersection, 1e-4))
     # #print(np.stack([depthDiffs.min(1), depthDiffs.argmin(1)], axis=1))
     # print(np.stack([planeDiffs.min(1) * 10000, planeDiffs.argmin(1)], axis=1))
+    # print(planeDiffs)
     # exit(1)
     
     pixel_curves = []
@@ -3726,11 +3715,11 @@ def testPlaneExtraction():
     exit(1)
     return
 
-def estimateFocalLength():
+def estimateFocalLength(image):
     from pylsd import lsd
     
-    height = depth.shape[0]
-    width = depth.shape[1]
+    height = image.shape[0]
+    width = image.shape[1]
 
     lines = lsd(image.mean(2))
 
@@ -3742,7 +3731,8 @@ def estimateFocalLength():
 
     numVPs = 3
     VPs, VPLines, remainingLines = calcVanishingPoints(lines, numVPs=numVPs)
-    focalLength = (np.sqrt((VPs[0] * VPs[1]).sum()) + np.sqrt((VPs[0] * VPs[2]).sum()) + np.sqrt((VPs[1] * VPs[2]).sum())) / 3
+    #focalLength = (np.sqrt(np.linalg.norm(np.cross(VPs[0], VPs[1]))) + np.sqrt(np.linalg.norm(np.cross(VPs[0], VPs[2]))) + np.sqrt(np.linalg.norm(np.cross(VPs[1], VPs[2])))) / 3
+    focalLength = (np.sqrt(np.abs(np.dot(VPs[0], VPs[1]))) + np.sqrt(np.abs(np.dot(VPs[0], VPs[2]))) + np.sqrt(np.abs(np.dot(VPs[1], VPs[2])))) / 3
     return focalLength
 
 def calcEdgeMap(segmentation, edgeWidth=3):
