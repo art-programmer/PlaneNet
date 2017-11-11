@@ -257,7 +257,7 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
         elif options.depthLoss == 4:
             S = tf.one_hot(tf.argmax(all_segmentations, 3), depth=options.numOutputPlanes + 1)
             depth_one_hot = tf.reduce_sum(all_depths * S, axis=3, keep_dims=True)
-            depthDiff = tf.abs(depth_softmax - global_gt_dict['depth'])
+            depthDiff = tf.abs(depth_one_hot - global_gt_dict['depth'])
             c = 0.3
             absMask = tf.cast(tf.less(depthDiff, c), tf.float32)
             depthDiff = depthDiff * absMask + (tf.pow(depthDiff, 2) + tf.pow(c, 2)) / (2 * c) * (1 - absMask)
