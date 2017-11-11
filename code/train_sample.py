@@ -58,7 +58,7 @@ def build_graph(img_inp_train, img_inp_val, training_flag, options):
 
         if abs(options.crfrnn) > 0:
             with tf.variable_scope('crfrnn'):
-                all_segmentations = crfrnnModule([tf.concat([segmentation_pred, non_plane_mask_pred], axis=3), img_inp * 255], image_dims=(HEIGHT, WIDTH), num_classes=options.numOutputPlanes + 1, theta_alpha=80, theta_beta=3, theta_gamma=3, num_iterations=abs(options.crfrnn))
+                all_segmentations = crfrnnModule([tf.concat([segmentation_pred, non_plane_mask_pred], axis=3), img_inp * 255], image_dims=(HEIGHT, WIDTH), num_classes=options.numOutputPlanes + 1, theta_alpha=15, theta_beta=10, theta_gamma=3, num_iterations=abs(options.crfrnn))
                 #all_segmentations = CrfRnnLayer(image_dims=(HEIGHT, WIDTH), num_classes=options.numOutputPlanes + 1, theta_alpha=80., theta_beta=3., theta_gamma=3., num_iterations=abs(options.crfrnn), name='crfrnn')([tf.concat([segmentation_pred, non_plane_mask_pred], axis=3), img_inp * 255])
                 segmentation_pred = all_segmentations[:, :, :, :options.numOutputPlanes]
                 non_plane_mask_pred = all_segmentations[:, :, :, options.numOutputPlanes:]

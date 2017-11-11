@@ -679,8 +679,6 @@ def gridSearch(options):
             if 'pixelwise' in options.methods[method_index][1]:
                 continue
             segmentation = pred_dict['segmentation'][image_index]
-            print(segmentation.shape)
-            print(pred_dict['np_mask'][image_index].shape)
             segmentation = np.concatenate([segmentation, pred_dict['np_mask'][image_index]], axis=2)
             cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_pred_' + str(method_index) + '.png', drawSegmentationImage(segmentation, blackIndex=options.numOutputPlanes))
             continue
@@ -851,10 +849,10 @@ def gridSearch(options):
         if method[1] == 'crfrnn':
 
             parameterConfigurations = []
-            for alpha in xrange(40, 160, 20):
-                for beta in xrange(1, 20):
-                    for gamma in [1, 3]:
-                        parameterConfigurations.append((alpha, gamma, beta))
+            for alpha in [15]:
+                for beta in [10]:
+                    for gamma in [3]:
+                        parameterConfigurations.append((alpha, beta, gamma))
                         continue
                     continue
                 continue
@@ -925,7 +923,7 @@ def gridSearch(options):
                         #exit(1)
                         continue
                     score /= options.numImages
-                    print(score)
+                    print(score, parameters)
                     #exit(1)
                     if score > bestScore:
                         bestScore = score
@@ -933,8 +931,7 @@ def gridSearch(options):
                         pass
                     pass
                 continue
-            print(bestScore)
-            print(bestParameters)
+            print(bestScore, bestParameters)
             pass
         continue
     return
