@@ -48,7 +48,7 @@ ALL_TITLES = ['PlaneNet', 'Oracle NYU toolbox', 'NYU toolbox', 'Oracle Manhattan
 #bl0_dl0_ll1_bw0.5_pb_pp_sm0
 #pb_pp
 
-ALL_METHODS = [['planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0', '', 0, 0], ['planenet_hybrid3_bl0_dl0_crfrnn-10_sm0', '', 1, 0], ['sample_np10_hybrid3_bl0_dl0_ll1_hl2_ds0_crfrnn5_sm0', '', 1, 0], ['sample_np10_hybrid3_bl0_dl0_hl4_ds0_crfrnn5_sm0', '', 1, 0], ['sample_np10_hybrid3_bl0_dl0_hl2_ds0_crfrnn5_sm0', '', 1, 0], ['sample_np10_hybrid3_bl0_dl0_hl3_ds0_crfrnn5_sm0', '', 1, 0], ['sample_np10_hybrid3_bl0_dl0_ds0_crfrnn5_sm0', '', 1, 0]]
+ALL_METHODS = [['planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0', '', 0, 0], ['planenet_hybrid3_bl0_dl0_crfrnn-10_sm0', '', 1, 0], ['sample_np10_hybrid3_bl0_dl0_ll1_hl2_ds0_crfrnn5_sm0', '', 1, 0], ['sample_np10_hybrid3_bl0_dl0_hl4_ds0_crfrnn5_sm0', '', 1, 0], ['sample_np10_hybrid3_bl0_dl0_hl2_ds0_crfrnn5_sm0', '', 1, 0], ['sample_np15_hybrid3_bl0_dl0_hl2_ds0_crfrnn5_sm0', '', 1, 0], ['sample_np10_hybrid3_bl0_dl0_ds0_crfrnn5_sm0', '', 1, 0]]
 
 
 def writeHTML(options):
@@ -186,6 +186,8 @@ def evaluatePlanes(options):
             numPlanes = options.numOutputPlanes
             if 'np10' in options.methods[method_index][0]:
                 numPlanes = 10
+            elif 'np15' in options.methods[method_index][0]:
+                numPlanes = 15
                 pass
             cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_pred_' + str(method_index) + '.png', drawSegmentationImage(segmentation, blackIndex=numPlanes))
             continue
@@ -268,6 +270,8 @@ def evaluatePlanes(options):
             numPlanes = options.numOutputPlanes
             if 'np10' in method[0]:
                 numPlanes = 10
+            elif 'np15' in method[0]:
+                numPlanes = 15
                 pass
             
             predSegmentations = []
@@ -417,6 +421,8 @@ def plotResults(gt_dict, predictions, options):
                 predNumPlanes = options.numOutputPlanes
                 if 'np10' in options.methods[method_index][0]:
                     predNumPlanes = 10
+                elif 'np15' in options.methods[method_index][0]:
+                    predNumPlanes = 15
                     pass
                 pass
 
@@ -551,6 +557,8 @@ def gridSearch(options):
             numPlanes = options.numOutputPlanes
             if 'np10' in options.methods[method_index][0]:
                 numPlanes = 10
+            elif 'np15' in options.methods[method_index][0]:
+                numPlanes = 15                
                 pass
             cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_pred_' + str(method_index) + '.png', drawSegmentationImage(segmentation, blackIndex=numPlanes))
             continue
@@ -864,6 +872,8 @@ def getResults(options):
         method_options.numOutputPlanes = 20
         if 'np10' in method[0]:
             method_options.numOutputPlanes = 10
+        elif 'np15' in method[0]:
+            method_options.numOutputPlanes = 15
             pass
         
         method_options.checkpoint_dir = checkpoint_prefix + method[0]
@@ -878,7 +888,13 @@ def getResults(options):
         elif method[0] == 'gt':
             pred_dict = gt_dict
         else:
-            pred_dict = getPrediction(method_options)
+            while True:
+                try:
+                    pred_dict = getPrediction(method_options)
+                    break
+                except:
+                    continue
+                continue
             pass
 
         # for image_index in xrange(method_options.visualizeImages):
@@ -922,7 +938,7 @@ def getPrediction(options):
     elif options.dataset == 'matterport':
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
-        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_train.tfrecords'], num_epochs=1)
         pass
 
 
@@ -1056,7 +1072,7 @@ def getGroundTruth(options):
     elif options.dataset == 'matterport':
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
-        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_train.tfrecords'], num_epochs=1)
         pass
     
     img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
@@ -1157,12 +1173,8 @@ def getGroundTruth(options):
             gt_dict['num_planes'] = np.array(gtNumPlanes)
             gt_dict['info'] = np.array(gtInfo)
             
-            print(np.array(gtNumPlanes))
-            np.save('test/num_planes.npy', np.array(gtNumPlanes))
 
         except tf.errors.OutOfRangeError:
-            print(np.array(gtNumPlanes))
-            np.save('test/num_planes.npy', np.array(gtNumPlanes))
             print('Done training -- epoch limit reached')
         finally:
             # When done, ask the threads to stop.
@@ -1173,7 +1185,6 @@ def getGroundTruth(options):
         coord.join(threads)
         sess.close()
         pass
-    exit(1)
     return gt_dict
 
 
