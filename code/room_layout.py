@@ -16,8 +16,11 @@ from utils import *
 from plane_utils import *
 from modules import *
 
-from train_planenet import *
+from train_planenet import build_graph
+from train_sample import build_graph as build_graph_sample
 from planenet import PlaneNet
+HEIGHT=192
+WIDTH=256
 
 def getGroundTruth(options):
     if options.useCache == 1 and os.path.exists(options.test_dir + '/room_layout_gt.npy'):
@@ -77,8 +80,9 @@ def getResults(options):
     floors = [14]
     ceilings = []    
     layout_planes = [ceilings, floors, left_walls + right_walls]
-    
-    # method = ('planenet_hybrid3_bl0_dl0_crfrnn-10_sm0', '')
+
+    method = ('sample_np10_hybrid3_bl0_dl0_hl2_ds0_crfrnn5_sm0', '')
+    #method = ('planenet_np10_hybrid3_bl0_dl0_crfrnn-10_sm0', '')
     # left_walls = [0, 5, 6, 11, 18]
     # right_walls = [4, 10]
     # floors = [14]
@@ -148,7 +152,11 @@ def getPrediction(options, layout_planes):
     img_inp = tf.placeholder(tf.float32, shape=[1, HEIGHT, WIDTH, 3], name='image')
     
     options.gpu_id = 0
-    global_pred_dict, local_pred_dict, deep_pred_dicts = build_graph(img_inp, img_inp, training_flag, options)
+    if 'sample' in options.checkpoint_dir:
+        global_pred_dict, local_pred_dict, deep_pred_dicts = build_graph_sample(img_inp, img_inp, training_flag, options)
+    else:
+        global_pred_dict, local_pred_dict, deep_pred_dicts = build_graph(img_inp, img_inp, training_flag, options)
+        pass
 
     var_to_restore = tf.global_variables()
 

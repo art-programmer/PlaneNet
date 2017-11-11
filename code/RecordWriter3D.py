@@ -195,7 +195,7 @@ if __name__=='__main__':
             else:
                 scene_ids = all_scene_ids[:int(len(all_scene_ids) * 0.9)]
                 pass
-            
+
             segmentationPaths = []
             for scene_id in scene_ids:
                 segmentationPaths += glob.glob(ROOT_FOLDER + scene_id + '/annotation/segmentation*/frame-*.segmentation.png')
@@ -207,14 +207,15 @@ if __name__=='__main__':
                 imagePath = {'image': framePath.replace('segmentation.png', 'color.jpg'), 'depth': framePath.replace('segmentation.png', 'depth.pgm'), 'segmentation': segmentationPath, 'plane': '/'.join(segmentationPath.split('/')[:-2]) + '/planes.npy', 'plane_relation': '/'.join(segmentationPath.split('/')[:-2]) + '/plane_relations.npy', 'pose': framePath.replace('segmentation.png', 'pose.txt'), 'info': '/'.join(framePath.split('/')[:-1]) + '/_info.txt'}
                 imagePaths.append(imagePath)
                 continue
+            print('num images', len(imagePaths))
             random.shuffle(imagePaths)
             if split == 'val':
                 imagePaths = imagePaths[:2000]
             else:
-                imagePaths = imagePaths[:70000]
+                imagePaths = imagePaths[:100000]
                 pass
                 
-            writeRecordFile('/mnt/vision/PlaneNet/planes_' + dataset + '_' + split + '.tfrecords', imagePaths)
+            writeRecordFile('/mnt/vision/PlaneNet/planes_' + dataset + '_' + split + '_raw.tfrecords', imagePaths)
             continue
         continue
 
