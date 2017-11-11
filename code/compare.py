@@ -938,7 +938,7 @@ def getPrediction(options):
     elif options.dataset == 'matterport':
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
-        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_train.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
         pass
 
 
@@ -1072,7 +1072,7 @@ def getGroundTruth(options):
     elif options.dataset == 'matterport':
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
-        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_train.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
         pass
     
     img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
