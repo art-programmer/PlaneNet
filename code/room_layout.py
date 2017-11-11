@@ -19,25 +19,47 @@ from modules import *
 from train_planenet import *
 from planenet import PlaneNet
 
-def getGroundTruth():
-    if os.path.exists('dump/room_layout_gt.npy'):
-        results = np.load('dump/room_layout_gt.npy')
+def getGroundTruth(options):
+    if options.useCache == 1 and os.path.exists(options.test_dir + '/room_layout_gt.npy'):
+        results = np.load(options.test_dir + '/room_layout_gt.npy')
         results = results[()]
         return results['index'], results['layout']
 
     import scipy.io as sio
-    image_indices = sio.loadmat('../../Data/NYU_RGBD/room_layout/index_303.mat')['index'].squeeze()
-    print(image_indices.shape)
-    test_indices = sio.loadmat('../../Data/NYU_RGBD/room_layout/data_split.mat')['test'].squeeze()
-    train_indices = sio.loadmat('../../Data/NYU_RGBD/room_layout/data_split.mat')['train'].squeeze()
-    indices = image_indices.nonzero()[0][test_indices - 1]
-    room_layouts = sio.loadmat('../../Data/NYU_RGBD/room_layout/layout_GT.mat')['layout_GT'].squeeze()
-    room_layouts = room_layouts[:, :, test_indices - 1]
-
-    np.save('dump/room_layout_gt.npy', {'index': indices, 'layout': room_layouts})
-    print(room_layouts.shape)
-    print(room_layouts.max())
-    print(room_layouts.min())        
+    if options.dataset == 'NYU_RGBD':
+        image_indices = sio.loadmat('../../Data/NYU_RGBD/room_layout/index_303.mat')['index'].squeeze()
+        print(image_indices.shape)
+        test_indices = sio.loadmat('../../Data/NYU_RGBD/room_layout/data_split.mat')['test'].squeeze()
+        train_indices = sio.loadmat('../../Data/NYU_RGBD/room_layout/data_split.mat')['train'].squeeze()
+        indices = image_indices.nonzero()[0][test_indices - 1]
+        room_layouts = sio.loadmat('../../Data/NYU_RGBD/room_layout/layout_GT.mat')['layout_GT'].squeeze()
+        room_layouts = room_layouts[:, :, test_indices - 1]
+        room_layouts = np.transpose(room_layouts, [2, 0, 1])
+    else:
+        filenames = glob.glob('/mnt/vision/RoomLayout_Hedau/*.mat')
+        room_layouts = []
+        indices = []
+        for filename in filenames:
+            room_layout = sio.loadmat(filename)
+            if 'fields' not in room_layout:
+                continue
+            room_layout = room_layout['fields'].squeeze()
+            new_room_layout = np.zeros(room_layout.shape)
+            new_room_layout[room_layout == 5] = 1
+            new_room_layout[room_layout == 1] = 2
+            new_room_layout[room_layout == 4] = 3
+            new_room_layout[room_layout == 2] = 4
+            new_room_layout[room_layout == 3] = 5
+            
+            room_layouts.append(new_room_layout)
+            indices.append(filename)
+            continue
+        pass
+        
+    np.save(options.test_dir + '/room_layout_gt.npy', {'index': indices, 'layout': room_layouts})
+    #print(room_layouts.shape)
+    #print(room_layouts.max())
+    #print(room_layouts.min())        
     return indices, room_layouts
     
 
@@ -97,20 +119,29 @@ def getResults(options):
     return
 
 def getPrediction(options, layout_planes):
+    print(options.test_dir)
     if not os.path.exists(options.test_dir):
         os.system("mkdir -p %s"%options.test_dir)
         pass
 
-    indices, room_layouts = getGroundTruth()
+    indices, room_layouts = getGroundTruth(options)
     
     
-    tf.reset_default_graph()
-    
-
     #image_list = glob.glob('/home/chenliu/Projects/Data/LSUN/images/*.jpg')
     #image_list = glob.glob('/mnt/vision/NYU_RGBD/images/*.png')
 
-    image_list = ['/mnt/vision/NYU_RGBD/images/' + ('%08d' % (image_index + 1)) + '.png' for image_index in indices]
+
+    if options.dataset == 'NYU_RGBD':
+        image_list = ['/mnt/vision/NYU_RGBD/images/' + ('%08d' % (image_index + 1)) + '.png' for image_index in indices]
+    else:
+        image_list = [filename.replace('RoomLayout_Hedau', 'RoomLayout_Hedau/Images').replace('_labels.mat', '.jpg') for filename in indices]
+        #image_list = glob.glob('/mnt/vision/RoomLayout_Hedau/Images/*.png') + glob.glob('/mnt/vision/RoomLayout_Hedau/Images/*.jpg')
+        pass
+    options.numImages = min(options.numImages, len(image_list))
+
+    
+    tf.reset_default_graph()    
+
     
     training_flag = tf.constant(False, tf.bool)
 
@@ -178,7 +209,8 @@ def getPrediction(options, layout_planes):
                 # print(img._getexif())
                 # print(img.shape)
                 # exit(1)
-                
+
+                #print(image_list[index])
                 img_ori = cv2.imread(image_list[index])
 
                 img = cv2.resize(img_ori, (WIDTH, HEIGHT))
@@ -199,7 +231,24 @@ def getPrediction(options, layout_planes):
 
                 pred_b = global_pred['boundary'][0]
 
-                
+
+                if options.dataset != 'NYU_RGBD':
+                    info = np.zeros(info.shape)
+                    focalLength = estimateFocalLength(img_ori)
+                    info[0] = focalLength
+                    info[5] = focalLength
+                    info[2] = img_ori.shape[1] / 2
+                    info[6] = img_ori.shape[0] / 2
+                    info[16] = img_ori.shape[1]
+                    info[17] = img_ori.shape[0]
+                    info[10] = 1
+                    info[15] = 1
+                    info[18] = 1000
+                    info[19] = 5
+                    width_high_res = img_ori.shape[1]
+                    height_high_res = img_ori.shape[0]
+                    pass
+                    
                 all_segmentations = np.concatenate([pred_s, pred_np_m], axis=2)
                 #all_segmentations = pred_s
                 plane_depths = calcPlaneDepths(pred_p, width_high_res, height_high_res, info)
@@ -361,8 +410,14 @@ def getPrediction(options, layout_planes):
                     #print(layout_plane_depths.shape)
                     #print(np.argmin(layout_plane_depths, axis=-1).shape)
                     layout_pred = np.argmin(layout_plane_depths, axis=-1) + 1
-                    layout_gt = room_layouts[:, :, index]
-                    
+                    layout_gt = room_layouts[index]
+
+                    layout_pred_img = drawSegmentationImage(layout_pred + 3)
+                    #cv2.imwrite(options.test_dir + '/' + str(index) + '_layout_pred.png', layout_pred_img)
+                    cv2.imwrite(options.test_dir + '/' + str(index) + '_layout_pred.png', img_ori / 2 + layout_pred_img / 2)
+                    cv2.imwrite(options.test_dir + '/' + str(index) + '_layout_gt.png', drawSegmentationImage(layout_gt + 3, blackIndex=0))
+                    #continue
+                
                     numWalls = 0
                     for wall in walls:
                         if wall >= 0:
@@ -396,12 +451,7 @@ def getPrediction(options, layout_planes):
 
                     accuracy = float((layout_pred == layout_gt).sum()) / (width_high_res * height_high_res)
                     print((index, accuracy))
-                    total_accuracy += accuracy
-
-                    layout_pred_img = drawSegmentationImage(layout_pred + 3)
-                    #cv2.imwrite(options.test_dir + '/' + str(index) + '_layout_pred.png', layout_pred_img)
-                    cv2.imwrite(options.test_dir + '/' + str(index) + '_layout_pred.png', img_ori / 2 + layout_pred_img / 2)
-                    cv2.imwrite(options.test_dir + '/' + str(index) + '_layout_gt.png', drawSegmentationImage(layout_gt + 3, blackIndex=0))
+                    total_accuracy += accuracy                    
                     pass
                 if options.imageIndex >= 0:                    
                     exit(1)
@@ -437,7 +487,7 @@ if __name__=='__main__':
                         default=20, type=int)
     parser.add_argument('--dataset', dest='dataset',
                         help='dataset name',
-                        default='ScanNet', type=str)
+                        default='NYU_RGBD', type=str)
     parser.add_argument('--hybrid', dest='hybrid',
                         help='hybrid',
                         default='3', type=str)
@@ -452,7 +502,7 @@ if __name__=='__main__':
                         default=0, type=int)    
     parser.add_argument('--useCache', dest='useCache',
                         help='use cache',
-                        default=0, type=int)
+                        default=1, type=int)
     # parser.add_argument('--useCRF', dest='useCRF',
     #                     help='use crf',
     #                     default=0, type=int)
@@ -477,4 +527,8 @@ if __name__=='__main__':
     args.test_dir = 'evaluate/' + args.task + '/' + args.dataset + '/hybrid' + args.hybrid + '/'
     args.visualizeImages = args.numImages
 
+    # image = cv2.imread('evaluate/layout/ScanNet/hybrid3/22_image.png')
+    # focal_length = estimateFocalLength(image)
+    # print(focal_length)
+    # exit(1)
     getResults(args)
