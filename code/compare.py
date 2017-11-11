@@ -1161,6 +1161,17 @@ def getGroundTruth(options):
                 gtNumPlanes.append(gt_num_p)
                 
                 gtInfo.append(global_gt['info'][0])
+
+                if index == 10:
+                    print(dump)
+                    np.save('test/planes.npy', gt_p[:gt_num_p])
+                    np.save('test/segmentation.npy', np.concatenate(np.argmax([gt_s[:, :, :gt_num_p], global_gt['non_plane_mask']], axis=-1), axis=-1))
+                    cv2.imwrite('test/image.png', image)
+                    np.save('test/depth.npy', gt_d)
+                    gt_n = calcNormal(gt_d, global_gt['info'][0])
+                    np.save('test/normal.npy', gt_n)
+                    np.save('test/info.npy', global_gt['info'][0])
+                    exit(1)
                 continue
 
             gt_dict['image'] = np.array(images)
