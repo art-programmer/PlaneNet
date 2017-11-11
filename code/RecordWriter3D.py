@@ -180,7 +180,8 @@ if __name__=='__main__':
     #imagePaths = glob.glob('/home/chenliu/Projects/Data/ScanNet/*/annotation/segmentation/frame-*.segmentation.png')
     #imagePaths = glob.glob('/mnt/vision/ScanNet/*/annotation/segmentation/frame-*.segmentation.png')
 
-    datasets = {'scannet': '/mnt/vision/ScanNet/data/', 'matterport': '/mnt/vision/matterport/data/v1/scans/'}
+    #datasets = {'scannet': '/mnt/vision/ScanNet/data/', 'matterport': '/mnt/vision/matterport/data/v1/scans/'}
+    datasets = {'scannet': '/home/chenliu/Projects/Data/ScanNet/data/', 'matterport': '/mnt/vision/matterport/data/v1/scans/'}
 
     for dataset, ROOT_FOLDER in datasets.iteritems():
         if dataset == 'matterport':
@@ -207,15 +208,16 @@ if __name__=='__main__':
                 imagePath = {'image': framePath.replace('segmentation.png', 'color.jpg'), 'depth': framePath.replace('segmentation.png', 'depth.pgm'), 'segmentation': segmentationPath, 'plane': '/'.join(segmentationPath.split('/')[:-2]) + '/planes.npy', 'plane_relation': '/'.join(segmentationPath.split('/')[:-2]) + '/plane_relations.npy', 'pose': framePath.replace('segmentation.png', 'pose.txt'), 'info': '/'.join(framePath.split('/')[:-1]) + '/_info.txt'}
                 imagePaths.append(imagePath)
                 continue
-            print('num images', len(imagePaths))
             random.shuffle(imagePaths)
             if split == 'val':
                 imagePaths = imagePaths[:2000]
             else:
-                imagePaths = imagePaths[:100000]
+                imagePaths = imagePaths[100000:]
                 pass
+            print('num images', len(imagePaths))
                 
-            writeRecordFile('/mnt/vision/PlaneNet/planes_' + dataset + '_' + split + '_raw.tfrecords', imagePaths)
+            #writeRecordFile('/mnt/vision/PlaneNet/planes_' + dataset + '_' + split + '_raw.tfrecords', imagePaths)
+            writeRecordFile('/home/chenliu/Projects/Data/PlaneNet/planes_' + dataset + '_' + split + '_raw_2.tfrecords', imagePaths)
             continue
         continue
 

@@ -58,7 +58,7 @@ def build_graph(img_inp_train, img_inp_val, training_flag, options):
 
         if abs(options.crfrnn) > 0:
             with tf.variable_scope('crfrnn'):
-                all_segmentations = crfrnnModule([tf.concat([segmentation_pred, non_plane_mask_pred], axis=3), img_inp * 255], image_dims=(HEIGHT, WIDTH), num_classes=options.numOutputPlanes + 1, theta_alpha=15, theta_beta=10, theta_gamma=3, num_iterations=abs(options.crfrnn))
+                all_segmentations = crfrnnModule([tf.concat([segmentation_pred, non_plane_mask_pred], axis=3), img_inp * 255], image_dims=(HEIGHT, WIDTH), num_classes=options.numOutputPlanes + 1, theta_alpha=30, theta_beta=10, theta_gamma=1, num_iterations=abs(options.crfrnn))
                 #all_segmentations = CrfRnnLayer(image_dims=(HEIGHT, WIDTH), num_classes=options.numOutputPlanes + 1, theta_alpha=80., theta_beta=3., theta_gamma=3., num_iterations=abs(options.crfrnn), name='crfrnn')([tf.concat([segmentation_pred, non_plane_mask_pred], axis=3), img_inp * 255])
                 segmentation_pred = all_segmentations[:, :, :, :options.numOutputPlanes]
                 non_plane_mask_pred = all_segmentations[:, :, :, options.numOutputPlanes:]
@@ -257,7 +257,7 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
         elif options.depthLoss == 4:
             S = tf.one_hot(tf.argmax(all_segmentations, 3), depth=options.numOutputPlanes + 1)
             depth_one_hot = tf.reduce_sum(all_depths * S, axis=3, keep_dims=True)
-            depthDiff = tf.abs(depth_softmax - global_gt_dict['depth'])
+            depthDiff = tf.abs(depth_one_hot - global_gt_dict['depth'])
             c = 0.3
             absMask = tf.cast(tf.less(depthDiff, c), tf.float32)
             depthDiff = depthDiff * absMask + (tf.pow(depthDiff, 2) + tf.pow(c, 2)) / (2 * c) * (1 - absMask)
@@ -530,7 +530,7 @@ def main(options):
             bno=sess.run(batchno)
             print(bno)
         elif options.restore == 2:
-            var_to_restore = [v for v in var_to_restore if 'plane' not in v.name and 'segmentation_conv2' not in v.name]
+            var_to_restore = [v for v in var_to_restore if 'plane' not in v.name and 'segmentation_conv2' not in v.name and 'crfrnn' not in v.name]
             loader = tf.train.Saver(var_to_restore)
             loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + options.hybrid + '_bl0_dl0_ll1_pb_pp_sm0/checkpoint.ckpt')
             #restore the same model from checkpoint but reset batchno to 1
@@ -548,9 +548,9 @@ def main(options):
             # if options.predictSemantics == 1:
             #     var_to_restore = [v for v in var_to_restore if 'semantics' not in v.name]
             #     pass
-            if np.abs(options.crfrnn) > 0:
-                var_to_restore = [v for v in var_to_restore if 'crfrnn' not in v.name]
-                pass
+            # if np.abs(options.crfrnn) > 0:
+            #     var_to_restore = [v for v in var_to_restore if 'crfrnn' not in v.name]
+            #     pass
             
             loader = tf.train.Saver(var_to_restore)
             if len(options.hybrid) == 1:
@@ -558,7 +558,6 @@ def main(options):
             else:
                 hybrid = str(3)
                 pass
-            #loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + hybrid + '_bl0_ll1_bw0.5_pb_pp_ps_sm0/checkpoint.ckpt')
             loader.restore(sess, options.rootFolder + '/checkpoint/sample_np10_hybrid3_bl0_dl0_hl2_ds0_crfrnn5_sm0/checkpoint.ckpt')
             #loader.restore(sess,"checkpoint/planenet/checkpoint.ckpt")
             sess.run(batchno.assign(1))
