@@ -32,9 +32,11 @@ def writeRecordFile(split, dataset):
     numOutputPlanes = 20
     if split == 'train':
         reader = RecordReader3D()
-        filename_queue = tf.train.string_input_producer(['../planes_' + dataset + '_train.tfrecords'], num_epochs=1)
+        #filename_queue = tf.train.string_input_producer(['../planes_' + dataset + '_train.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_' + dataset + '_train_raw.tfrecords', '/mnt/vision/PlaneNet/planes_' + dataset + '_train_raw_2.tfrecords'], num_epochs=1)
         img_inp, global_gt_dict, _ = reader.getBatch(filename_queue, numOutputPlanes=numOutputPlanes, batchSize=batchSize, random=False, getLocal=True)
-        writer = tf.python_io.TFRecordWriter('/mnt/vision/PlaneNet/planes_' + dataset + '_train.tfrecords')
+        #writer = tf.python_io.TFRecordWriter('/mnt/vision/PlaneNet/planes_' + dataset + '_train.tfrecords')
+        writer = tf.python_io.TFRecordWriter('/mnt/vision/PlaneNet/planes_' + dataset + '_train_new.tfrecords')
         numImages = 50000
     else:
         reader = RecordReader3D()
