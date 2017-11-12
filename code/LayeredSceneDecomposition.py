@@ -92,11 +92,11 @@ def getConcaveHullProposal(solution, depth, segmentations, planeDepths, NUM_LAYE
 
 def getExpansionProposals(solution, depth, segmentations, planeDepths, NUM_LAYERS=3, NUM_PLANES=15, height=192, width=256):
  
-    layoutPlanes = solution[:, :, 0].unique()
-    layoutDepth = np.zeros(height, width)
+    layoutPlanes = np.unique(solution[:, :, 0])
+    layoutDepth = np.zeros((height, width))
     for layoutPlane in layoutPlanes:
         mask = solution[:, :, 0] == layoutPlane
-        layoutDepth[mask] = planeDepths[:, :, layoutPlane]
+        layoutDepth[mask] = planeDepths[:, :, layoutPlane][mask]
         continue
 
     depthGap = 0.1
@@ -115,9 +115,6 @@ def getExpansionProposals(solution, depth, segmentations, planeDepths, NUM_LAYER
         selectedPlaneIndex = np.random.randint(NUM_PLANES)
         pass
             
-    layoutPlaneDepths * solution[:, :, 0]
-
-
     
     proposals = []
     for layer in xrange(NUM_LAYERS):
@@ -128,9 +125,10 @@ def getExpansionProposals(solution, depth, segmentations, planeDepths, NUM_LAYER
             if otherLayer == layer:
                 continue
             mask = proposal[otherLayer] == selectedPlaneIndex
-            if mask.sum() > 0:
+            if mask.sum() == 0:
+                continue
             if otherLayer == 0:
-                layoutPlanes.remove(planeIndex)
+                layoutPlanes = np.delete(layoutPlanes, np.argwhere(layoutPlanes == selectedPlaneIndex))
                 layoutPlaneDepths = planeDepths[:, :, layoutPlanes]
                 layoutSegmentation = np.argmin(layoutPlaneDepths, axis=-1)
                 newLayoutSegmentation = layoutSegmentation.copy()
@@ -142,8 +140,8 @@ def getExpansionProposals(solution, depth, segmentations, planeDepths, NUM_LAYER
                 proposal[otherLayer][mask] == NUM_PLANES
                 pass
             continue
-        proposal[layer] = selectedPlaneIndex]
-        proposals.append(proposal)
+        proposal[layer].fill(selectedPlaneIndex)
+        proposals.append(np.stack(proposal, axis=-1))
         continue
     
     return proposals
@@ -159,6 +157,7 @@ def getProposals(solution, planes, segmentation, segmentations, planeDepths, ite
     elif iteration == 1:
         return [solution, getConcaveHullProposal(solution, depth, segmentations, planeDepths, NUM_LAYERS, NUM_PLANES, height, width)]
     else:
+        return [solution] + getExpansionProposals(solution, depth, segmentations, planeDepths, NUM_LAYERS, NUM_PLANES, height, width)
         return
     
 def decompose(image, depth, normal, info, planes, segmentation):
@@ -232,17 +231,25 @@ def decompose(image, depth, normal, info, planes, segmentation):
     depthGap = 0.05
     
     solution = []
-    for iteration in xrange(2):
+    for iteration in xrange(3):
+        if os.path.exists('test/solution_' + str(iteration) + '.npy') and iteration <= 1:
+            solution = np.load('test/solution_' + str(iteration) + '.npy')
+            continue
+        
         proposals = getProposals(solution, planes, segmentation, segmentations, planeDepths, iteration, NUM_LAYERS=NUM_LAYERS, NUM_PLANES=NUM_PLANES, height=height, width=width)
         numProposals = len(proposals)
         if numProposals == 1:
             solution = proposals[0]
             continue
+
+        
         for proposalIndex, proposal in enumerate(proposals):
             drawSolution(proposal, NUM_PLANES, proposalIndex)
             continue
 
-
+        if iteration == 2:
+            exit(1)
+            
         visibleSegmentations = []
         for proposal in proposals:
             visibleSegmentation = proposal[:, :, 0].copy()
@@ -288,8 +295,8 @@ def decompose(image, depth, normal, info, planes, segmentation):
         #print((unaries[:, 1] - unaries[:, 0]).min())        
         #exit(1)
         #cv2.imwrite('test/segmentation.png', drawSegmentationImage(unaries.reshape((height, width, -1)), blackIndex=numOutputPlanes))
-        cv2.imwrite('test/mask_0.png', drawMaskImage((unaries[:, 1] - unaries[:, 0]).reshape((height, width)) / 2 + 0.5))
-        exit(1)
+        #cv2.imwrite('test/mask_0.png', drawMaskImage((unaries[:, 1] - unaries[:, 0]).reshape((height, width)) / 2 + 0.5))
+        #exit(1)
         
         edges = []
         edges_features = []
@@ -360,12 +367,12 @@ def decompose(image, depth, normal, info, planes, segmentation):
 
         solution = inference_ogm(-unaries * 10, edges_features, edges, return_energy=False, alg='trw')
 
-        print(solution.max())
-        print(solution.min())        
         cv2.imwrite('test/solution_' + str(iteration) + '.png', drawSegmentationImage(solution.reshape((height, width))))
         
         solution = np.tile(solution.reshape([height * width, 1, 1]), [1, NUM_LAYERS, 1])
         solution = readProposalInfo(proposals, solution).reshape((height, width, NUM_LAYERS))
+
+        np.save('test/solution_' + str(iteration) + '.npy', solution)
         continue
     
     return solution
