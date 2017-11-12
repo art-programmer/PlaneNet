@@ -93,7 +93,11 @@ def writeRecordFile(split, dataset):
                         pass
                     info = np.concatenate([info[3:], info[:3], np.ones(1) * datasetIndex])
 
-                    depthFilename = global_gt['image_path'][batchIndex].replace('color.jpg', 'depth.pgm')
+                    imagePath = global_gt['image_path'][batchIndex]
+                    if '/home/chenliu' in imagePath:
+                        imagePath = imagePath.replace('/home/chenliu/Projects/Data/', '/mnt/vision/')
+                        pass
+                    depthFilename = imagePath.replace('color.jpg', 'depth.pgm')
                     
                     depth = np.array(PIL.Image.open(depthFilename)).astype(np.float32) / info[18]
                     invalidMask = (depth < 1e-4).astype(np.float32)
@@ -103,7 +107,7 @@ def writeRecordFile(split, dataset):
                     depth[invalidMask] = 0
 
 
-                    semanticsFilename = global_gt['image_path'][batchIndex].replace('color.jpg', 'segmentation.png').replace('frames', 'annotation/semantics')
+                    semanticsFilename = imagePath.replace('color.jpg', 'segmentation.png').replace('frames', 'annotation/semantics')
                     semantics = cv2.imread(semanticsFilename, -1)
                     semantics = cv2.resize(semantics, (WIDTH, HEIGHT), interpolation=cv2.INTER_NEAREST)
                     #cv2.imwrite('test/segmentation_' + str(batchIndex) + '.png', drawSegmentationImage(semantics, blackIndex=0))
