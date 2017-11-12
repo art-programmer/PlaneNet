@@ -41,7 +41,7 @@ def writeRecordFile(split, dataset):
     numOutputPlanes = 20
     if split == 'train':
         reader = RecordReaderAll()
-        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_' + dataset + '_train.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_' + dataset + '_train_new.tfrecords'], num_epochs=1)
         img_inp, global_gt_dict, _ = reader.getBatch(filename_queue, numOutputPlanes=numOutputPlanes, batchSize=batchSize, random=False, getLocal=True)
         writer = tf.python_io.TFRecordWriter('/mnt/vision/PlaneNet/planes_' + dataset + '_train_temp.tfrecords')
         numImages = 50000

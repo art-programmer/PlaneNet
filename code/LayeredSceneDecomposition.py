@@ -2,6 +2,17 @@ import numpy as np
 from pystruct.inference import get_installed, inference_ogm, inference_dispatch
 from utils import *
 
+def drawSolution(layeredSegmentations, numPlanes, index):
+    for layer in xrange(layeredSegmentations.shape[-1]):
+        segmentation = layeredSegmentations[:, :, layer]
+        if index >= 0:
+            cv2.imwrite('test/' + str(index) + '_segmentation_' + str(layer) + '.png', drawSegmentationImage(segmentation, blackIndex=numPlanes))
+        else:
+            cv2.imwrite('test/segmentation_' + str(layer) + '.png', drawSegmentationImage(segmentation, blackIndex=numPlanes))
+            pass
+        continue
+    return
+
 def getConcaveHullProposal(solution, depth, segmentations, planeDepths, NUM_LAYERS=3, NUM_PLANES=15, height=192, width=256, ):
     layoutPlanes = []
     if False:
@@ -39,30 +50,103 @@ def getConcaveHullProposal(solution, depth, segmentations, planeDepths, NUM_LAYE
             continue
         layoutPlanes = np.random.choice(layoutPlanes, min(5 - int(np.floor(pow(np.random.random(), 2) * 5)), len(layoutPlanes)), replace=False)
         pass
-                
-            
+
+
     layoutPlanes = np.array(layoutPlanes)
     layoutPlaneDepths = planeDepths[:, :, layoutPlanes]
     layoutSegmentation = np.argmin(layoutPlaneDepths, axis=-1)
+
+    
     #remainingPlaneInds = np.arange(numPlanes).tolist()
-    proposal = solution.copy()
-    backgroundMask = np.zeros(proposal.shape, dtype=np.bool)
+    proposal = np.split(solution.copy(), NUM_LAYERS, axis=2)
+    proposal = [np.squeeze(v) for v in proposal]
+
+    backgroundMask = np.zeros((height, width), dtype=np.bool)
+    newLayoutSegmentation = layoutSegmentation.copy()
     for layoutIndex, planeIndex in enumerate(layoutPlanes):
-        layoutSegmentation[layoutSegmentation == layoutIndex] = planeIndex
+        print(layoutIndex, planeIndex)
+        newLayoutSegmentation[layoutSegmentation == layoutIndex] = planeIndex
         for layer in xrange(1, NUM_LAYERS):
-            proposal[:, :, layer][proposal[:, :, layer] == planeIndex] = NUM_PLANES
+            proposal[layer][proposal[layer] == planeIndex] = NUM_PLANES
             continue
         backgroundMask = np.logical_or(backgroundMask, proposal[0] == planeIndex)
         #remainingPlaneInds.remove(planeIndex)
         continue
-    backgroundMask = np.logical_not(backgroundMask).astype(np.int32)
+
+    
+    backgroundMask = np.logical_not(backgroundMask)
     if backgroundMask.sum() > 0:
         for layer in xrange(NUM_LAYERS - 1, 0, -1):
-            proposal[:, :, layer][backgroundMask] = proposal[:, :, layer - 1][backgroundMask]
+            proposal[layer][backgroundMask] = proposal[layer - 1][backgroundMask]
             continue
         pass
-    proposal[:, :, 0] = layoutSegmentation
+
+    # cv2.imwrite('test/segmentation_0.png', drawSegmentationImage(layoutSegmentation, blackIndex=numPlanes))    
+    # cv2.imwrite('test/segmentation_2.png', drawSegmentationImage(solution[:, :, 0], blackIndex=numPlanes))    
+    # cv2.imwrite('test/segmentation_1.png', drawSegmentationImage(proposal[1], blackIndex=numPlanes))    
+    # exit(1)
+    
+    proposal[0] = newLayoutSegmentation
+    proposal = np.stack(proposal, axis=2)
     return proposal
+
+def getExpansionProposals(solution, depth, segmentations, planeDepths, NUM_LAYERS=3, NUM_PLANES=15, height=192, width=256):
+ 
+    layoutPlanes = solution[:, :, 0].unique()
+    layoutDepth = np.zeros(height, width)
+    for layoutPlane in layoutPlanes:
+        mask = solution[:, :, 0] == layoutPlane
+        layoutDepth[mask] = planeDepths[:, :, layoutPlane]
+        continue
+
+    depthGap = 0.1
+    smoothLayout = ((np.abs(layoutDepth[1:] - layoutDepth[:-1]) > depthGap).sum() + (np.abs(layoutDepth[:, 1:] - layoutDepth[:, :-1]) > depthGap).sum()) > 0
+    
+    if smoothLayout == 0:
+        if len(layoutPlanes) == NUM_PLANES:
+            return []
+
+        while True:
+            selectedPlaneIndex = np.random.randint(NUM_PLANES)
+            if selectedPlaneIndex in layoutPlanes:
+                continue
+            break
+    else:
+        selectedPlaneIndex = np.random.randint(NUM_PLANES)
+        pass
+            
+    layoutPlaneDepths * solution[:, :, 0]
+
+
+    
+    proposals = []
+    for layer in xrange(NUM_LAYERS):
+        proposal = np.split(solution.copy(), NUM_LAYERS, axis=2)    
+        proposal = [np.squeeze(v) for v in proposal]
+
+        for otherLayer in xrange(NUM_LAYERS):
+            if otherLayer == layer:
+                continue
+            mask = proposal[otherLayer] == selectedPlaneIndex
+            if mask.sum() > 0:
+            if otherLayer == 0:
+                layoutPlanes.remove(planeIndex)
+                layoutPlaneDepths = planeDepths[:, :, layoutPlanes]
+                layoutSegmentation = np.argmin(layoutPlaneDepths, axis=-1)
+                newLayoutSegmentation = layoutSegmentation.copy()
+                for layoutIndex, planeIndex in enumerate(layoutPlanes):
+                    newLayoutSegmentation[layoutSegmentation == layoutIndex] = planeIndex
+                    continue
+                proposal[0] = newLayoutSegmentation
+            else:
+                proposal[otherLayer][mask] == NUM_PLANES
+                pass
+            continue
+        proposal[layer] = selectedPlaneIndex]
+        proposals.append(proposal)
+        continue
+    
+    return proposals
 
     
 def getProposals(solution, planes, segmentation, segmentations, planeDepths, iteration, NUM_LAYERS=3, NUM_PLANES=15, height=192, width=256):
@@ -86,7 +170,12 @@ def decompose(image, depth, normal, info, planes, segmentation):
     width = depth.shape[1]
     segmentations = (np.expand_dims(segmentation, -1) == np.arange(NUM_PLANES).reshape([1, 1, -1])).astype(np.float32)
     
-    planeDepths = calcPlaneDepths(planes, width, height, info)    
+    planeDepths = calcPlaneDepths(planes, width, height, info)
+
+    # for planeIndex in xrange(NUM_PLANES):
+    #     cv2.imwrite('test/depth_' + str(planeIndex) + '.png', drawDepthImage(planeDepths[:, :, planeIndex]))
+    #     continue
+    
     allDepths = np.concatenate([planeDepths, np.zeros((height, width, 1))], axis=2)
     
     camera = getCameraFromInfo(info)
@@ -149,10 +238,14 @@ def decompose(image, depth, normal, info, planes, segmentation):
         if numProposals == 1:
             solution = proposals[0]
             continue
-        
+        for proposalIndex, proposal in enumerate(proposals):
+            drawSolution(proposal, NUM_PLANES, proposalIndex)
+            continue
+
+
         visibleSegmentations = []
         for proposal in proposals:
-            visibleSegmentation = proposal[:, :, 0]
+            visibleSegmentation = proposal[:, :, 0].copy()
             for layer in xrange(1, NUM_LAYERS):
                 mask = proposal[:, :, layer] < NUM_PLANES
                 visibleSegmentation[mask] = proposal[:, :, layer][mask]
@@ -161,7 +254,10 @@ def decompose(image, depth, normal, info, planes, segmentation):
             continue
         visibleSegmentations = np.stack(visibleSegmentations, axis=-1).reshape((-1, numProposals))
 
-        unaries = -readProposalInfo(unaryCost, visibleSegmentations)
+        #cv2.imwrite('test/segmentation_0.png', drawSegmentationImage(visibleSegmentations[:, 0].reshape((height, width)), blackIndex=NUM_PLANES))
+        #cv2.imwrite('test/segmentation_1.png', drawSegmentationImage(visibleSegmentations[:, 1].reshape((height, width)), blackIndex=NUM_PLANES))        
+        
+        unaries = readProposalInfo(unaryCost, visibleSegmentations)
 
         proposalDepths = []
         for proposal in proposals:
@@ -174,16 +270,31 @@ def decompose(image, depth, normal, info, planes, segmentation):
         for layer in xrange(1, NUM_LAYERS):
             conflictDepthMask = np.logical_or(conflictDepthMask, proposalDepths[:, layer, :] > proposalDepths[:, layer - 1, :] + depthGap)
             continue
+
+        #cv2.imwrite('test/mask_0.png', drawMaskImage((unaries[:, 1] - unaries[:, 0]).reshape((height, width)) / 2 + 0.5))
+        #exit(1)
+        #print((unaries[:, 1] - unaries[:, 0]).min())        
+
+
         unaries += conflictDepthMask.astype(np.float32) * 100
+
+        #print((unaries[:, 1] - unaries[:, 0]).max())
+        #print((unaries[:, 1] - unaries[:, 0]).min())        
         
         proposals = np.stack(proposals, axis=-1).reshape((width * height, NUM_LAYERS, numProposals))
-        #cv2.imwrite('test/segmentation.png', drawSegmentationImage(unaries.reshape((height, width, -1)), blackIndex=numOutputPlanes))
 
-    
+        unaries += (proposals[:, 0, :] == NUM_PLANES).astype(np.float32) * 100        
+        #print((unaries[:, 1] - unaries[:, 0]).max())
+        #print((unaries[:, 1] - unaries[:, 0]).min())        
+        #exit(1)
+        #cv2.imwrite('test/segmentation.png', drawSegmentationImage(unaries.reshape((height, width, -1)), blackIndex=numOutputPlanes))
+        cv2.imwrite('test/mask_0.png', drawMaskImage((unaries[:, 1] - unaries[:, 0]).reshape((height, width)) / 2 + 0.5))
+        exit(1)
+        
         edges = []
         edges_features = []
 
-        for delta in deltas:
+        for deltaIndex, delta in enumerate(deltas):
             deltaX = delta[0]
             deltaY = delta[1]
             partial_nodes = nodes[max(-deltaY, 0):min(height - deltaY, height), max(-deltaX, 0):min(width - deltaX, width)].reshape(-1)
@@ -209,12 +320,50 @@ def decompose(image, depth, normal, info, planes, segmentation):
             np.reshape(1 + 45 * np.exp(-colorDiff / intensityDifference), [-1, 1, 1])
             #pairwise_cost = np.expand_dims(pairwise_matrix, 0) * np.ones(np.reshape(1 + 45 * np.exp(-colorDiff / np.maximum(intensityDifference[partial_nodes], 1e-4)), [-1, 1, 1]).shape)
             edges_features.append(-pairwise_cost)
+
+            print(pairwise_cost.shape)
+            print(pairwise_cost.max())
+
+            if False:
+                if deltaIndex == 0:
+                    #cv2.imwrite('test/segmentation.png', drawSegmentationImage(proposals[partial_nodes, 0, 1].reshape((height - 1, width))))
+                    diff = (labelDiff * depthDiff).reshape((height - 1, width, NUM_LAYERS, numProposals, numProposals))
+                    #diff = (labelDiff).reshape((height - 1, width, NUM_LAYERS, numProposals, numProposals))
+
+                    for proposalIndex_1 in xrange(numProposals):
+                        for proposalIndex_2 in xrange(numProposals):
+                            for layer in xrange(NUM_LAYERS):
+                                cv2.imwrite('test/cost_' + str(proposalIndex_1) + str(proposalIndex_2) + str(layer) + str(deltaIndex) + '.png', drawMaskImage(diff[:, :, layer, proposalIndex_1, proposalIndex_2]))
+                                continue
+                            continue
+                        continue
+                if deltaIndex == 1 and True:
+                    #cv2.imwrite('test/segmentation.png', drawSegmentationImage(proposals[partial_nodes, 0, 1].reshape((height - 1, width))))
+                    diff = (labelDiff * depthDiff).reshape((height, width - 1, NUM_LAYERS, numProposals, numProposals))
+                    #diff = (labelDiff).reshape((height - 1, width, NUM_LAYERS, numProposals, numProposals))
+
+                    for proposalIndex_1 in xrange(numProposals):
+                        for proposalIndex_2 in xrange(numProposals):
+                            for layer in xrange(NUM_LAYERS):
+                                cv2.imwrite('test/cost_' + str(proposalIndex_1) + str(proposalIndex_2) + str(layer) + str(deltaIndex) + '.png', drawMaskImage(diff[:, :, layer, proposalIndex_1, proposalIndex_2]))
+                                continue
+                            continue
+                        continue
+                    exit(1)
+                pass
             continue
         
         edges = np.concatenate(edges, axis=0)
         edges_features = np.concatenate(edges_features, axis=0)
 
-        solution = inference_ogm(unaries * 10, edges_features, edges, return_energy=False, alg='trw')
+        
+
+        solution = inference_ogm(-unaries * 10, edges_features, edges, return_energy=False, alg='trw')
+
+        print(solution.max())
+        print(solution.min())        
+        cv2.imwrite('test/solution_' + str(iteration) + '.png', drawSegmentationImage(solution.reshape((height, width))))
+        
         solution = np.tile(solution.reshape([height * width, 1, 1]), [1, NUM_LAYERS, 1])
         solution = readProposalInfo(proposals, solution).reshape((height, width, NUM_LAYERS))
         continue
@@ -228,5 +377,12 @@ image = cv2.imread('test/image.png')
 depth = np.load('test/depth.npy')
 normal = np.load('test/normal.npy')
 info = np.load('test/info.npy')
+numPlanes = planes.shape[0]
+# cv2.imwrite('test/segmentation.png', drawSegmentationImage(segmentation, blackIndex=numPlanes))
+# cv2.imwrite('test/depth.png', drawDepthImage(depth))
+# for planeIndex in xrange(numPlanes):
+#     cv2.imwrite('test/mask_' + str(planeIndex) + '.png', drawMaskImage(segmentation == planeIndex))
+#     continue
 
 layeredSegmentations = decompose(image, depth, normal, info, planes, segmentation)
+drawSolution(layeredSegmentations, numPlanes, -1)

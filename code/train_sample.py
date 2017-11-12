@@ -454,7 +454,7 @@ def main(options):
         val_inputs.append(options.rootFolder + '/planes_matterport_val.tfrecords')
         pass
     if '3' in options.hybrid:
-        train_inputs.append(options.rootFolder + '/planes_scannet_train_sample_5000.tfrecords')
+        train_inputs.append(options.rootFolder + '/planes_scannet_train_new.tfrecords')
         val_inputs.append(options.rootFolder + '/planes_scannet_val.tfrecords')
         pass
     
