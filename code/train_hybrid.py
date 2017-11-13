@@ -23,93 +23,13 @@ from RecordReaderRGBD import *
 from RecordReader3D import *
 from RecordReaderAll import *
 from crfasrnn_layer import CrfRnnLayer
+from train_sample import build_graph as build_graph
 
 #from SegmentationRefinement import *
 
 #training_flag: toggle dropout and batch normalization mode
 #it's true for training and false for validation, testing, prediction
 #it also controls which data batch to use (*_train or *_val)
-
-
-def build_graph(img_inp_train, img_inp_val, training_flag, options):
-    with tf.device('/gpu:%d'%options.gpu_id):
-        img_inp = tf.cond(training_flag, lambda: img_inp_train, lambda: img_inp_val)
-        
-        net = PlaneNet({'img_inp': img_inp}, is_training=training_flag, options=options)
-
-        #global predictions
-        plane_pred = net.layers['plane_pred']
-        
-        segmentation_pred = net.layers['segmentation_pred']
-        non_plane_mask_pred = net.layers['non_plane_mask_pred']
-        non_plane_depth_pred = net.layers['non_plane_depth_pred']
-        non_plane_normal_pred = net.layers['non_plane_normal_pred']
-        non_plane_normal_pred = tf.nn.l2_normalize(non_plane_normal_pred, dim=-1)
-
-
-        if False:
-            plane_pred = gt_dict['plane']
-            non_plane_mask_pred = gt_dict['non_plane_mask'] * 10
-            non_plane_depth_pred = gt_dict['depth']
-            non_plane_normal_pred = gt_dict['normal']            
-            segmentation_pred = gt_dict['segmentation'][:, :, :, :20] * 10
-            pass
-        
-
-        if abs(options.crfrnn) > 0:
-            with tf.variable_scope('crfrnn'):
-                all_segmentations = CrfRnnLayer(image_dims=(HEIGHT, WIDTH), num_classes=options.numOutputPlanes + 1, theta_alpha=120., theta_beta=3., theta_gamma=3., num_iterations=abs(options.crfrnn), name='crfrnn')([tf.concat([segmentation_pred, non_plane_mask_pred], axis=3), img_inp * 255])
-                segmentation_pred = all_segmentations[:, :, :, :options.numOutputPlanes]
-                non_plane_mask_pred = all_segmentations[:, :, :, options.numOutputPlanes:]
-                pass
-            pass
-        
-        global_pred_dict = {'plane': plane_pred, 'segmentation': segmentation_pred, 'non_plane_mask': non_plane_mask_pred, 'non_plane_depth': non_plane_depth_pred, 'non_plane_normal': non_plane_normal_pred}
-
-        if options.predictBoundary:
-            global_pred_dict['boundary'] = net.layers['boundary_pred']
-        else:
-            global_pred_dict['boundary'] = tf.zeros((options.batchSize, HEIGHT, WIDTH, 2))
-            pass
-        if options.predictConfidence:
-            global_pred_dict['confidence'] = net.layers['plane_confidence_pred']
-            pass
-        if options.predictSemantics:
-            global_pred_dict['semantics'] = net.layers['semantics_pred']
-            pass
-
-        #local predictions
-        if options.predictLocal:
-            local_pred_dict = {'score': net.layers['local_score_pred'], 'plane': net.layers['local_plane_pred'], 'mask': net.layers['local_mask_pred']}
-        else:
-            local_pred_dict = {}
-            pass
-
-        
-        #deep supervision
-        deep_pred_dicts = []
-        for layer in options.deepSupervisionLayers:
-            pred_dict = {'plane': net.layers[layer+'_plane_pred'], 'segmentation': net.layers[layer+'_segmentation_pred'], 'non_plane_mask': net.layers[layer+'_non_plane_mask_pred']}
-            #if options.predictConfidence:
-            #pred_dict['confidence'] = net.layers[layer+'_plane_confidence_pred']
-            #pass
-            deep_pred_dicts.append(pred_dict)
-            continue
-
-        
-        if options.anchorPlanes:
-            anchors_np = np.load('dump/anchors_' + options.hybrid + '.npy')
-            anchors = tf.reshape(tf.constant(anchors_np.reshape(-1)), anchors_np.shape)
-            anchors = tf.tile(tf.expand_dims(anchors, 0), [options.batchSize, 1, 1])
-            all_pred_dicts = deep_pred_dicts + [global_pred_dict]            
-            for pred_index, pred_dict in enumerate(all_pred_dicts):
-                all_pred_dicts[pred_index]['plane'] += anchors
-                continue
-            pass
-
-        pass
-    
-    return global_pred_dict, local_pred_dict, deep_pred_dicts
 
 
 def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_gt_dict_val, training_flag, options):
@@ -486,7 +406,8 @@ def main(options):
                 hybrid = str(3)
                 pass
             #loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + hybrid + '_bl0_ll1_bw0.5_pb_pp_ps_sm0/checkpoint.ckpt')
-            loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0/checkpoint.ckpt')            
+            #loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0/checkpoint.ckpt')
+            loader.restore(sess, options.rootFolder + '/checkpoint/sample_np10_hybrid3_bl0_dl0_hl2_ds0_crfrnn5_sm0/checkpoint.ckpt')
             #loader.restore(sess,"checkpoint/planenet/checkpoint.ckpt")
             sess.run(batchno.assign(1))
         elif options.restore == 4:
@@ -1355,13 +1276,13 @@ def parse_args():
                         default=0, type=int)
     parser.add_argument('--labelLoss', dest='labelLoss',
                         help='use label loss: [0, 1]',
-                        default=1, type=int)
+                        default=0, type=int)
     parser.add_argument('--planeLoss', dest='planeLoss',
                         help='use plane loss: [0, 1]',
                         default=1, type=int)        
     parser.add_argument('--deepSupervision', dest='deepSupervision',
                         help='deep supervision level: [0, 1, 2]',
-                        default=1, type=int)
+                        default=0, type=int)
     parser.add_argument('--sameMatching', dest='sameMatching',
                         help='use the same matching for all deep supervision layers and the final prediction: [0, 1]',
                         default=0, type=int)
@@ -1406,7 +1327,7 @@ def parse_args():
                         default=3e-5, type=float)
     parser.add_argument('--hybrid', dest='hybrid',
                         help='hybrid training',
-                        default='3', type=str)
+                        default='1', type=str)
     parser.add_argument('--rootFolder', dest='rootFolder',
                         help='root folder',
                         default='/mnt/vision/PlaneNet/', type=str)

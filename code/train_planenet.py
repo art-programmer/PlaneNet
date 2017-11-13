@@ -58,7 +58,8 @@ def build_graph(img_inp_train, img_inp_val, training_flag, options):
 
         if abs(options.crfrnn) > 0:
             with tf.variable_scope('crfrnn'):
-                all_segmentations = CrfRnnLayer(image_dims=(HEIGHT, WIDTH), num_classes=options.numOutputPlanes + 1, theta_alpha=15., theta_beta=10., theta_gamma=3., num_iterations=abs(options.crfrnn), name='crfrnn')([tf.concat([segmentation_pred, non_plane_mask_pred], axis=3), img_inp * 255])
+                all_segmentations = crfrnnModule([tf.concat([segmentation_pred, non_plane_mask_pred], axis=3), img_inp * 255], image_dims=(HEIGHT, WIDTH), num_classes=options.numOutputPlanes + 1, theta_alpha=30, theta_beta=10, theta_gamma=1, num_iterations=abs(options.crfrnn))           
+                #all_segmentations = CrfRnnLayer(image_dims=(HEIGHT, WIDTH), num_classes=options.numOutputPlanes + 1, theta_alpha=15., theta_beta=10., theta_gamma=3., num_iterations=abs(options.crfrnn), name='crfrnn')([tf.concat([segmentation_pred, non_plane_mask_pred], axis=3), img_inp * 255])
                 segmentation_pred = all_segmentations[:, :, :, :options.numOutputPlanes]
                 non_plane_mask_pred = all_segmentations[:, :, :, options.numOutputPlanes:]
                 pass
@@ -1398,13 +1399,13 @@ def parse_args():
                         default=0, type=int)
     parser.add_argument('--labelLoss', dest='labelLoss',
                         help='use label loss: [0, 1]',
-                        default=1, type=int)
+                        default=0, type=int)
     parser.add_argument('--planeLoss', dest='planeLoss',
                         help='use plane loss: [0, 1]',
                         default=1, type=int)        
     parser.add_argument('--deepSupervision', dest='deepSupervision',
                         help='deep supervision level: [0, 1, 2]',
-                        default=1, type=int)
+                        default=0, type=int)
     parser.add_argument('--sameMatching', dest='sameMatching',
                         help='use the same matching for all deep supervision layers and the final prediction: [0, 1]',
                         default=0, type=int)    
@@ -1425,7 +1426,7 @@ def parse_args():
                         default=0, type=int)
     parser.add_argument('--predictSemantics', dest='predictSemantics',
                         help='whether predict semantics or not: [0, 1]',
-                        default=1, type=int)    
+                        default=0, type=int)    
     parser.add_argument('--predictLocal', dest='predictLocal',
                         help='whether predict local planes or not: [0, 1]',
                         default=0, type=int)
@@ -1434,7 +1435,7 @@ def parse_args():
                         default=0, type=int)
     parser.add_argument('--predictPixelwise', dest='predictPixelwise',
                         help='whether predict pixelwise depth or not: [0, 1]',
-                        default=1, type=int)    
+                        default=0, type=int)    
     parser.add_argument('--fineTuningCheckpoint', dest='fineTuningCheckpoint',
                         help='specify the model for fine-tuning',
                         default='../PlaneSetGeneration/dump_planenet_diverse/train_planenet_diverse.ckpt', type=str)
