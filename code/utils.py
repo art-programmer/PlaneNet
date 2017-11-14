@@ -19,9 +19,39 @@ from pystruct.inference import get_installed, inference_ogm, inference_dispatch
 
 class ColorPalette:
     def __init__(self, numColors):
-        np.random.seed(1)
-        self.colorMap = np.random.randint(255, size = (numColors, 3))
+        #np.random.seed(2)
+        #self.colorMap = np.random.randint(255, size = (numColors, 3))
         #self.colorMap[0] = 0
+
+        
+        self.colorMap = np.array([[255, 0, 0],
+                                  [0, 255, 0],
+                                  [0, 0, 255],
+                                  [80, 128, 255],
+                                  [255, 230, 180],
+                                  [255, 0, 255],
+                                  [0, 255, 255],
+                                  [100, 0, 0],
+                                  [0, 100, 0],                                   
+                                  [255, 255, 0],                                  
+                                  [50, 150, 0],
+                                  [200, 255, 255],
+                                  [255, 200, 255],
+                                  [128, 128, 80],
+                                  [0, 50, 128],                                  
+                                  [0, 100, 100],
+                                  [0, 255, 128],                                  
+                                  [0, 128, 255],
+                                  [255, 0, 128],                                  
+                                  [128, 0, 255],
+                                  [255, 128, 0],                                  
+                                  [128, 255, 0],                                                                    
+        ])
+
+        if numColors > self.colorMap.shape[0]:
+            self.colorMap = np.random.randint(255, size = (numColors, 3))
+            pass
+        
         return
 
     def getColorMap(self):
@@ -687,11 +717,167 @@ def calcPlaneNormals(planes, width, height):
     return np.tile(planeNormals.reshape([1, 1, -1, 3]), [height, width, 1, 1])
 
 
-def writePLYFile(folder, index, image, depth, segmentation):
-    imageFilename = str(index) + '_image.png'
+def writePLYFile(folder, index, image, depth, segmentation, planes, info):
+    imageFilename = str(index) + '_model_texture.png'
     cv2.imwrite(folder + '/' + imageFilename, image)
 
-    focalLength = 517.97
+    width = image.shape[1]
+    height = image.shape[0]
+    
+    numPlanes = planes.shape[0]
+    
+    camera = getCameraFromInfo(info)
+
+    #camera = getNYURGBDCamera()
+    #camera = getSUNCGCamera()
+
+    urange = (np.arange(width, dtype=np.float32) / width * camera['width'] - camera['cx']) / camera['fx']
+    urange = urange.reshape(1, -1).repeat(height, 0)
+    vrange = (np.arange(height, dtype=np.float32) / height * camera['height'] - camera['cy']) / camera['fy']
+    vrange = vrange.reshape(-1, 1).repeat(width, 1)
+    X = depth * urange
+    Y = depth
+    Z = -depth * vrange
+
+    XYZ = np.stack([X, Y, Z], axis=2)
+
+    
+    #focalLength = 517.97
+        
+    faces = []
+    #minDepthDiff = 0.15
+    #maxDepthDiff = 0.3
+    #occlusionBoundary = boundaries[:, :, 1]
+    betweenRegionThreshold = 0.05
+    nonPlanarRegionThreshold = 0.02
+    
+    planesD = np.linalg.norm(planes, axis=1, keepdims=True)
+    planeNormals = -planes / np.maximum(planesD, 1e-4)    
+
+    croppingRatio = -0.05
+    
+    for y in xrange(height - 1):
+        for x in xrange(width - 1):
+            if y < height * croppingRatio or y > height * (1 - croppingRatio) or x < width * croppingRatio or x > width * (1 - croppingRatio):
+                continue
+            
+            segmentIndex = segmentation[y][x]
+            if segmentIndex == -1:
+                continue    
+
+            point = XYZ[y][x]
+            #neighborPixels = []
+            validNeighborPixels = []
+            for neighborPixel in [(x, y + 1), (x + 1, y), (x + 1, y + 1)]:
+                neighborSegmentIndex = segmentation[neighborPixel[1]][neighborPixel[0]]
+                if neighborSegmentIndex == segmentIndex:
+                    if segmentIndex < numPlanes:
+                        validNeighborPixels.append(neighborPixel)
+                    else:
+                        neighborPoint = XYZ[neighborPixel[1]][neighborPixel[0]]
+                        if np.linalg.norm(neighborPoint - point) < nonPlanarRegionThreshold:
+                            validNeighborPixels.append(neighborPixel)
+                            pass
+                        pass
+                else:
+                    neighborPoint = XYZ[neighborPixel[1]][neighborPixel[0]]
+                    if segmentIndex < numPlanes and neighborSegmentIndex < numPlanes:
+                        if abs(np.dot(planeNormals[segmentIndex], neighborPoint) + planesD[segmentIndex]) < betweenRegionThreshold or abs(np.dot(planeNormals[neighborSegmentIndex], point) + planesD[neighborSegmentIndex]) < betweenRegionThreshold:
+                            validNeighborPixels.append(neighborPixel)
+                            pass
+                    else:
+                        if np.linalg.norm(neighborPoint - point) < betweenRegionThreshold:
+                            validNeighborPixels.append(neighborPixel)
+                            pass
+                        pass                            
+                    pass
+                continue
+            if len(validNeighborPixels) == 3:
+                faces.append((x, y, x + 1, y + 1, x + 1, y))
+                faces.append((x, y, x, y + 1, x + 1, y + 1))
+            elif len(validNeighborPixels) == 2 and segmentIndex < numPlanes:
+                faces.append((x, y, validNeighborPixels[0][0], validNeighborPixels[0][1], validNeighborPixels[1][0], validNeighborPixels[1][1]))
+                pass
+            continue
+        continue
+    
+    with open(folder + '/' + str(index) + '_model.ply', 'w') as f:
+        header = """ply
+format ascii 1.0
+comment VCGLIB generated
+comment TextureFile """
+        header += imageFilename
+        header += """
+element vertex """
+        header += str(width * height)
+        header += """
+property float x
+property float y
+property float z
+element face """
+        header += str(len(faces))
+        header += """
+property list uchar int vertex_indices
+property list uchar float texcoord
+end_header
+"""
+        f.write(header)
+        for y in xrange(height):
+            for x in xrange(width):
+                segmentIndex = segmentation[y][x]
+                if segmentIndex == -1:
+                    f.write("0.0 0.0 0.0\n")
+                    continue
+                point = XYZ[y][x]
+                X = point[0]
+                Y = point[1]
+                Z = point[2]
+                #Y = depth[y][x]
+                #X = Y / focalLength * (x - width / 2) / width * 640
+                #Z = -Y / focalLength * (y - height / 2) / height * 480
+                f.write(str(X) + ' ' +    str(Z) + ' ' + str(-Y) + '\n')
+                continue
+            continue
+
+
+        for face in faces:
+            f.write('3 ')
+            for c in xrange(3):
+                f.write(str(face[c * 2 + 1] * width + face[c * 2]) + ' ')
+                continue
+            f.write('6 ')                     
+            for c in xrange(3):
+                f.write(str(float(face[c * 2]) / width) + ' ' + str(1 - float(face[c * 2 + 1]) / height) + ' ')
+                continue
+            f.write('\n')
+            continue
+        f.close()
+        pass
+    return  
+
+def writePLYFileDepth(folder, index, image, depth, segmentation, planes, info):
+    imageFilename = str(index) + '_segmentation_pred_blended_0.png'
+    #cv2.imwrite(folder + '/' + imageFilename, image)
+    
+    numPlanes = planes.shape[0]
+
+    camera = getCameraFromInfo(info)
+
+    #camera = getNYURGBDCamera()
+    #camera = getSUNCGCamera()
+
+    urange = (np.arange(width, dtype=np.float32) / width * camera['width'] - camera['cx']) / camera['fx']
+    urange = urange.reshape(1, -1).repeat(height, 0)
+    vrange = (np.arange(height, dtype=np.float32) / height * camera['height'] - camera['cy']) / camera['fy']
+    vrange = vrange.reshape(-1, 1).repeat(width, 1)
+    X = depth * urange
+    Y = depth
+    Z = -depth * vrange
+
+    XYZ = np.stack([X, Y, Z], axis=2).reshape(-1, 3)
+
+    
+    #focalLength = 517.97
     width = image.shape[1]
     height = image.shape[0]
         
@@ -705,31 +891,39 @@ def writePLYFile(folder, index, image, depth, segmentation):
             segmentIndex = segmentation[y][x]
             if segmentIndex == -1:
                 continue
-            if segmentIndex == 0:
-                continue
-            depths = [depth[y][x], depth[y + 1][x], depth[y + 1][x + 1]]
-            if segmentIndex > 0 or (max([occlusionBoundary[y][x], occlusionBoundary[y + 1][x], occlusionBoundary[y + 1][x + 1]]) < 0.5 and (max(depths) - min(depths)) < maxDepthDiff):
-                if segmentation[y + 1][x] == segmentIndex and segmentation[y + 1][x + 1] == segmentIndex:
-                    if min(depths) > 0 and max(depths) < 10:
-                        faces.append((x, y, x, y + 1, x + 1, y + 1))
-                        pass
-                    pass
-                elif max(depths) - min(depths) < minDepthDiff:
-                    faces.append((x, y, x, y + 1, x + 1, y + 1))
-                    pass
-                pass
+            #if segmentIndex == 0:
+            #continue
+            #depths = [depth[y][x], depth[y + 1][x], depth[y + 1][x + 1]]
+            # if segmentIndex >= 0 or (max([occlusionBoundary[y][x], occlusionBoundary[y + 1][x], occlusionBoundary[y + 1][x + 1]]) < 0.5 and (max(depths) - min(depths)) < maxDepthDiff):
+            #     if segmentation[y + 1][x] == segmentIndex and segmentation[y + 1][x + 1] == segmentIndex:
+            #         if min(depths) > 0 and max(depths) < 10:
+            #             faces.append((x, y, x, y + 1, x + 1, y + 1))
+            #             pass
+            #         pass
+            #     elif max(depths) - min(depths) < minDepthDiff:
+            #         faces.append((x, y, x, y + 1, x + 1, y + 1))
+            #         pass
+            #     pass
 
-                        
+
+            if segmentation[y + 1][x] == segmentIndex and segmentation[y + 1][x + 1] == segmentIndex and min(depths) > 0 and max(depths) < 10:
+                faces.append((x, y, x, y + 1, x + 1, y + 1))
+                pass
+            
+                
             depths = [depth[y][x], depth[y][x + 1], depth[y + 1][x + 1]]                        
-            if segmentIndex > 0 or (max([occlusionBoundary[y][x], occlusionBoundary[y][x + 1], occlusionBoundary[y + 1][x + 1]]) < 0.5 and (max(depths) - min(depths)) < maxDepthDiff):
-                if segmentation[y][x + 1] == segmentIndex and segmentation[y + 1][x + 1] == segmentIndex:
-                    if min(depths) > 0 and max(depths) < 10:
-                        faces.append((x, y, x + 1, y + 1, x + 1, y))
-                        pass
-                    pass
-                elif max(depths) - min(depths) < minDepthDiff:
-                    faces.append((x, y, x + 1, y + 1, x + 1, y))
-                    pass
+            # if segmentIndex > 0 or (max([occlusionBoundary[y][x], occlusionBoundary[y][x + 1], occlusionBoundary[y + 1][x + 1]]) < 0.5 and (max(depths) - min(depths)) < maxDepthDiff):
+            #     if segmentation[y][x + 1] == segmentIndex and segmentation[y + 1][x + 1] == segmentIndex:
+            #         if min(depths) > 0 and max(depths) < 10:
+            #             faces.append((x, y, x + 1, y + 1, x + 1, y))
+            #             pass
+            #         pass
+            #     elif max(depths) - min(depths) < minDepthDiff:
+            #         faces.append((x, y, x + 1, y + 1, x + 1, y))
+            #         pass
+            #     pass
+            if segmentation[y][x + 1] == segmentIndex and segmentation[y + 1][x + 1] == segmentIndex and min(depths) > 0 and max(depths) < 10:
+                faces.append((x, y, x + 1, y + 1, x + 1, y))
                 pass
             continue
         continue
@@ -1916,7 +2110,7 @@ def mergePlanesBackup(points, planes, planePointIndices, planeDiffThreshold = 0.
 #         np.save(prefix + 'curves.npy', pixel_curves + plane_curves)
 #         return
 
-def evaluatePlanePrediction(predDepths, predSegmentations, predNumPlanes, gtDepths, gtSegmentations, gtNumPlanes, prefix = ''):
+def evaluatePlanePrediction(predDepths, predSegmentations, predNumPlanes, gtDepths, gtSegmentations, gtNumPlanes, gtPlanes, predPlanes, prefix = ''):
     if len(gtSegmentations.shape) == 2:
         gtSegmentations = (np.expand_dims(gtSegmentations, -1) == np.arange(gtNumPlanes)).astype(np.float32)
         pass
@@ -1938,6 +2132,9 @@ def evaluatePlanePrediction(predDepths, predSegmentations, predNumPlanes, gtDept
     intersection = np.sum((intersectionMask).astype(np.float32), axis=(0, 1))
     
     planeDiffs = np.abs(depthDiffs * intersectionMask).sum(axis=(0, 1)) / np.maximum(intersection, 1e-4)
+    
+    #planeDiffs = np.linalg.norm(np.expand_dims(gtPlanes, 1) - np.expand_dims(predPlanes, 0), axis=2)
+    
     planeDiffs[intersection < 1e-4] = 1
     
     union = np.sum(((np.expand_dims(gtSegmentations, -1) + np.expand_dims(predSegmentations, 2)) > 0.5).astype(np.float32), axis=(0, 1))
@@ -1961,7 +2158,7 @@ def evaluatePlanePrediction(predDepths, predSegmentations, predNumPlanes, gtDept
     # #print(np.stack([depthDiffs.min(1), depthDiffs.argmin(1)], axis=1))
     # print(np.stack([planeDiffs.min(1) * 10000, planeDiffs.argmin(1)], axis=1))
     # print(planeDiffs)
-    # exit(1)
+    # #exit(1)
     
     pixel_curves = []
     plane_curves = []
@@ -3751,3 +3948,671 @@ def calcEdgeMap(segmentation, edgeWidth=3):
     return edges > 0.5
             
 #testPlaneExtraction()
+
+def findFloorPlane(planes, segmentation):
+    minZ = 0
+    minZPlaneIndex = -1
+    minFloorArea = 32 * 24
+    for planeIndex, plane in enumerate(planes):
+        if plane[2] < 0 and abs(plane[2]) > max(abs(plane[0]), abs(plane[1])) and plane[2] < minZ and (segmentation == planeIndex).sum() > minFloorArea:
+            minZPlaneIndex = planeIndex
+            minZ = plane[2]
+            pass
+        continue
+    return minZPlaneIndex
+
+def findCornerPoints(plane, depth, mask, info, axis=2, rectangle=True):
+    width = depth.shape[1]
+    height = depth.shape[0]
+    
+    camera = getCameraFromInfo(info)
+
+    #camera = getNYURGBDCamera()
+    #camera = getSUNCGCamera()
+
+    urange = (np.arange(width, dtype=np.float32) / width * camera['width'] - camera['cx']) / camera['fx']
+    urange = urange.reshape(1, -1).repeat(height, 0)
+    vrange = (np.arange(height, dtype=np.float32) / height * camera['height'] - camera['cy']) / camera['fy']
+    vrange = vrange.reshape(-1, 1).repeat(width, 1)
+    X = depth * urange
+    Y = depth
+    Z = -depth * vrange
+
+    XYZ = np.stack([X, Y, Z], axis=2)
+    XYZ = XYZ.reshape((-1, 3))
+    
+    maxs = XYZ.max(0)
+    mins = XYZ.min(0)
+
+    planeD = np.linalg.norm(plane)
+    planeNormal = plane / np.maximum(planeD, 1e-4)
+    
+    if axis == 2:
+        points = np.array([[mins[0], mins[1]], [mins[0], maxs[1]], [maxs[0], mins[1]], [maxs[0], maxs[1]]])
+        pointsZ = (planeD - planeNormal[0] * points[:, 0] - planeNormal[1] * points[:, 1]) / planeNormal[2]
+        points = np.concatenate([points, np.expand_dims(pointsZ, -1)], axis=1)
+        pass
+    
+    u = (points[:, 0] / points[:, 1] * camera['fx'] + camera['cx']) / camera['width'] * width
+    v = (-points[:, 2] / points[:, 1] * camera['fy'] + camera['cy']) / camera['height'] * height
+
+    if rectangle:
+        minU = u.min()
+        maxU = u.max()
+        minV = v.min()
+        maxV = v.max()
+        uv = np.array([[minU, minV], [minU, maxV], [maxU, minV], [maxU, maxV]])
+    else:
+        uv = np.stack([u, v], axis=1)
+        pass
+    return uv
+
+def findCornerPoints2D(mask):
+    from pylsd import lsd
+    lines = lsd(mask)
+
+    #lineImage = mask.copy()
+    lineImage = np.zeros(mask.shape + (3, ))
+    print(lines.shape)
+    print(lines)
+    for line in lines:
+        cv2.line(lineImage, (int(line[0]), int(line[1])), (int(line[2]), int(line[3])), (0, 0, 255), int(np.ceil(line[4] / 2)))
+        continue
+    cv2.imwrite('test/lines.png', lineImage)
+    exit(1)
+    
+
+def copyTexture(image, planes, segmentation, info, denotedPlaneIndex=-1, textureIndex=-1):
+    import glob
+    
+    width = segmentation.shape[1]
+    height = segmentation.shape[0]
+    
+    plane_depths = calcPlaneDepths(planes, width, height, info)
+    
+    texture_image_names = glob.glob('../texture_images/*.png') + glob.glob('../texture_images/*.jpg')
+    if textureIndex >= 0:
+        texture_image_names = [texture_image_names[textureIndex]]
+        pass
+    
+    resultImages = []
+    for texture_index, texture_image_name in enumerate(texture_image_names):
+        textureImage = cv2.imread(texture_image_name)
+        #textureImage = cv2.imread('../textures/texture_2.jpg')
+        textureImage = cv2.resize(textureImage, (width, height), interpolation=cv2.INTER_LINEAR)
+
+        if denotedPlaneIndex < 0:
+            denotedPlaneIndex = findFloorPlane(planes, segmentation)
+            pass
+        
+        mask = segmentation == denotedPlaneIndex
+        #mask = cv2.resize(mask.astype(np.float32), (width, height), interpolation=cv2.INTER_LINEAR) > 0.5
+        #plane_depths = calcPlaneDepths(pred_p, width, height)
+        depth = plane_depths[:, :, denotedPlaneIndex]
+        #depth = cv2.resize(depth, (width, height), interpolation=cv2.INTER_LINEAR) > 0.5
+        #uv = findCornerPoints(planes[denotedPlaneIndex], depth, mask, info)
+        uv = findCornerPoints2D(mask.astype(np.uint8) * 255)
+        #print(uv)
+        source_uv = np.array([[0, 0], [0, height], [width, 0], [width, height]])
+
+        h, status = cv2.findHomography(source_uv, uv)
+        #textureImageWarped = cv2.warpPerspective(textureImage, h, (WIDTH, HEIGHT))
+        textureImageWarped = cv2.warpPerspective(textureImage, h, (width, height))
+        resultImage = image.copy()
+
+        resultImage[mask] = textureImageWarped[mask]
+        resultImages.append(resultImage)
+        #cv2.imwrite(options.test_dir + '/' + str(index) + '_texture.png', textureImageWarped)
+        #cv2.imwrite(options.test_dir + '/' + str(index) + '_result_' + str(texture_index) + '.png', resultImage)
+        continue
+    return resultImages
+
+
+def copyLogo(folder, index, image, depth, planes, segmentation, info):
+    import glob
+    from sklearn.cluster import KMeans
+    from skimage import measure
+    #from sklearn.decomposition import PCA
+    
+    width = segmentation.shape[1]
+    height = segmentation.shape[0]
+
+    camera = getCameraFromInfo(info)
+    
+    urange = (np.arange(width, dtype=np.float32) / width * camera['width'] - camera['cx']) / camera['fx']
+    urange = urange.reshape(1, -1).repeat(height, 0)
+    vrange = (np.arange(height, dtype=np.float32) / height * camera['height'] - camera['cy']) / camera['fy']
+    vrange = vrange.reshape(-1, 1).repeat(width, 1)
+    X = depth * urange
+    Y = depth
+    Z = -depth * vrange
+    XYZ = np.stack([X, Y, Z], axis=2)    
+    #plane_depths = calcPlaneDepths(planes, width, height, info)
+
+    planesD = np.linalg.norm(planes, axis=-1, keepdims=True)
+    planesNormal = planes / np.maximum(planesD, 1e-4)
+
+    planeAreaThreshold = width * height / 100
+    
+    normals = []
+    for planeIndex in xrange(planes.shape[0]):
+        mask = segmentation == planeIndex
+        if mask.sum() < planeAreaThreshold:
+            continue
+        normals.append(planesNormal[planeIndex])
+        continue
+    normals = np.stack(normals, axis=0)
+    normals[normals[:, 1] < 0] *= -1
+        
+
+    kmeans = KMeans(n_clusters=3).fit(normals)
+    dominantNormals = kmeans.cluster_centers_
+    dominantNormals = dominantNormals / np.maximum(np.linalg.norm(dominantNormals, axis=-1, keepdims=True), 1e-4)
+
+    normals = planesNormal.copy()
+    normals[normals[:, 1] < 0] *= -1    
+    planeClusters = kmeans.predict(normals)
+    
+    #texture_image_names = glob.glob('../texture_images/*.png') + glob.glob('../texture_images/*.jpg')
+    
+    #imageFilename = '/home/chenliu/Projects/PlaneNet/texture_images/CVPR.jpg'
+    #textureImage = cv2.imread(imageFilename)
+
+    #textureImage = cv2.imread('../texture_images/CVPR_transparent.png')
+    textureImage = cv2.imread('../texture_images/CVPR.jpg')
+    imageFilename = 'CVPR.png'
+    cv2.imwrite(folder + '/' + imageFilename, textureImage)
+
+    backgroundMask = textureImage.mean(2) > 224
+    backgroundMask = cv2.erode(backgroundMask.astype(np.uint8), np.ones((3, 3)))
+    #cv2.imwrite('test/mask.png', drawMaskImage(background))
+    #exit(1)
+
+    textureHeight = textureImage.shape[0]
+    textureWidth = textureImage.shape[1]
+    textureRatio = float(textureHeight) / textureWidth
+    #textureImage = cv2.imread('../textures/texture_2.jpg')
+    #textureImage = cv2.resize(textureImage, (width, height), interpolation=cv2.INTER_LINEAR)
+
+    faces = []
+    texcoords = []        
+    maskImage = np.full(segmentation.shape, planes.shape[0])
+    for planeIndex in xrange(planes.shape[0]):
+        globalMask = segmentation == planeIndex
+        if globalMask.sum() < planeAreaThreshold:
+            continue
+        
+        masks = measure.label(globalMask.astype(np.int32), background=0)
+        #print(masks.max())
+        #print(masks.min())        
+        #cv2.imwrite('test/mask.png', drawSegmentationImage(masks, blackIndex=planes.shape[0]))
+        #exit(1)
+        for maskIndex in xrange(1, masks.max() + 1):
+            mask = masks == maskIndex
+            if mask.sum() < planeAreaThreshold:
+                continue
+
+            planeNormal = planesNormal[planeIndex]
+
+            # maxs = points.max(0)
+            # mins = points.min(0)
+
+            # planeNormal = planesNormal[planeIndex]
+            # maxAxis = np.argmax(np.abs(planeNormal))
+            # center = points.mean(0)
+            # if maxAxis != 2:
+            #     direction_u = np.cross(planeNormal, np.array([0, 0, 1]))
+            #     direction_u = direction_u / np.maximum(np.linalg.norm(direction_u), 1e-4)
+            #     direction_v = np.cross(planeNormal, direction_u)
+            #     direction_v = direction_v / np.maximum(np.linalg.norm(direction_v), 1e-4)
+            # else:
+            #     pca = PCA(n_components=1)
+            #     pca.fit(points[:, :2])
+            #     direction = np.concatenate([pca.components_[0], np.zeros(1)], axis=0)
+
+            #     direction_u = np.cross(planeNormal, direction)
+            #     direction_u = direction_u / np.maximum(np.linalg.norm(direction_u), 1e-4)
+            #     direction_v = np.cross(planeNormal, direction_u)
+            #     direction_v = direction_v / np.maximum(np.linalg.norm(direction_v), 1e-4)
+            #     pass
+
+            cluster = planeClusters[planeIndex]
+            dominantNormal = dominantNormals[(cluster + 1) % 3]
+            direction_u = np.cross(planeNormal, dominantNormal)
+            direction_u = direction_u / np.maximum(np.linalg.norm(direction_u), 1e-4)
+            direction_v = np.cross(planeNormal, direction_u)
+            direction_v = direction_v / np.maximum(np.linalg.norm(direction_v), 1e-4)
+
+            points = XYZ[mask]        
+            projection_u = np.tensordot(points, direction_u, axes=([1], [0]))
+            range_u = [projection_u.min(), projection_u.max()]       
+            projection_v = np.tensordot(points, direction_v, axes=([1], [0]))                
+            range_v = [projection_v.min(), projection_v.max()]
+            if range_v[1] - range_v[0] > range_u[1] - range_u[0]:
+                range_u, range_v = range_v, range_u
+                direction_u, direction_v = direction_v, direction_u
+                pass
+
+            if (np.argmax(np.abs(direction_v)) == 2 and direction_v[2] < 0) or (np.argmax(np.abs(direction_v)) != 2 and np.dot(np.array([0, 1, 0]), direction_v) < 0):
+                direction_v *= -1
+                projection_v *= -1
+                range_v = [-range_v[1], -range_v[0]]
+                pass
+            if np.dot(np.cross(planeNormal, direction_v), direction_u) < 0:
+                direction_u *= -1
+                projection_u *= -1
+                range_u = [-range_u[1], -range_u[0]]
+                pass
+
+            print(planeIndex, dominantNormal, direction_u, direction_v)
+
+
+            length_u = range_u[1] - range_u[0]
+            length_v = range_v[1] - range_v[0]
+            if length_u * textureRatio > length_v:
+                length_u = length_v / textureRatio
+            else:
+                length_v = length_u * textureRatio
+                pass
+
+            logoSize = 0.35
+            
+            center_u = (range_u[0] + range_u[1]) / 2
+            range_u = [center_u - length_u * logoSize, center_u + length_u * logoSize]
+
+            center_v = (range_v[0] + range_v[1]) / 2
+            range_v = [center_v - length_v * logoSize, center_v + length_v * logoSize]
+
+            projection_u = np.tensordot(XYZ, direction_u, axes=([2], [0]))
+            projection_v = np.tensordot(XYZ, direction_v, axes=([2], [0]))
+            projection_u = (projection_u - range_u[0]) / (range_u[1] - range_u[0])
+            projection_v = (projection_v - range_v[0]) / (range_v[1] - range_v[0])
+            rectangleMask = np.logical_and(np.logical_and(projection_u >= 0, projection_u <= 1), np.logical_and(projection_v >= 0, projection_v <= 1))
+
+            rectangleMask = np.logical_and(rectangleMask, mask)
+            maskImage[rectangleMask] = planeIndex
+
+            for y in xrange(height - 1):
+                for x in xrange(width - 1):
+                    facePixels = []
+                    for pixel in [(x, y), (x + 1, y), (x + 1, y + 1), (x, y + 1)]:
+                        if rectangleMask[pixel[1]][pixel[0]]:
+                            u = projection_u[pixel[1]][pixel[0]]
+                            v = projection_v[pixel[1]][pixel[0]]
+                            u = min(max(int(round(u * textureWidth)), 0), textureWidth - 1)
+                            v = min(max(textureHeight - 1 - int(round(v * textureHeight)), 0), textureHeight - 1)
+                            if backgroundMask[v][u] == False:
+                                facePixels.append(pixel)
+                                pass
+                            pass
+                        continue
+                    
+                    if len(facePixels) == 3:
+                        faces.append(facePixels[0] + facePixels[1] + facePixels[2])
+                        vt = []
+                        for c in [0, 1, 2]:
+                            vt.append(projection_u[facePixels[c][1]][facePixels[c][0]])
+                            vt.append(projection_v[facePixels[c][1]][facePixels[c][0]])
+                            continue
+                        texcoords.append(vt)
+                    elif len(facePixels) == 4:
+                        faces.append(facePixels[0] + facePixels[1] + facePixels[2])
+                        vt = []
+                        for c in [0, 1, 2]:
+                            vt.append(projection_u[facePixels[c][1]][facePixels[c][0]])
+                            vt.append(projection_v[facePixels[c][1]][facePixels[c][0]])
+                            continue
+                        texcoords.append(vt)                    
+                        faces.append(facePixels[0] + facePixels[2] + facePixels[3])
+                        vt = []
+                        for c in [0, 2, 3]:
+                            vt.append(projection_u[facePixels[c][1]][facePixels[c][0]])
+                            vt.append(projection_v[facePixels[c][1]][facePixels[c][0]])
+                            continue
+                        texcoords.append(vt)                    
+                        pass
+                    continue
+                continue
+            continue
+        continue
+
+    cv2.imwrite('test/mask.png', drawSegmentationImage(maskImage, blackIndex=planes.shape[0]))
+    
+    
+    with open(folder + '/' + str(index) + '_logo.ply', 'w') as f:
+        header = """ply
+format ascii 1.0
+comment VCGLIB generated
+comment TextureFile """
+        header += imageFilename
+        header += """
+element vertex """
+        header += str(width * height)
+        header += """
+property float x
+property float y
+property float z
+element face """
+        header += str(len(faces))
+        header += """
+property list uchar int vertex_indices
+property list uchar float texcoord
+end_header
+"""
+        f.write(header)
+        for y in xrange(height):
+            for x in xrange(width):
+                segmentIndex = segmentation[y][x]
+                if segmentIndex == -1:
+                    f.write("0.0 0.0 0.0\n")
+                    continue
+                point = XYZ[y][x]
+                X = point[0] * 0.9999
+                Y = point[1] * 0.9999
+                Z = point[2] * 0.9999
+                #Y = depth[y][x]
+                #X = Y / focalLength * (x - width / 2) / width * 640
+                #Z = -Y / focalLength * (y - height / 2) / height * 480
+                f.write(str(X) + ' ' +    str(Z) + ' ' + str(-Y) + '\n')
+                continue
+            continue
+
+
+        for faceIndex, face in enumerate(faces):
+            f.write('3 ')
+            for c in xrange(3):
+                f.write(str(face[c * 2 + 1] * width + face[c * 2]) + ' ')
+                continue
+            f.write('6 ')
+            vt = texcoords[faceIndex]
+            for value in vt:
+                f.write(str(value) + ' ')
+                continue
+            # for c in xrange(3):
+            #     f.write(str(float(face[c * 2]) / width) + ' ' + str(1 - float(face[c * 2 + 1]) / height) + ' ')
+            #     continue
+            f.write('\n')
+            continue
+        f.close()
+        pass
+    return
+
+
+def copyWallTexture(folder, index, image, depth, planes, segmentation, info, wallPlanes=[]):
+    import glob
+    from sklearn.cluster import KMeans
+    from skimage import measure
+    #from sklearn.decomposition import PCA
+    
+    width = segmentation.shape[1]
+    height = segmentation.shape[0]
+
+    camera = getCameraFromInfo(info)
+    
+    urange = (np.arange(width, dtype=np.float32) / width * camera['width'] - camera['cx']) / camera['fx']
+    urange = urange.reshape(1, -1).repeat(height, 0)
+    vrange = (np.arange(height, dtype=np.float32) / height * camera['height'] - camera['cy']) / camera['fy']
+    vrange = vrange.reshape(-1, 1).repeat(width, 1)
+    X = depth * urange
+    Y = depth
+    Z = -depth * vrange
+    XYZ = np.stack([X, Y, Z], axis=2)    
+    #plane_depths = calcPlaneDepths(planes, width, height, info)
+
+    planesD = np.linalg.norm(planes, axis=-1, keepdims=True)
+    planesNormal = planes / np.maximum(planesD, 1e-4)
+
+    planeAreaThreshold = width * height / 100
+    
+    normals = []
+    for planeIndex in xrange(planes.shape[0]):
+        mask = segmentation == planeIndex
+        if mask.sum() < planeAreaThreshold:
+            continue
+        normals.append(planesNormal[planeIndex])
+        continue
+    normals = np.stack(normals, axis=0)
+    normals[normals[:, 1] < 0] *= -1
+        
+
+    kmeans = KMeans(n_clusters=3).fit(normals)
+    dominantNormals = kmeans.cluster_centers_
+    dominantNormals = dominantNormals / np.maximum(np.linalg.norm(dominantNormals, axis=-1, keepdims=True), 1e-4)
+
+    normals = planesNormal.copy()
+    normals[normals[:, 1] < 0] *= -1    
+    planeClusters = kmeans.predict(normals)
+    
+    #texture_image_names = glob.glob('../texture_images/*.png') + glob.glob('../texture_images/*.jpg')
+    
+    #imageFilename = '/home/chenliu/Projects/PlaneNet/texture_images/CVPR.jpg'
+    #textureImage = cv2.imread(imageFilename)
+
+    #textureImage = cv2.imread('../texture_images/CVPR_transparent.png')
+    textureImage = cv2.imread('../texture_images/checkerboard.jpg')
+    imageFilename = 'checkerboard.png'
+    cv2.imwrite(folder + '/' + imageFilename, textureImage)
+
+    #background = textureImage.mean(2) > 224
+    #background = cv2.erode(background.astype(np.uint8), np.ones((3, 3)))
+    #cv2.imwrite('test/mask.png', drawMaskImage(background))
+    #exit(1)
+
+    textureHeight = textureImage.shape[0]
+    textureWidth = textureImage.shape[1]
+    textureRatio = float(textureHeight) / textureWidth
+    #textureImage = cv2.imread('../textures/texture_2.jpg')
+    #textureImage = cv2.resize(textureImage, (width, height), interpolation=cv2.INTER_LINEAR)
+
+    faces = []
+    texcoords = []        
+    maskImage = np.full(segmentation.shape, planes.shape[0])
+    for planeIndex in xrange(planes.shape[0]):
+        if planeIndex not in wallPlanes:
+            continue
+        globalMask = segmentation == planeIndex
+        if globalMask.sum() < planeAreaThreshold:
+            continue
+        
+        masks = measure.label(globalMask.astype(np.int32), background=0)
+        #print(masks.max())
+        #print(masks.min())        
+        #cv2.imwrite('test/mask.png', drawSegmentationImage(masks, blackIndex=planes.shape[0]))
+        #exit(1)
+        for maskIndex in xrange(1, masks.max() + 1):
+            mask = masks == maskIndex
+            if mask.sum() < planeAreaThreshold:
+                continue
+
+            planeNormal = planesNormal[planeIndex]
+
+            # maxs = points.max(0)
+            # mins = points.min(0)
+
+            # planeNormal = planesNormal[planeIndex]
+            # maxAxis = np.argmax(np.abs(planeNormal))
+            # center = points.mean(0)
+            # if maxAxis != 2:
+            #     direction_u = np.cross(planeNormal, np.array([0, 0, 1]))
+            #     direction_u = direction_u / np.maximum(np.linalg.norm(direction_u), 1e-4)
+            #     direction_v = np.cross(planeNormal, direction_u)
+            #     direction_v = direction_v / np.maximum(np.linalg.norm(direction_v), 1e-4)
+            # else:
+            #     pca = PCA(n_components=1)
+            #     pca.fit(points[:, :2])
+            #     direction = np.concatenate([pca.components_[0], np.zeros(1)], axis=0)
+
+            #     direction_u = np.cross(planeNormal, direction)
+            #     direction_u = direction_u / np.maximum(np.linalg.norm(direction_u), 1e-4)
+            #     direction_v = np.cross(planeNormal, direction_u)
+            #     direction_v = direction_v / np.maximum(np.linalg.norm(direction_v), 1e-4)
+            #     pass
+
+            cluster = planeClusters[planeIndex]
+            dominantNormal = dominantNormals[(cluster + 1) % 3]
+            direction_u = np.cross(planeNormal, dominantNormal)
+            direction_u = direction_u / np.maximum(np.linalg.norm(direction_u), 1e-4)
+            direction_v = np.cross(planeNormal, direction_u)
+            direction_v = direction_v / np.maximum(np.linalg.norm(direction_v), 1e-4)
+
+            points = XYZ[mask]        
+            projection_u = np.tensordot(points, direction_u, axes=([1], [0]))
+            range_u = [projection_u.min(), projection_u.max()]       
+            projection_v = np.tensordot(points, direction_v, axes=([1], [0]))                
+            range_v = [projection_v.min(), projection_v.max()]
+            if range_v[1] - range_v[0] > range_u[1] - range_u[0]:
+                range_u, range_v = range_v, range_u
+                direction_u, direction_v = direction_v, direction_u
+                pass
+
+            if (np.argmax(np.abs(direction_v)) == 2 and direction_v[2] < 0) or (np.argmax(np.abs(direction_v)) != 2 and np.dot(np.array([0, 1, 0]), direction_v) < 0):
+                direction_v *= -1
+                projection_v *= -1
+                range_v = [-range_v[1], -range_v[0]]
+                pass
+            if np.dot(np.cross(planeNormal, direction_v), direction_u) < 0:
+                direction_u *= -1
+                projection_u *= -1
+                range_u = [-range_u[1], -range_u[0]]
+                pass
+
+            print(planeIndex, dominantNormal, direction_u, direction_v)
+
+
+            length_u = range_u[1] - range_u[0]
+            length_v = range_v[1] - range_v[0]
+            if length_u * textureRatio > length_v:
+                length_u = length_v / textureRatio
+            else:
+                length_v = length_u * textureRatio
+                pass
+
+            #logoSize = 0.35
+            
+            # center_u = (range_u[0] + range_u[1]) / 2
+            # range_u = [center_u - length_u * logoSize, center_u + length_u * logoSize]
+
+            # center_v = (range_v[0] + range_v[1]) / 2
+            # range_v = [center_v - length_v * logoSize, center_v + length_v * logoSize]
+
+            projection_u = np.tensordot(XYZ, direction_u, axes=([2], [0]))
+            projection_v = np.tensordot(XYZ, direction_v, axes=([2], [0]))
+            #projection_u = (projection_u - range_u[0]) / (range_u[1] - range_u[0])
+            #projection_v = (projection_v - range_v[0]) / (range_v[1] - range_v[0])
+            
+            #rectangleMask = np.logical_and(np.logical_and(projection_u >= 0, projection_u <= 1), np.logical_and(projection_v >= 0, projection_v <= 1))
+            #rectangleMask = np.logical_and(rectangleMask, mask)
+            #maskImage[rectangleMask] = planeIndex
+
+            textureSize = 1
+            projection_u = (projection_u / textureSize) % 1
+            projection_v = (projection_v / textureSize) % 1
+            rectangleMask = mask
+
+            maskImage[rectangleMask] = planeIndex
+            
+            for y in xrange(height - 1):
+                for x in xrange(width - 1):
+                    facePixels = []
+                    for pixel in [(x, y), (x + 1, y), (x + 1, y + 1), (x, y + 1)]:
+                        if rectangleMask[pixel[1]][pixel[0]]:
+                            # u = projection_u[pixel[1]][pixel[0]]
+                            # v = projection_v[pixel[1]][pixel[0]]
+                            # u = min(max(int(round(u * textureWidth)), 0), textureWidth - 1)
+                            # v = min(max(textureHeight - 1 - int(round(v * textureHeight)), 0), textureHeight - 1)
+                            # if background[v][u] == False:
+                            facePixels.append(pixel)
+                            pass
+                        continue
+                    
+                    if len(facePixels) == 3:
+                        faces.append(facePixels[0] + facePixels[1] + facePixels[2])
+                        vt = []
+                        for c in [0, 1, 2]:
+                            vt.append(projection_u[facePixels[c][1]][facePixels[c][0]])
+                            vt.append(projection_v[facePixels[c][1]][facePixels[c][0]])
+                            continue
+                        texcoords.append(vt)
+                    elif len(facePixels) == 4:
+                        faces.append(facePixels[0] + facePixels[1] + facePixels[2])
+                        vt = []
+                        for c in [0, 1, 2]:
+                            vt.append(projection_u[facePixels[c][1]][facePixels[c][0]])
+                            vt.append(projection_v[facePixels[c][1]][facePixels[c][0]])
+                            continue
+                        texcoords.append(vt)                    
+                        faces.append(facePixels[0] + facePixels[2] + facePixels[3])
+                        vt = []
+                        for c in [0, 2, 3]:
+                            vt.append(projection_u[facePixels[c][1]][facePixels[c][0]])
+                            vt.append(projection_v[facePixels[c][1]][facePixels[c][0]])
+                            continue
+                        texcoords.append(vt)                    
+                        pass
+                    continue
+                continue
+            continue
+        continue
+
+    cv2.imwrite('test/mask.png', drawSegmentationImage(maskImage, blackIndex=planes.shape[0]))
+    
+    
+    with open(folder + '/' + str(index) + '_logo.ply', 'w') as f:
+        header = """ply
+format ascii 1.0
+comment VCGLIB generated
+comment TextureFile """
+        header += imageFilename
+        header += """
+element vertex """
+        header += str(width * height)
+        header += """
+property float x
+property float y
+property float z
+element face """
+        header += str(len(faces))
+        header += """
+property list uchar int vertex_indices
+property list uchar float texcoord
+end_header
+"""
+        f.write(header)
+        for y in xrange(height):
+            for x in xrange(width):
+                segmentIndex = segmentation[y][x]
+                if segmentIndex == -1:
+                    f.write("0.0 0.0 0.0\n")
+                    continue
+                point = XYZ[y][x]
+                X = point[0] * 0.9999
+                Y = point[1] * 0.9999
+                Z = point[2] * 0.9999
+                #Y = depth[y][x]
+                #X = Y / focalLength * (x - width / 2) / width * 640
+                #Z = -Y / focalLength * (y - height / 2) / height * 480
+                f.write(str(X) + ' ' +    str(Z) + ' ' + str(-Y) + '\n')
+                continue
+            continue
+
+
+        for faceIndex, face in enumerate(faces):
+            f.write('3 ')
+            for c in xrange(3):
+                f.write(str(face[c * 2 + 1] * width + face[c * 2]) + ' ')
+                continue
+            f.write('6 ')
+            vt = texcoords[faceIndex]
+            for value in vt:
+                f.write(str(value) + ' ')
+                continue
+            # for c in xrange(3):
+            #     f.write(str(float(face[c * 2]) / width) + ' ' + str(1 - float(face[c * 2 + 1]) / height) + ' ')
+            #     continue
+            f.write('\n')
+            continue
+        f.close()
+        pass
+    return
+
+

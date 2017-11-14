@@ -48,7 +48,7 @@ ALL_TITLES = ['PlaneNet', 'Oracle NYU toolbox', 'NYU toolbox', 'Oracle Manhattan
 #bl0_dl0_ll1_bw0.5_pb_pp_sm0
 #pb_pp
 
-ALL_METHODS = [['planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0', '', 0, 0], ['planenet_hybrid3_bl0_dl0_crfrnn-10_sm0', '', 1, 0], ['sample_np10_hybrid3_bl0_dl0_ll1_hl2_ds0_crfrnn5_sm0', '', 1, 0], ['sample_np10_hybrid3_bl0_dl0_hl4_ds0_crfrnn5_sm0', '', 1, 0], ['sample_np10_hybrid3_bl0_dl0_hl2_ds0_crfrnn5_sm0', '', 1, 0], ['sample_np15_hybrid3_bl0_dl0_hl2_ds0_crfrnn5_sm0', '', 1, 0], ['sample_np10_hybrid3_bl0_dl0_ds0_crfrnn5_sm0', '', 1, 0]]
+ALL_METHODS = [['planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0', '', 0, 0], ['planenet_hybrid3_bl0_dl0_crfrnn-10_sm0', '', 1, 0], ['sample_np10_hybrid3_bl0_dl0_ll1_hl2_ds0_crfrnn5_sm0', '', 1, 0], ['sample_np10_hybrid3_bl0_dl0_hl2_crfrnn5_sm0', '', 1, 0], ['sample_np10_hybrid3_bl0_dl0_hl2_ds0_crfrnn5_sm0', '', 1, 0], ['planenet_hybrid3_bl0_dl0_ds0_crfrnn5_sm0', '', 1, 0], ['sample_np10_hybrid3_bl0_dl0_ds0_crfrnn5_sm0', '', 1, 0]]
 
 
 def writeHTML(options):
@@ -398,7 +398,7 @@ def plotResults(gt_dict, predictions, options):
     for method_index, pred_dict in enumerate(predictions):
         if titles[method_index] == 'pixelwise':
             continue
-        #if method_index != 2:
+        #if method_index != 6:
         #continue
         
         numPlanes = pred_dict['segmentation'].shape[-1]
@@ -443,7 +443,7 @@ def plotResults(gt_dict, predictions, options):
             # print(np.abs(gt_dict['depth'][image_index] - predDepths[:, :, 4])[gt_dict['segmentation'][image_index][:, :, 3] * segmentations[image_index][:, :, 4] > 0.5].mean())
             # print(np.abs(gt_dict['depth'][image_index] - predDepths[:, :, 5])[gt_dict['segmentation'][image_index][:, :, 1] * segmentations[image_index][:, :, 5] > 0.5].mean())            
             # exit(1)
-            pixelStatistics, planeStatistics = evaluatePlanePrediction(predDepths, segmentations[image_index], predNumPlanes, gtDepths, gt_dict['segmentation'][image_index], gt_dict['num_planes'][image_index])
+            pixelStatistics, planeStatistics = evaluatePlanePrediction(predDepths, segmentations[image_index], predNumPlanes, gtDepths, gt_dict['segmentation'][image_index], gt_dict['num_planes'][image_index], gtPlanes=gt_dict['plane'][image_index], predPlanes=pred_dict['plane'][image_index])
             #print(method_index)
             #print(planeStatistics[2][5])
 
@@ -1161,18 +1161,6 @@ def getGroundTruth(options):
                 gtNumPlanes.append(gt_num_p)
                 
                 gtInfo.append(global_gt['info'][0])
-
-                if index == 10:
-                    print('dump')
-                    np.save('test/planes.npy', gt_p[:gt_num_p])
-                    print(global_gt['non_plane_mask'].shape)
-                    np.save('test/segmentation.npy', np.argmax(np.concatenate([gt_s[:, :, :gt_num_p], global_gt['non_plane_mask'][0]], axis=-1), axis=-1))
-                    cv2.imwrite('test/image.png', image)
-                    np.save('test/depth.npy', gt_d)
-                    gt_n = calcNormal(gt_d, global_gt['info'][0])
-                    np.save('test/normal.npy', gt_n)
-                    np.save('test/info.npy', global_gt['info'][0])
-                    exit(1)
                 continue
 
             gt_dict['image'] = np.array(images)

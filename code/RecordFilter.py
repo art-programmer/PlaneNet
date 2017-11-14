@@ -54,26 +54,26 @@ def writeRecordFile(split, dataset):
         pass
     
 
-    parser = argparse.ArgumentParser(description='Planenet')
-    options = parser.parse_args()
-    options.deepSupervisionLayers = ['res4b22_relu', ]
-    options.predictConfidence = 0
-    options.predictLocal = 0
-    options.predictPixelwise = 1
-    options.predictBoundary = 1
-    options.predictSemantics = 0    
-    options.anchorPlanes = 0
-    options.numOutputPlanes = 20
-    options.batchSize = 8
-    options.useNonPlaneDepth = 1
+    # parser = argparse.ArgumentParser(description='Planenet')
+    # options = parser.parse_args()
+    # options.deepSupervisionLayers = ['res4b22_relu', ]
+    # options.predictConfidence = 0
+    # options.predictLocal = 0
+    # options.predictPixelwise = 1
+    # options.predictBoundary = 1
+    # options.predictSemantics = 0    
+    # options.anchorPlanes = 0
+    # options.numOutputPlanes = 20
+    # options.batchSize = 8
+    # options.useNonPlaneDepth = 1
     
 
-    training_flag = tf.constant(False, tf.bool)
+    #training_flag = tf.constant(False, tf.bool)
     
-    options.gpu_id = 0
-    global_pred_dict, _, _ = build_graph(img_inp, img_inp, training_flag, options)    
+    #options.gpu_id = 0
+    #global_pred_dict, _, _ = build_graph(img_inp, img_inp, training_flag, options)    
 
-    var_to_restore = [v for v in tf.global_variables()]
+    #var_to_restore = [v for v in tf.global_variables()]
 
     config=tf.ConfigProto()
     config.allow_soft_placement=True    
@@ -87,15 +87,15 @@ def writeRecordFile(split, dataset):
     
     with tf.Session(config=config) as sess:
         sess.run(init_op)        
-        loader = tf.train.Saver(var_to_restore)
-        loader.restore(sess, '/mnt/vision/PlaneNet/checkpoint/planenet_hybrid3_ll1_pb_pp/checkpoint.ckpt')
+        #loader = tf.train.Saver(var_to_restore)
+        #loader.restore(sess, '/mnt/vision/PlaneNet/checkpoint/planenet_hybrid3_ll1_pb_pp/checkpoint.ckpt')
         
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
 
         try:
             for _ in xrange(numImages / batchSize):
-                img, global_gt, pred_dict = sess.run([img_inp, global_gt_dict, global_pred_dict])
+                img, global_gt = sess.run([img_inp, global_gt_dict])
 
                 print(_)                
                 for batchIndex in xrange(batchSize):
@@ -124,8 +124,8 @@ def writeRecordFile(split, dataset):
                             np.save('temp/info.npy', global_gt['info'][batchIndex])
                             np.save('temp/num_planes.npy', global_gt['num_planes'][batchIndex])
                             print('why')
+                            exit(1)                            
                             pass
-                        exit(1)                        
                         pass
 
                     
@@ -133,9 +133,9 @@ def writeRecordFile(split, dataset):
                     #continue
                     
                     
-                    pred_s = np.concatenate([pred_dict['segmentation'][batchIndex], pred_dict['non_plane_mask'][batchIndex]], axis=-1)
+                    #pred_s = np.concatenate([pred_dict['segmentation'][batchIndex], pred_dict['non_plane_mask'][batchIndex]], axis=-1)
                     #pred_s[:, :, numOutputPlanes] -= 0.1
-                    pred_s = one_hot(np.argmax(pred_s, axis=-1), numOutputPlanes + 1)
+                    #pred_s = one_hot(np.argmax(pred_s, axis=-1), numOutputPlanes + 1)
                     #planes, segmentation, numPlanes = filterPlanes(planes, gt_s, global_gt['depth'][batchIndex].squeeze(), global_gt['info'][batchIndex], pred_s)
                     planes, segmentation, numPlanes = filterPlanes(planes, gt_s, global_gt['depth'][batchIndex].squeeze(), global_gt['info'][batchIndex])
 

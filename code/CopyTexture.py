@@ -1,6 +1,6 @@
-import sys
 import tensorflow as tf
 import numpy as np
+np.set_printoptions(precision=2, linewidth=200)
 import cv2
 import os
 import time
@@ -9,25 +9,18 @@ import tf_nndistance
 import argparse
 import glob
 import PIL
-
-#from SegmentationBatchFetcherV2 import *
-from RecordReader import *
-from RecordReaderAll import *
+import scipy.ndimage as ndimage
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import *
-from layers import PlaneDepthLayer, PlaneNormalLayer
+from plane_utils import *
 from modules import *
 
-#from resnet import inference as resnet
-#from resnet import fc as fc, conv as conv, block_transpose as block_transpose, conv_transpose as conv_transpose, bn as bn, UPDATE_OPS_COLLECTION
-from config import Config
-from modules import *
-import scipy.ndimage as ndimage
+from train_sample import build_graph
 from planenet import PlaneNet
-#from SegmentationRefinement import refineSegmentation
-from train_planenet import build_graph as build_graph
-from SegmentationRefinement import refineSegmentation
+from RecordReaderAll import *
+from SegmentationRefinement import *
+from crfasrnn_layer import CrfRnnLayer
 
 np.set_printoptions(precision=2, linewidth=200)
 
@@ -79,7 +72,7 @@ def findCornerPoints(plane, depth, mask, axis=2, rectangle=True):
         pass
     return uv
 
-def copyTextureTest():
+def copyTextureTest(options):
     testdir = 'texture_test/'
     for index in xrange(1):
         planes = np.load(testdir + '/planes_' + str(index) + '.npy')
@@ -104,24 +97,128 @@ def copyTextureTest():
         cv2.imwrite(testdir + '/' + str(index) + '_result.png', image)
         continue
     return
-        
-def copyTexture(numOutputPlanes=20, useCRF=0, dataset='SUNCG', numImages=100):
-    testdir = 'texture_test/'
-    dumpdir = 'texture_dump/'
-    if not os.path.exists(testdir):
-        os.system("mkdir -p %s"%testdir)
-        pass
-    if not os.path.exists(dumpdir):
-        os.system("mkdir -p %s"%dumpdir)
+
+
+def copyTexture(options):
+
+    if os.path.exists(options.result_filename) and options.useCache == 1:
+        pred_dict = np.load(options.result_filename)
+        pred_dict = pred_dict[()]
+    else:
+        pred_dict = getResults(options)
+        np.save(options.result_filename, pred_dict)        
         pass
 
+
+    texture_image_names = glob.glob('../textures/*.png') + glob.glob('../textures/*.jpg')
+    
+    for image_index in xrange(options.numImages):
+        planes = pred_dict['plane'][image_index]
+        segmentation = pred_dict['segmentation'][image_index]
+        image = pred_dict['image'][image_index]
+        plane_depths = pred_dict['plane_depth'][image_index]
+
+        #writePLYFile(options.test_dir, index, image, pred_d, segmentation, np.zeros(pred_boundary.shape))
+        oriWidth = image.shape[1]
+        oriHeight = image.shape[0]
+        
+        for texture_index, texture_image_name in enumerate(texture_image_names):
+            textureImage = cv2.imread(texture_image_name)
+            #textureImage = cv2.imread('../textures/texture_2.jpg')
+            textureImage = cv2.resize(textureImage, (oriWidth, oriHeight), interpolation=cv2.INTER_LINEAR)
+            floorPlaneIndex = findFloorPlane(planes, segmentation)
+            mask = segmentation == floorPlaneIndex
+            #mask = cv2.resize(mask.astype(np.float32), (oriWidth, oriHeight), interpolation=cv2.INTER_LINEAR) > 0.5
+            #plane_depths = calcPlaneDepths(pred_p, oriWidth, oriHeight)
+            depth = plane_depths[:, :, floorPlaneIndex]
+            #depth = cv2.resize(depth, (oriWidth, oriHeight), interpolation=cv2.INTER_LINEAR) > 0.5
+            uv = findCornerPoints(planes[floorPlaneIndex], depth, mask)
+            print(uv)
+            source_uv = np.array([[0, 0], [0, oriHeight], [oriWidth, 0], [oriWidth, oriHeight]])
+                
+            h, status = cv2.findHomography(source_uv, uv)
+            #textureImageWarped = cv2.warpPerspective(textureImage, h, (WIDTH, HEIGHT))
+            textureImageWarped = cv2.warpPerspective(textureImage, h, (oriWidth, oriHeight))
+            resultImage = image.copy()
+
+            resultImage[mask] = textureImageWarped[mask]
+            #cv2.imwrite(options.test_dir + '/' + str(index) + '_texture.png', textureImageWarped)
+            cv2.imwrite(options.test_dir + '/' + str(index) + '_result_' + str(texture_index) + '.png', resultImage)
+            continue
+        continue
+    return
+
+    
+def getResults(options):
+
+    if not os.path.exists(options.test_dir):
+        os.system("mkdir -p %s"%options.test_dir)
+        pass
+
+    checkpoint_prefix = options.rootFolder + '/checkpoint/'
+
+
+    image_list = glob.glob('testing_images/*.png') + glob.glob('testing_images/*.jpg')
+    #print(image_list)
+    #exit(1)
+    
+    method = ('hybrid_hybrid1_bl0_dl0_ll1_sm0', '')
+    #method = ('finetuning_hybrid1_ps', '')
+    #method = ('planenet_hybrid1_bl0_ll1_ds0_pp_ps', '')
+    # left_walls = [0, 5, 6, 11, 18]
+    # right_walls = [4, 10, 7, 19]
+    # floors = [14]
+    # ceilings = []    
+    # layout_planes = [ceilings, floors, left_walls + right_walls]
+
+    #method = ('sample_np10_hybrid3_bl0_dl0_hl2_ds0_crfrnn5_sm0', '')
+    #method = ('planenet_np10_hybrid3_bl0_dl0_crfrnn-10_sm0', '')
+    # left_walls = [0, 5, 6, 11, 18]
+    # right_walls = [4, 10]
+    # floors = [14]
+    # ceilings = []    
+    # layout_planes = [ceilings, floors, left_walls + right_walls]
+    
+    
+    if 'ds0' not in method[0]:
+        options.deepSupervisionLayers = ['res4b22_relu', ]
+    else:
+        options.deepSupervisionLayers = []
+        pass
+    options.predictConfidence = 0
+    options.predictLocal = 0
+    options.predictPixelwise = 1
+    options.predictBoundary = int('pb' in method[0])
+    options.anchorPlanes = 0
+    options.predictSemantics = 0
+    options.batchSize = 1
+
+    if 'crfrnn' in method[0]:
+        options.crfrnn = 10
+    else:
+        options.crfrnn = 0
+        pass    
+    if 'ap1' in method[0]:
+        options.anchorPlanes = 1
+        pass
+        
+    options.checkpoint_dir = checkpoint_prefix + method[0]
+    print(options.checkpoint_dir)
+    
+    options.suffix = method[1]
+
+    
     batchSize = 1
-    img_inp = tf.placeholder(tf.float32,shape=(batchSize,HEIGHT,WIDTH,3),name='img_inp')
-    plane_gt=tf.placeholder(tf.float32,shape=(batchSize,numOutputPlanes, 3),name='plane_inp')
-    validating_inp = tf.constant(True, tf.bool)
+    img_inp = tf.placeholder(tf.float32,shape=(batchSize, HEIGHT, WIDTH, 3),name='img_inp')
+    training_flag = tf.constant(True, tf.bool)
  
 
-    plane_pred, plane_confidence_pred, depth_pred, normal_pred, segmentation_pred, non_plane_mask_pred, non_plane_depth_pred, non_plane_normal_pred, boundary_pred, grid_s_pred, grid_p_pred, grid_m_pred, plane_preds, segmentation_preds, refined_segmentation = build_graph(img_inp, img_inp, plane_gt, plane_gt, validating_inp, numOutputPlanes=numOutputPlanes, useCRF=useCRF, is_training=False)
+    options.gpu_id = 0
+    if 'sample' in options.checkpoint_dir:
+        global_pred_dict, _, _ = build_graph_sample(img_inp, img_inp, training_flag, options)
+    else:
+        global_pred_dict, _, _ = build_graph(img_inp, img_inp, training_flag, options)
+        pass
 
     var_to_restore = tf.global_variables()
     
@@ -131,161 +228,167 @@ def copyTexture(numOutputPlanes=20, useCRF=0, dataset='SUNCG', numImages=100):
     config.allow_soft_placement=True
 
 
-    #im_names = glob.glob('../test_images/*.png') + glob.glob('../test_images/*.jpg')
-    im_names = glob.glob('../AdobeImages/*.png') + glob.glob('../AdobeImages/*.jpg')
-    im_names = [{'image': im_name} for im_name in im_names]
-    
-    texture_image_names = glob.glob('../textures/*.png') + glob.glob('../textures/*.jpg')
+    #im_names = glob.glob('../AdobeImages/*.png') + glob.glob('../AdobeImages/*.jpg')
+
       
-    if numImages > 0:
-        im_names = im_names[:numImages]
+    if options.numImages > 0:
+        image_list = image_list[:options.numImages]
         pass
 
-    #if args.imageIndex > 0:
-    #im_names = im_names[args.imageIndex:args.imageIndex + 1]
-    #pass    
+    if options.imageIndex >= 0:
+        image_list = [image_list[args.imageIndex:args.imageIndex]]
+    pass    
+
 
     init_op = tf.group(tf.global_variables_initializer(),
                        tf.local_variables_initializer())
 
 
+    pred_dict = {}    
     with tf.Session(config=config) as sess:
-        saver = tf.train.Saver()
+        loader = tf.train.Saver()
         #sess.run(tf.global_variables_initializer())
-        saver.restore(sess,"dump_planenet/train_planenet.ckpt")
+        loader.restore(sess, "%s/checkpoint.ckpt"%(options.checkpoint_dir))
+        #saver.restore(sess,"dump_planenet/train_planenet.ckpt")
 
+        images = []
+        predPlanes = []
+        predSegmentations = []
+        predDepths = []        
+        predPlaneDepths = []
 
-        randomColor = np.random.randint(255, size=(numOutputPlanes + 1, 3)).astype(np.uint8)
-        randomColor[0] = 0
-        gtDepths = []
-        predDepths = []
-        segmentationDepths = []
-        predDepthsOneHot = []
-        planeMasks = []
-        predMasks = []
-
-        imageWidth = WIDTH
-        imageHeight = HEIGHT
-        focalLength = 517.97
-        urange = np.arange(imageWidth).reshape(1, -1).repeat(imageHeight, 0) - imageWidth * 0.5
-        vrange = np.arange(imageHeight).reshape(-1, 1).repeat(imageWidth, 1) - imageHeight * 0.5
-        ranges = np.array([urange / focalLength, np.ones(urange.shape), -vrange / focalLength]).transpose([1, 2, 0])
+        # imageWidth = WIDTH
+        # imageHeight = HEIGHT
+        # focalLength = 517.97
+        # urange = np.arange(imageWidth).reshape(1, -1).repeat(imageHeight, 0) - imageWidth * 0.5
+        # vrange = np.arange(imageHeight).reshape(-1, 1).repeat(imageWidth, 1) - imageHeight * 0.5
+        # ranges = np.array([urange / focalLength, np.ones(urange.shape), -vrange / focalLength]).transpose([1, 2, 0])
         
-        for index, im_name in enumerate(im_names):
+        for index, image_filename in enumerate(image_list):
             if index <= -1:
                 continue
-            print(im_name['image'])
-            im = cv2.imread(im_name['image'])
+            print(image_filename)
+            im = cv2.imread(image_filename)
             im_resized = cv2.resize(im, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)
-            cv2.imwrite(testdir + '/' + str(index) + '_image.png', im)
-            continue
-            oriWidth = im.shape[1]
-            oriHeight = im.shape[0]
+            cv2.imwrite(options.test_dir + '/' + str(index) + '_image.png', im)
+            #continue
+            width_high_res = im.shape[1]
+            height_high_res = im.shape[0]
             image = im.astype(np.float32, copy=False)
             image = image / 255 - 0.5
             image = cv2.resize(image, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)
 
+            global_pred = sess.run(global_pred_dict, feed_dict={img_inp: np.expand_dims(image, 0)})
+
+            pred_p = global_pred['plane'][0]
+            pred_s = global_pred['segmentation'][0]
+                
+            pred_np_m = global_pred['non_plane_mask'][0]
+            pred_np_d = global_pred['non_plane_depth'][0]
+            pred_np_n = global_pred['non_plane_normal'][0]
             
-            pred_p, pred_d, pred_n, pred_s, pred_np_m, pred_np_d, pred_np_n, pred_boundary, pred_grid_s, pred_grid_p, pred_grid_m = sess.run([plane_pred, depth_pred, normal_pred, segmentation_pred, non_plane_mask_pred, non_plane_depth_pred, non_plane_normal_pred, boundary_pred, grid_s_pred, grid_p_pred, grid_m_pred], feed_dict = {img_inp:np.expand_dims(image, 0), plane_gt: np.zeros((batchSize, numOutputPlanes, 3))})
 
+            info = np.zeros(info.shape)
+            focalLength = estimateFocalLength(im)
+            info[0] = focalLength
+            info[5] = focalLength
+            info[2] = im.shape[1] / 2
+            info[6] = im.shape[0] / 2
+            info[16] = im.shape[1]
+            info[17] = im.shape[0]
+            info[10] = 1
+            info[15] = 1
+            info[18] = 1000
+            info[19] = 5
+            
+            all_segmentations = np.concatenate([pred_s, pred_np_m], axis=2)
+            plane_depths = calcPlaneDepths(pred_p, width_high_res, height_high_res, info)
 
-            #if index != 13:
-            #continue
-              
-            pred_s = pred_s[0] 
-            pred_p = pred_p[0]
-            pred_np_m = pred_np_m[0]
-            pred_np_d = pred_np_d[0]
-            pred_np_n = pred_np_n[0]
-            #pred_s = 1 / (1 + np.exp(-pred_s))
+            pred_np_d = np.expand_dims(cv2.resize(pred_np_d.squeeze(), (width_high_res, height_high_res)), -1)
+            all_depths = np.concatenate([plane_depths, pred_np_d], axis=2)
 
-            plane_depths = calcPlaneDepths(pred_p, WIDTH, HEIGHT)
-            all_depths = np.concatenate([pred_np_d, plane_depths], axis=2)
-
-            all_segmentations = np.concatenate([pred_np_m, pred_s], axis=2)
+            all_segmentations = np.stack([cv2.resize(all_segmentations[:, :, planeIndex], (width_high_res, height_high_res)) for planeIndex in xrange(all_segmentations.shape[-1])], axis=2)
+                
             segmentation = np.argmax(all_segmentations, 2)
-            pred_d = all_depths.reshape(-1, numOutputPlanes + 1)[np.arange(WIDTH * HEIGHT), segmentation.reshape(-1)].reshape(HEIGHT, WIDTH)
-
-            pred_boundary = pred_boundary[0]
-            pred_boundary = 1 / (1 + np.exp(-pred_boundary))
-
-            #refined_s = refineSegmentation(pred_s, plane_depths, pred_boundary[:, :, 0], pred_boundary[:, :, 1])
-            #cv2.imwrite(testdir + '/' + str(index) + '_segmentation_refined.png', drawSegmentationImage(refined_s))
-            #exit(1)
+            pred_d = all_depths.reshape(-1, options.numOutputPlanes + 1)[np.arange(height_high_res * width_high_res), segmentation.reshape(-1)].reshape(height_high_res, width_high_res)
             
-
-            #cv2.imwrite(testdir + '/' + str(index) + '_depth_gt.png', (minDepth / np.clip(depth, minDepth, 20) * 255).astype(np.uint8))
-            #cv2.imwrite(testdir + '/' + str(index) + '_depth_pred.png', (minDepth / np.clip(pred_d[0, :, :, 0], minDepth, 20) * 255).astype(np.uint8))
-            #cv2.imwrite(testdir + '/' + str(index) + '_depth_plane.png', (minDepth / np.clip(reconstructedDepth, minDepth, 20) * 255).astype(np.uint8))
+            cv2.imwrite(options.test_dir + '/' + str(index) + '_depth_pred.png', drawDepthImage(pred_d))
+            cv2.imwrite(options.test_dir + '/' + str(index) + '_segmentation_pred.png', drawSegmentationImage(all_segmentations, black=True))
 
 
-            cv2.imwrite(testdir + '/' + str(index) + '_depth_pred.png', drawDepthImage(pred_d))
-            #cv2.imwrite(testdir + '/' + str(index) + '_normal_pred.png', drawNormalImage(pred_n[0]))
-            cv2.imwrite(testdir + '/' + str(index) + '_segmentation_pred.png', drawSegmentationImage(all_segmentations, black=True))
-            
-            segmentation = np.argmax(all_segmentations, axis=2)
-            writePLYFile(testdir, index, image, pred_d, segmentation, np.zeros(pred_boundary.shape))
-            
-            if index == 12 and False:
-                #np.save(testdir + '/planes_' + str(index) + '.npy', pred_p)
-                #cv2.imwrite(testdir + '/image_' + str(index) + '.png', im_resized)
-                #np.save(testdir + '/segmentations_' + str(index) + '.npy', pred_s)
-                
-                np.save(testdir + '/' + str(index) + '_segmentation_pred.npy', segmentation)
-                np.save(testdir + '/' + str(index) + '_planes.npy', pred_p)
-                exit(1)
-                np.save(dumpdir + '/planes_' + str(index) + '.npy', pred_p)
-                np.save(dumpdir + '/segmentations_' + str(index) + '.npy', pred_s)
-                np.save(dumpdir + '/non_plane_depth_' + str(index) + '.npy', pred_np_d)
-                np.save(dumpdir + '/non_plane_segmentation_' + str(index) + '.npy', pred_np_m)
-                boundary = np.concatenate([pred_boundary, np.zeros((HEIGHT, WIDTH, 1))], axis=2)                    
-                cv2.imwrite(dumpdir + '/boundary_' + str(index) + '.png', drawMaskImage(boundary))
-                cv2.imwrite(dumpdir + '/image_' + str(index) + '.png', im_resized)
-                exit(1)
-                continue
-                pass
-
+            images.append(im)
+            predDepths.append(pred_d)
+            predPlanes.append(pred_p)
+            predSegmentations.append(segmentation)
+            predPlaneDepths.append(plane_depths)
             continue
 
-            planes = pred_p
-            segmentations = pred_s
-            segmentation = np.argmax(segmentations, axis=2)
-            #textureImage = cv2.imread('../textures/texture_0.jpg')
-            #textureImage = cv2.imread('../textures/texture_2.jpg')
-            for texture_index, texture_image_name in enumerate(texture_image_names):
-                textureImage = cv2.imread(texture_image_name)
-                #textureImage = cv2.imread('../textures/texture_2.jpg')
-                textureImage = cv2.resize(textureImage, (oriWidth, oriHeight), interpolation=cv2.INTER_LINEAR)
-                floorPlaneIndex = findFloorPlane(planes, segmentation)
-                mask = segmentation == floorPlaneIndex
-                mask = cv2.resize(mask.astype(np.float32), (oriWidth, oriHeight), interpolation=cv2.INTER_LINEAR) > 0.5
-                plane_depths = calcPlaneDepths(pred_p, oriWidth, oriHeight)
-                depth = plane_depths[:, :, floorPlaneIndex]
-                #depth = cv2.resize(depth, (oriWidth, oriHeight), interpolation=cv2.INTER_LINEAR) > 0.5
-                uv = findCornerPoints(planes[floorPlaneIndex], depth, mask)
-                print(uv)
-                source_uv = np.array([[0, 0], [0, oriHeight], [oriWidth, 0], [oriWidth, oriHeight]])
-                
-                h, status = cv2.findHomography(source_uv, uv)
-                #textureImageWarped = cv2.warpPerspective(textureImage, h, (WIDTH, HEIGHT))
-                textureImageWarped = cv2.warpPerspective(textureImage, h, (oriWidth, oriHeight))
-                image = im
-
-                image[mask] = textureImageWarped[mask]
-                cv2.imwrite(testdir + '/' + str(index) + '_texture.png', textureImageWarped)
-                cv2.imwrite(testdir + '/' + str(index) + '_result_' + str(texture_index) + '.png', image)
-
-
-            # if index < 0:
-            #     segmentation = np.argmax(pred_s, 2)
-            #     for planeIndex in xrange(numOutputPlanes):
-            #         cv2.imwrite(testdir + '/' + str(index) + '_segmentation_' + str(planeIndex) + '.png', drawMaskImage(pred_s[:, :, planeIndex]))
-            #         #cv2.imwrite(testdir + '/' + str(index) + '_segmentation_' + str(planeIndex) + '_gt.png', drawMaskImage(gt_s[:, :, planeIndex]))
-            #         continue
-            #     pass
-            continue
-        #exit(1)
+        pred_dict['image'] = np.array(images)
+        pred_dict['plane'] = np.array(predPlanes)
+        pred_dict['segmentation'] = np.array(predSegmentations)
+        pred_dict['depth'] = np.array(predDepths)
+        pred_dict['plane_depth'] = np.array(predPlaneDepths)
         pass
-    return
+    return pred_dict
 
-copyTexture()
+
+
+if __name__=='__main__':
+    """
+    Parse input arguments
+    """
+    parser = argparse.ArgumentParser(description='Planenet')
+    parser.add_argument('--task', dest='task',
+                        help='task type',
+                        default='texture', type=str)
+    parser.add_argument('--numOutputPlanes', dest='numOutputPlanes',
+                        help='the number of output planes',
+                        default=20, type=int)
+    parser.add_argument('--dataset', dest='dataset',
+                        help='dataset name',
+                        default='NYU_RGBD', type=str)
+    parser.add_argument('--hybrid', dest='hybrid',
+                        help='hybrid',
+                        default='3', type=str)
+    parser.add_argument('--visualizeImages', dest='visualizeImages',
+                        help='visualize image',
+                        default=30, type=int)    
+    parser.add_argument('--numImages', dest='numImages',
+                        help='the number of images',
+                        default=30, type=int)
+    parser.add_argument('--startIndex', dest='startIndex',
+                        help='start index',
+                        default=0, type=int)    
+    parser.add_argument('--useCache', dest='useCache',
+                        help='use cache',
+                        default=1, type=int)
+    # parser.add_argument('--useCRF', dest='useCRF',
+    #                     help='use crf',
+    #                     default=0, type=int)
+    # parser.add_argument('--useSemantics', dest='useSemantics',
+    #                     help='use semantics',
+    #                     default=0, type=int)
+    parser.add_argument('--useNonPlaneDepth', dest='useNonPlaneDepth',
+                        help='use non-plane depth',
+                        default=0, type=int)
+    parser.add_argument('--imageIndex', dest='imageIndex',
+                        help='image index',
+                        default=-1, type=int)
+    parser.add_argument('--methods', dest='methods',
+                        help='methods',
+                        default='0123', type=str)
+    parser.add_argument('--rootFolder', dest='rootFolder',
+                        help='root folder',
+                        default='/mnt/vision/PlaneNet/', type=str)
+    
+    args = parser.parse_args()
+    #args.hybrid = 'hybrid' + args.hybrid
+    args.test_dir = 'evaluate/' + args.task + '/'
+    args.visualizeImages = args.numImages
+    args.result_filename = args.test_dir + '/results.npy'
+    
+    # image = cv2.imread('evaluate/layout/ScanNet/hybrid3/22_image.png')
+    # focal_length = estimateFocalLength(image)
+    # print(focal_length)
+    # exit(1)
+    copyTexture(args)
