@@ -2111,7 +2111,7 @@ def mergePlanesBackup(points, planes, planePointIndices, planeDiffThreshold = 0.
 #         np.save(prefix + 'curves.npy', pixel_curves + plane_curves)
 #         return
 
-def evaluatePlanePrediction(predDepths, predSegmentations, predNumPlanes, gtDepths, gtSegmentations, gtNumPlanes, gtPlanes, predPlanes, prefix = ''):
+def evaluatePlanePrediction(predDepths, predSegmentations, predNumPlanes, gtDepths, gtSegmentations, gtNumPlanes, prefix = ''):
     if len(gtSegmentations.shape) == 2:
         gtSegmentations = (np.expand_dims(gtSegmentations, -1) == np.arange(gtNumPlanes)).astype(np.float32)
         pass
@@ -2255,6 +2255,161 @@ def plotCurves(x, ys, filename = 'test/test.png', xlabel='', ylabel='', title=''
     plt.ylim((0, 1))
     plt.tight_layout(w_pad=0.3)
     plt.savefig(filename)
+    return
+
+
+def plotCurvesSplit(x, ys, filenames, xlabel='', ylabel='', title='', labels=[]):
+    import matplotlib.pyplot as plt
+
+    plt.rcParams.update({'font.size': 16})
+
+    colors = []
+    markers = []
+    sizes = []
+    for label in labels:
+        if 'PlaneNet' in label:
+            colors.append('blue')
+        elif 'NYU' in label:
+            colors.append('red')
+        elif 'Manhattan' in label:
+            colors.append('orange')
+        else:
+            colors.append('brown')
+            pass
+        if 'Oracle' in label:
+            markers.append('o')
+        else:
+            markers.append('')
+            pass
+        if 'PlaneNet' in label:
+            sizes.append(2)
+        else:
+            sizes.append(1)
+            pass        
+        continue
+    final_labels = ['PlaneNet', '[25]+GT depth', '[25]', '[9]+GT depth', '[9]', '[26]+GT depth', '[26]'] 
+
+    fig = plt.figure()
+    ax = plt.gca()
+    
+    ordering = [2, 4, 6, 0]
+    
+    #for index, y in enumerate(ys):
+    for order in ordering:
+        plt.plot(x, ys[order], figure=fig, label=final_labels[order], color=colors[order], marker=markers[order], linewidth=sizes[order])
+        continue
+    #plt.legend(loc='upper right')
+    #plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.05), ncol=4, fancybox=True, shadow=True, handletextpad=0.1)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel + ' %')
+    ax.set_yticklabels(np.arange(0, 101, 20))
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.get_xaxis().tick_bottom()
+    ax.get_yaxis().tick_left()    
+    #ax.xaxis.set_label_coords(1.1, -0.025)
+    #plt.title(title)
+    plt.xlim((x[0], x[-1] + 0.01))
+    plt.ylim((0, 1))
+    plt.tight_layout(w_pad=0.3)
+    plt.savefig(filenames[0])
+
+
+    fig = plt.figure()
+    ax = plt.gca()
+    
+    ordering = [1, 3, 5, 0]
+    
+    #for index, y in enumerate(ys):
+    for order in ordering:
+        plt.plot(x, ys[order], figure=fig, label=final_labels[order], color=colors[order], marker=markers[order], linewidth=sizes[order])
+        continue
+    #plt.legend(loc='upper right')
+    #plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.05), ncol=4, fancybox=True, shadow=True, handletextpad=0.1)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel + ' %')
+    ax.set_yticklabels(np.arange(0, 101, 20))
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.get_xaxis().tick_bottom()
+    ax.get_yaxis().tick_left()    
+    #ax.xaxis.set_label_coords(1.1, -0.025)
+    #plt.title(title)
+    plt.xlim((x[0], x[-1] + 0.01))
+    plt.ylim((0, 1))
+    plt.tight_layout(w_pad=0.3)
+    plt.savefig(filenames[1])
+    return
+
+
+def plotCurvesSubplot(x, ysArray, filenames, xlabel='', ylabels=[], labels=[]):
+    import matplotlib.pyplot as plt
+
+    plt.rcParams.update({'font.size': 14})
+
+    colors = []
+    markers = []
+    sizes = []
+    for label in labels:
+        if 'PlaneNet' in label:
+            colors.append('blue')
+        elif 'NYU' in label:
+            colors.append('red')
+        elif 'Manhattan' in label:
+            colors.append('orange')
+        else:
+            colors.append('brown')
+            pass
+        if 'Oracle' in label:
+            markers.append('o')
+        else:
+            markers.append('')
+            pass
+        if 'PlaneNet' in label:
+            sizes.append(2)
+        else:
+            sizes.append(1)
+            pass        
+        continue
+    final_labels = ['PlaneNet', '[25]+GT depth', '[25]', '[9]+GT depth', '[9]', '[26]+GT depth', '[26]'] 
+
+    orderingArray = [[2, 4, 6, 0], [1, 3, 5, 0]]
+
+    for groupIndex in xrange(2):
+        fig = plt.figure(groupIndex)
+        ax = plt.gca()
+
+        ordering = orderingArray[groupIndex]
+        for metricIndex in xrange(2):
+            plt.subplot(1, 2, metricIndex + 1)
+            #for index, y in enumerate(ys):
+            ys = ysArray[metricIndex]
+            for order in ordering:
+                plt.plot(x, ys[order], figure=fig, label=final_labels[order], color=colors[order], marker=markers[order], linewidth=sizes[order])
+                continue
+            plt.xlabel(xlabel)
+            plt.ylabel(ylabels[metricIndex] + ' %')
+
+            ax.set_yticklabels(np.arange(0, 101, 20))
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.get_xaxis().tick_bottom()
+            ax.get_yaxis().tick_left()    
+            #ax.xaxis.set_label_coords(1.1, -0.025)
+            #plt.title(title)
+
+            plt.xlim((x[0], x[-1] + 0.01))
+            plt.ylim((0, 1))
+            
+            continue
+
+        plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=4, fancybox=True, shadow=True, handletextpad=0.1)
+
+        plt.tight_layout(w_pad=0.3)
+        plt.savefig(filenames[groupIndex])
+        
+        continue
+    #plt.legend(loc='upper right')
     return
 
 

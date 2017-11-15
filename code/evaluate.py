@@ -179,7 +179,7 @@ def evaluatePlanes(options):
             if 'pixelwise' in options.methods[method_index][1]:
                 continue
             segmentation = pred_dict['segmentation'][image_index]
-            segmentation = np.concatenate([segmentation, pred_dict['np_mask'][image_index]], axis=2)
+            #segmentation = np.concatenate([segmentation, pred_dict['np_mask'][image_index]], axis=2)
             cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_pred_' + str(method_index) + '.png', drawSegmentationImage(segmentation, blackIndex=options.numOutputPlanes))
             continue
         continue
@@ -604,8 +604,8 @@ def plotResults(gt_dict, predictions, options):
         continue
 
     
-    np.save(options.test_dir + '/pixel_curves.npy', np.array(pixel_curves))
-    np.save(options.test_dir + '/plane_curves.npy', np.array(plane_curves))    
+    #np.save(options.test_dir + '/pixel_curves.npy', np.array(pixel_metric_curves))
+    #np.save(options.test_dir + '/plane_curves.npy', np.array(plane_metric_curves))    
 
     
     xs = []
@@ -615,17 +615,42 @@ def plotResults(gt_dict, predictions, options):
     xs.append((np.arange(11) * 0.05).tolist())
     xs.append((np.arange(11) * 0.05).tolist())
     xs.append((np.arange(11) * 0.05).tolist())
-    xlabels = ['IOU threshold', 'IOU threshold', 'IOU threshold', 'depth error tolerance', 'depth error tolerance', 'depth error tolerance']
-    curve_titles = ['depth error 0.1', 'depth error 0.2', 'depth error 0.3', 'IOU 0.3', 'IOU 0.5', 'IOU 0.7']
+    xlabels = ['IOU threshold', 'IOU threshold', 'IOU threshold', 'depth threshold', 'depth threshold', 'depth threshold']
+    curve_titles = ['depth threshold 0.1', 'depth threshold 0.2', 'depth threshold 0.3', 'IOU 0.3', 'IOU 0.5', 'IOU 0.7']
     curve_labels = [title for title in titles if title != 'pixelwise']
+
+
+    # metric_index = 4
+    # filename = options.test_dir + '/curves'
+    # pixel_curves = pixel_metric_curves[metric_index]
+    # plane_curves = plane_metric_curves[metric_index]
+    # plane_curves = [plane_curve[:, 0] / plane_curve[:, 1] for plane_curve in plane_curves]
+    # plotCurvesSubplot(xs[metric_index], [plane_curves, pixel_curves], filenames = [filename + '.png', filename + '_oracle.png'], xlabel=xlabels[metric_index], ylabels=['Per-plane recall', 'Per-pixel recall'], labels=curve_labels)
+    # return
+    
     for metric_index, curves in enumerate(pixel_metric_curves):
-        filename = options.test_dir + '/curve_pixel_' + curve_titles[metric_index].replace(' ', '_') + '.png'
-        plotCurves(xs[metric_index], curves, filename = filename, xlabel=xlabels[metric_index], ylabel='pixel coverage', title=curve_titles[metric_index], labels=curve_labels)
+        if metric_index not in [4]:
+            continue
+        #filename = options.test_dir + '/curve_pixel_' + curve_titles[metric_index].replace(' ', '_') + '.png'
+        #plotCurves(xs[metric_index], curves, filename = filename, xlabel=xlabels[metric_index], ylabel='pixel coverage', title=curve_titles[metric_index], labels=curve_labels)
+
+        filename = options.test_dir + '/curve_pixel_' + curve_titles[metric_index].replace(' ', '_').replace('.', '')
+        plotCurvesSplit(xs[metric_index], curves, filenames = [filename + '.png', filename + '_oracle.png'], xlabel=xlabels[metric_index], ylabel='Per-pixel recall', title=curve_titles[metric_index], labels=curve_labels)
+
+        #plotCurvesSubplot(xs[metric_index], curves, filename = filename + '.png', xlabel=xlabels[metric_index], ylabel='Per-pixel recall', title=curve_titles[metric_index], labels=curve_labels)
+        
         continue
     for metric_index, curves in enumerate(plane_metric_curves):
-        filename = options.test_dir + '/curve_plane_' + curve_titles[metric_index].replace(' ', '_') + '.png'
+        if metric_index not in [4]:
+            continue
+        
         curves = [curve[:, 0] / curve[:, 1] for curve in curves]
-        plotCurves(xs[metric_index], curves, filename = filename, xlabel=xlabels[metric_index], ylabel='plane accuracy', title=curve_titles[metric_index], labels=curve_labels)
+
+        #filename = options.test_dir + '/curve_plane_' + curve_titles[metric_index].replace(' ', '_') + '.png'        
+        #plotCurves(xs[metric_index], curves, filename = filename, xlabel=xlabels[metric_index], ylabel='Per-plane recall', title=curve_titles[metric_index], labels=curve_labels)
+
+        filename = options.test_dir + '/curve_plane_' + curve_titles[metric_index].replace(' ', '_').replace('.', '')
+        plotCurvesSplit(xs[metric_index], curves, filenames = [filename + '.png', filename + '_oracle.png'], xlabel=xlabels[metric_index], ylabel='Per-plane recall', title=curve_titles[metric_index], labels=curve_labels)
         continue
 
     
