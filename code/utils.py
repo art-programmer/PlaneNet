@@ -2287,9 +2287,9 @@ def plotCurvesSplit(x, ys, filenames, xlabel='', ylabel='', title='', labels=[])
             sizes.append(1)
             pass        
         continue
-    final_labels = ['PlaneNet', '[25]+GT depth', '[25]', '[9]+GT depth', '[9]', '[26]+GT depth', '[26]'] 
+    final_labels = ['PlaneNet', '[29]+GT depth', '[29]', '[11]+GT depth', '[11]', '[30]+GT depth', '[30]'] 
 
-    fig = plt.figure()
+    fig = plt.figure(figsize=(12, 6))
     ax = plt.gca()
     
     ordering = [2, 4, 6, 0]
@@ -2299,7 +2299,7 @@ def plotCurvesSplit(x, ys, filenames, xlabel='', ylabel='', title='', labels=[])
         plt.plot(x, ys[order], figure=fig, label=final_labels[order], color=colors[order], marker=markers[order], linewidth=sizes[order])
         continue
     #plt.legend(loc='upper right')
-    #plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.05), ncol=4, fancybox=True, shadow=True, handletextpad=0.1)
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.05), ncol=4, fancybox=True, shadow=True, handletextpad=0.1)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel + ' %')
     ax.set_yticklabels(np.arange(0, 101, 20))
@@ -2315,7 +2315,7 @@ def plotCurvesSplit(x, ys, filenames, xlabel='', ylabel='', title='', labels=[])
     plt.savefig(filenames[0])
 
 
-    fig = plt.figure()
+    fig = plt.figure(figsize=(12, 6))
     ax = plt.gca()
     
     ordering = [1, 3, 5, 0]
@@ -2325,7 +2325,7 @@ def plotCurvesSplit(x, ys, filenames, xlabel='', ylabel='', title='', labels=[])
         plt.plot(x, ys[order], figure=fig, label=final_labels[order], color=colors[order], marker=markers[order], linewidth=sizes[order])
         continue
     #plt.legend(loc='upper right')
-    #plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.05), ncol=4, fancybox=True, shadow=True, handletextpad=0.1)
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.05), ncol=4, fancybox=True, shadow=True, handletextpad=0.1)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel + ' %')
     ax.set_yticklabels(np.arange(0, 101, 20))
