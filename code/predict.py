@@ -1101,7 +1101,7 @@ def getPrediction(options):
                 predPlanes.append(pred_p)
                 predSegmentations.append(segmentation)
 
-                if index == 10 and False:
+                if index == 10 and True:
                     print('dump')
                     newPlanes = []
                     newSegmentation = np.zeros((HEIGHT, WIDTH))

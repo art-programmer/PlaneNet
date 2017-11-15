@@ -33,14 +33,14 @@ import csv
 #ALL_METHODS = [('ll1_pb_pp', 'pixelwise_1'), ('crf1_pb_pp', 'pixelwise_2'), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', 'pixelwise_3'), ('ll1_bw0.5_pb_pp_sm0', 'pixelwise_4')]
 
 
-ALL_TITLES = ['planenet', 'pixelwise']
+ALL_TITLES = ['planenet', 'pixelwise', 'fine-tuning']
 #ALL_METHODS = [('bl0_ll1_bw0.5_pp_ps_sm0', ''), ('bl0_ll1_bw0.5_pp_ps_sm0', 'pixelwise_1')]
 #ALL_METHODS = [('planenet_hybrid1_bl0_ll1_ds0_pp_ps', ''), ('pixelwise_hybrid1_ps', 'pixelwise_1')]
 #ALL_TITLES = ['crf', 'different matching']
 #ALL_METHODS = [('pb_pp_sm0', 'crf'), ('pb_pp_sm0', '')]
 
 #ALL_METHODS = [('planenet_hybrid1_bl0_ll1_ds0_pp_ps', ''), ('pixelwise_hybrid1_ps', '')]
-ALL_METHODS = [('hybrid_hybrid1_bl0_dl0_ll1_sm0', ''), ('finetuning_hybrid1_ps', '')]
+ALL_METHODS = [('pixelwise_hybrid1_ps', ''), ('finetuning_hybrid1_ps', ''), ('finetuning_np10_hybrid1_ds0_ps', '')]
 
 def writeHTML(options):
     from html import HTML
@@ -1069,6 +1069,7 @@ def getPredictionHighRes(options):
     training_flag = tf.constant(False, tf.bool)
 
     options.gpu_id = 0
+
     global_pred_dict, local_pred_dict, deep_pred_dicts = build_graph(img_inp, img_inp, training_flag, options)
 
     var_to_restore = tf.global_variables()
@@ -1467,6 +1468,7 @@ def getGroundTruthHighRes(options):
 
 def evaluateAll(options):
 
+
     if not os.path.exists(options.test_dir):
         os.system("mkdir -p %s"%options.test_dir)
         pass
@@ -1728,7 +1730,7 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Planenet')
     parser.add_argument('--task', dest='task',
                         help='task type',
-                        default='depth', type=str)
+                        default='all', type=str)
     parser.add_argument('--numOutputPlanes', dest='numOutputPlanes',
                         help='the number of output planes',
                         default=20, type=int)
@@ -1764,7 +1766,7 @@ if __name__=='__main__':
                         default=-1, type=int)
     parser.add_argument('--methods', dest='methods',
                         help='methods',
-                        default='01', type=str)
+                        default='2', type=str)
     parser.add_argument('--rootFolder', dest='rootFolder',
                         help='root folder',
                         default='/mnt/vision/PlaneNet/', type=str)
@@ -1796,6 +1798,7 @@ if __name__=='__main__':
     args.methods = [ALL_METHODS[int(method)] for method in args.methods]
     
     print(args.titles)
+
     
     if args.task == 'plane':
         evaluatePlanePrediction(args)
