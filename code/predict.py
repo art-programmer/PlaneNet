@@ -173,17 +173,46 @@ def evaluatePlanes(options):
                     for planeIndex in xrange(options.numOutputPlanes):
                         cv2.imwrite('test/mask_' + str(planeIndex) + '.png', drawMaskImage(segmentation == planeIndex))
                         continue
-                    # resultImages = copyTexture(gt_dict['image'][image_index], pred_dict['plane'][image_index], segmentation, gt_dict['info'][image_index], 6)
-                    # for resultIndex, resultImage in enumerate(resultImages):
-                    #     cv2.imwrite('test/texture_' + str(image_index + options.startIndex) + '_' + str(resultIndex) + '.png', resultImage)
-                    #     continue
+                    #resultImages = copyTexture(gt_dict['image'][image_index], pred_dict['plane'][image_index], segmentation, gt_dict['info'][image_index], 6)
+                    #for resultIndex, resultImage in enumerate(resultImages):
+                    #cv2.imwrite('test/texture_' + str(image_index + options.startIndex) + '_' + str(resultIndex) + '.png', resultImage)
+                    #continue
                     
-                    #copyLogo(options.test_dir, image_index + options.startIndex, gt_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, gt_dict['info'][image_index])
-                    copyWallTexture(options.test_dir, image_index + options.startIndex, gt_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, gt_dict['info'][image_index], [7, 9])
+                    resultImage = copyLogo(options.test_dir, image_index + options.startIndex, gt_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, gt_dict['info'][image_index])
+                    #resultImage = copyWallTexture(options.test_dir, image_index + options.startIndex, gt_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, gt_dict['info'][image_index], [7, 9])
+                    cv2.imwrite(options.test_dir + '/' + str(image_index + options.startIndex) + '_result.png', resultImage)
                     writePLYFile(options.test_dir, image_index + options.startIndex, gt_dict['image'][image_index], pred_dict['depth'][image_index], segmentation, pred_dict['plane'][image_index], gt_dict['info'][image_index])
+                elif options.suffix == 'dump':
+                    newPlanes = []
+                    newSegmentation = np.zeros(segmentation.shape)
+                    newPlaneIndex = 0
+                    planes = pred_dict['plane'][image_index]
+                    for planeIndex in xrange(options.numOutputPlanes):
+                        mask = segmentation == planeIndex
+                        if mask.sum() > 0:
+                            newPlanes.append(planes[planeIndex])
+                            newSegmentation[mask] = newPlaneIndex
+                            newPlaneIndex += 1
+                            pass
+                        continue
+                    
+                    np.save('test/planes.npy', np.stack(newPlanes, axis=0))
+                    #print(global_gt['non_plane_mask'].shape)
+                    np.save('test/segmentation.npy', newSegmentation)
+                    cv2.imwrite('test/image.png', gt_dict['image'][image_index])
+                    depth = pred_dict['depth'][image_index]
+                    np.save('test/depth.npy', depth)
+                    info = gt_dict['info'][image_index]
+                    normal = calcNormal(depth, info)
+                    np.save('test/normal.npy', normal)
+                    np.save('test/info.npy', info)
+                    exit(1)
+                                    
                 else:
                     np_mask = (segmentation == options.numOutputPlanes).astype(np.float32)
-                    cv2.imwrite(options.test_dir + '/' + str(image_index + options.startIndex) + '_np_depth_pred_' + str(method_index) + '.png', drawDepthImage(pred_dict['np_depth'][image_index].squeeze() * np_mask))
+                    np_depth = pred_dict['np_depth'][image_index].squeeze()
+                    np_depth = cv2.resize(np_depth, (np_mask.shape[1], np_mask.shape[0]))
+                    cv2.imwrite(options.test_dir + '/' + str(image_index + options.startIndex) + '_np_depth_pred_' + str(method_index) + '.png', drawDepthImage(np_depth * np_mask))
                     writePLYFile(options.test_dir, image_index + options.startIndex, segmentationImageBlended, pred_dict['depth'][image_index], segmentation, pred_dict['plane'][image_index], gt_dict['info'][image_index])
                     pass
                 exit(1)
@@ -1101,30 +1130,6 @@ def getPrediction(options):
                 predPlanes.append(pred_p)
                 predSegmentations.append(segmentation)
 
-                if index == 10 and False:
-                    print('dump')
-                    newPlanes = []
-                    newSegmentation = np.zeros((HEIGHT, WIDTH))
-                    newPlaneIndex = 0
-                    for planeIndex in xrange(options.numOutputPlanes):
-                        mask = segmentation == planeIndex
-                        if mask.sum() > 0:
-                            newPlanes.append(pred_p[planeIndex])
-                            newSegmentation[mask] = newPlaneIndex
-                            newPlaneIndex += 1
-                            pass
-                        continue
-                    
-                    np.save('test/planes.npy', np.stack(newPlanes, axis=0))
-                    #print(global_gt['non_plane_mask'].shape)
-                    np.save('test/segmentation.npy', newSegmentation)
-                    cv2.imwrite('test/image.png', image)
-                    np.save('test/depth.npy', pred_d)
-                    #pred_n = calcNormal(pred_d, global_gt['info'][0])
-                    np.save('test/normal.npy', pred_np_n)
-                    np.save('test/info.npy', global_gt['info'][0])
-                    exit(1)
-                
                 continue
             pred_dict['plane'] = np.array(predPlanes)
             pred_dict['segmentation'] = np.array(predSegmentations)

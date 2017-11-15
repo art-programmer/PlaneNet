@@ -16,7 +16,8 @@ from utils import *
 from plane_utils import *
 from modules import *
 
-from train_planenet import *
+from train_planenet import build_graph
+from train_sample import build_graph as build_graph_sample
 from planenet import PlaneNet
 from RecordReaderAll import *
 from SegmentationRefinement import *
@@ -36,8 +37,8 @@ ALL_TITLES = ['PlaneNet', 'Oracle NYU toolbox', 'NYU toolbox', 'Oracle Manhattan
 #ALL_METHODS = [('bl0_dl0_ll1_pb_pp_sm0', '', 0), ('bl0_dl0_ll1_pb_pp_sm0', 'crfrnn', 0), ('bl0_dl0_crfrnn10_sm0', '')]
 
 #ALL_METHODS = [['planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0', '', 0, 0], ['planenet_hybrid3_bl0_dl0_ll1_pb_pp_ps_sm0', 'pixelwise_2', 1, 0], ['', 'pixelwise_3', 1, 0], ['', 'pixelwise_4', 1, 0], ['', 'pixelwise_5', 1, 0], ['', 'pixelwise_6', 1, 0], ['', 'pixelwise_7', 1, 0]]
-ALL_METHODS = [['planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0', '', 0, 0], ['planenet_hybrid3_bl0_dl0_ll1_pb_pp_ps_sm0', 'crfrnn', 1, 0], ['', 'pixelwise_3', 1, 0], ['', 'pixelwise_4', 1, 0], ['', 'pixelwise_5', 1, 0], ['', 'pixelwise_6', 1, 0], ['', 'pixelwise_7', 1, 0]]
-
+#ALL_METHODS = [['planenet_hybrid3_bl0_dl0_ll1_pb_pp_sm0', '', 0, 0], ['planenet_hybrid3_bl0_dl0_ll1_pb_pp_ps_sm0', 'pixelwise_2', 1, 0], ['', 'pixelwise_3', 1, 0], ['', 'pixelwise_4', 1, 0], ['', 'pixelwise_5', 1, 0], ['', 'pixelwise_6', 1, 0], ['', 'pixelwise_7', 1, 0]]
+ALL_METHODS = [['sample_np10_hybrid3_bl0_dl0_ds0_crfrnn5_sm0', '', 0, 0], ['planenet_hybrid3_bl0_dl0_ll1_pb_pp_ps_sm0', 'pixelwise_2', 1, 0], ['', 'pixelwise_3', 1, 0], ['', 'pixelwise_4', 1, 0], ['', 'pixelwise_5', 1, 0], ['', 'pixelwise_6', 1, 0], ['', 'pixelwise_7', 1, 0]]
 
 #ALL_METHODS = [('ll1_pb_pp', 'pixelwise_1'), ('crf1_pb_pp', 'pixelwise_2'), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', 'pixelwise_3'), ('ll1_bw0.5_pb_pp_sm0', 'pixelwise_4')]
 
@@ -536,12 +537,16 @@ def plotAll(options):
         other_results = other_results[()]
         other_gt_dict = other_results['gt']
         other_predictions = other_results['pred']
-
         for k, v in other_gt_dict.iteritems():
             gt_dict[k] = np.concatenate([gt_dict[k], v], axis=0)
             continue
         for methodIndex, other_pred_dict in enumerate(other_predictions):
+            if methodIndex == 1:
+                continue
             for k, v in other_pred_dict.iteritems():
+                print(methodIndex, k)
+                print(predictions[methodIndex][k].shape)
+                print(v.shape)
                 predictions[methodIndex][k] = np.concatenate([predictions[methodIndex][k], v], axis=0)
                 continue
             continue
@@ -1240,36 +1245,45 @@ def getResults(options):
             continue
         if method[0] == '':
             continue
-        
+
+
+        method_options = copy.deepcopy(options)
         if 'ds0' not in method[0]:
-            options.deepSupervisionLayers = ['res4b22_relu', ]
+            method_options.deepSupervisionLayers = ['res4b22_relu', ]
         else:
-            options.deepSupervisionLayers = []
+            method_options.deepSupervisionLayers = []
             pass
-        options.predictConfidence = 0
-        options.predictLocal = 0
-        options.predictPixelwise = 1
-        options.predictBoundary = int('pb' in method[0])
-        options.anchorPlanes = 0
+        method_options.predictConfidence = 0
+        method_options.predictLocal = 0
+        method_options.predictPixelwise = 1
+        method_options.predictBoundary = int('pb' in method[0])
+        method_options.anchorPlanes = 0
         if 'ps' in method[0]:
-            options.predictSemantics = 1
+            method_options.predictSemantics = 1
         else:
-            options.predictSemantics = 0
+            method_options.predictSemantics = 0
             pass
         if 'crfrnn' in method[0]:
-            options.crfrnn = 10
+            method_options.crfrnn = 10
         else:
-            options.crfrnn = 0
+            method_options.crfrnn = 0
             pass
-            
         if 'ap1' in method[0]:
-            options.anchorPlanes = 1            
+            method_options.anchorPlanes = 1            
             pass
+
+        method_options.numOutputPlanes = 20
+        if 'np10' in method[0]:
+            method_options.numOutputPlanes = 10
+        elif 'np15' in method[0]:
+            method_options.numOutputPlanes = 15
+            pass
+
         
-        options.checkpoint_dir = checkpoint_prefix + method[0]
-        print(options.checkpoint_dir)
+        method_options.checkpoint_dir = checkpoint_prefix + method[0]
+        print(method_options.checkpoint_dir)
         
-        options.suffix = method[1]
+        method_options.suffix = method[1]
 
         method_names = [previous_method[0] for previous_method in methods[:method_index]]
 
@@ -1278,7 +1292,7 @@ def getResults(options):
         elif method[0] == 'gt':
             pred_dict = gt_dict
         else:
-            pred_dict = getPrediction(options)
+            pred_dict = getPrediction(method_options)
             pass
 
         # for image_index in xrange(options.visualizeImages):
@@ -1324,7 +1338,7 @@ def getPrediction(options):
     else:
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
         pass
-    
+
     img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
         
 
@@ -1332,7 +1346,10 @@ def getPrediction(options):
     training_flag = tf.constant(False, tf.bool)
 
     options.gpu_id = 0
-    global_pred_dict, local_pred_dict, deep_pred_dicts = build_graph(img_inp, img_inp, training_flag, options)
+    if 'sample' not in options.checkpoint_dir:
+        global_pred_dict, _, _ = build_graph(img_inp, img_inp, training_flag, options)
+    else:
+        global_pred_dict, _, _ = build_graph_sample(img_inp, img_inp, training_flag, options)
 
     var_to_restore = tf.global_variables()
 
@@ -1443,7 +1460,7 @@ def getGroundTruth(options):
 
     reader = RecordReaderAll()
     if options.dataset == 'SUNCG':
-        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_SUNCG_val.tfrecords'], num_epochs=10000)
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_SUNCG_val.tfrecords'], num_epochs=1)
     elif options.dataset == 'NYU_RGBD':
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
         options.deepSupervision = 0
@@ -1453,7 +1470,8 @@ def getGroundTruth(options):
     else:
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
         pass
-    
+
+
     img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
     
 
@@ -1609,7 +1627,7 @@ if __name__=='__main__':
                         default=-1, type=int)
     parser.add_argument('--methods', dest='methods',
                         help='methods',
-                        default='0123', type=str)
+                        default='0000000', type=str)
     parser.add_argument('--rootFolder', dest='rootFolder',
                         help='root folder',
                         default='/mnt/vision/PlaneNet/', type=str)
