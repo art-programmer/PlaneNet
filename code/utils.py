@@ -748,13 +748,14 @@ def writePLYFile(folder, index, image, depth, segmentation, planes, info):
     #minDepthDiff = 0.15
     #maxDepthDiff = 0.3
     #occlusionBoundary = boundaries[:, :, 1]
-    betweenRegionThreshold = 0.05
+    betweenRegionThreshold = 0.1
     nonPlanarRegionThreshold = 0.02
     
     planesD = np.linalg.norm(planes, axis=1, keepdims=True)
     planeNormals = -planes / np.maximum(planesD, 1e-4)    
 
     croppingRatio = -0.05
+    dotThreshold = np.cos(np.deg2rad(30))
     
     for y in xrange(height - 1):
         for x in xrange(width - 1):
@@ -782,7 +783,7 @@ def writePLYFile(folder, index, image, depth, segmentation, planes, info):
                 else:
                     neighborPoint = XYZ[neighborPixel[1]][neighborPixel[0]]
                     if segmentIndex < numPlanes and neighborSegmentIndex < numPlanes:
-                        if abs(np.dot(planeNormals[segmentIndex], neighborPoint) + planesD[segmentIndex]) < betweenRegionThreshold or abs(np.dot(planeNormals[neighborSegmentIndex], point) + planesD[neighborSegmentIndex]) < betweenRegionThreshold:
+                        if (abs(np.dot(planeNormals[segmentIndex], neighborPoint) + planesD[segmentIndex]) < betweenRegionThreshold or abs(np.dot(planeNormals[neighborSegmentIndex], point) + planesD[neighborSegmentIndex]) < betweenRegionThreshold) and np.abs(np.dot(planeNormals[segmentIndex], planeNormals[neighborSegmentIndex])) < dotThreshold:
                             validNeighborPixels.append(neighborPixel)
                             pass
                     else:
@@ -4124,7 +4125,7 @@ def copyLogo(folder, index, image, depth, planes, segmentation, info):
     cv2.imwrite(folder + '/' + imageFilename, textureImage)
 
     backgroundMask = textureImage.mean(2) > 224
-    backgroundMask = cv2.erode(backgroundMask.astype(np.uint8), np.ones((3, 3)))
+    #backgroundMask = cv2.erode(backgroundMask.astype(np.uint8), np.ones((3, 3)))
     #cv2.imwrite('test/mask.png', drawMaskImage(background))
     #exit(1)
 
@@ -4136,7 +4137,8 @@ def copyLogo(folder, index, image, depth, planes, segmentation, info):
 
     faces = []
     texcoords = []        
-    maskImage = np.full(segmentation.shape, planes.shape[0])
+    #maskImage = np.full(segmentation.shape, planes.shape[0])
+    maskImage = image.copy()
     for planeIndex in xrange(planes.shape[0]):
         globalMask = segmentation == planeIndex
         if globalMask.sum() < planeAreaThreshold:
@@ -4147,7 +4149,7 @@ def copyLogo(folder, index, image, depth, planes, segmentation, info):
         #print(masks.min())        
         #cv2.imwrite('test/mask.png', drawSegmentationImage(masks, blackIndex=planes.shape[0]))
         #exit(1)
-        for maskIndex in xrange(1, masks.max() + 1):
+        for maskIndex in xrange(masks.min() + 1, masks.max() + 1):
             mask = masks == maskIndex
             if mask.sum() < planeAreaThreshold:
                 continue
@@ -4230,7 +4232,7 @@ def copyLogo(folder, index, image, depth, planes, segmentation, info):
             rectangleMask = np.logical_and(np.logical_and(projection_u >= 0, projection_u <= 1), np.logical_and(projection_v >= 0, projection_v <= 1))
 
             rectangleMask = np.logical_and(rectangleMask, mask)
-            maskImage[rectangleMask] = planeIndex
+            #maskImage[rectangleMask] = planeIndex
 
             for y in xrange(height - 1):
                 for x in xrange(width - 1):
@@ -4243,6 +4245,10 @@ def copyLogo(folder, index, image, depth, planes, segmentation, info):
                             v = min(max(textureHeight - 1 - int(round(v * textureHeight)), 0), textureHeight - 1)
                             if backgroundMask[v][u] == False:
                                 facePixels.append(pixel)
+
+                                if pixel == (x, y):
+                                    maskImage[y][x] = textureImage[v][u]
+                                    pass
                                 pass
                             pass
                         continue
@@ -4276,7 +4282,8 @@ def copyLogo(folder, index, image, depth, planes, segmentation, info):
             continue
         continue
 
-    cv2.imwrite('test/mask.png', drawSegmentationImage(maskImage, blackIndex=planes.shape[0]))
+    #cv2.imwrite('test/mask.png', drawSegmentationImage(maskImage, blackIndex=planes.shape[0]))
+    #cv2.imwrite('test/mask.png', drawSegmentationImage(maskImage, blackIndex=planes.shape[0]))
     
     
     with open(folder + '/' + str(index) + '_logo.ply', 'w') as f:
@@ -4335,7 +4342,7 @@ end_header
             continue
         f.close()
         pass
-    return
+    return maskImage
 
 
 def copyWallTexture(folder, index, image, depth, planes, segmentation, info, wallPlanes=[]):
@@ -4406,7 +4413,10 @@ def copyWallTexture(folder, index, image, depth, planes, segmentation, info, wal
 
     faces = []
     texcoords = []        
-    maskImage = np.full(segmentation.shape, planes.shape[0])
+    #maskImage = np.full(segmentation.shape, planes.shape[0])
+    maskImage = image.copy()
+    print(wallPlanes)
+    print(textureImage.shape)
     for planeIndex in xrange(planes.shape[0]):
         if planeIndex not in wallPlanes:
             continue
@@ -4417,9 +4427,11 @@ def copyWallTexture(folder, index, image, depth, planes, segmentation, info, wal
         masks = measure.label(globalMask.astype(np.int32), background=0)
         #print(masks.max())
         #print(masks.min())        
-        #cv2.imwrite('test/mask.png', drawSegmentationImage(masks, blackIndex=planes.shape[0]))
+        cv2.imwrite('test/mask.png', drawSegmentationImage(masks, blackIndex=planes.shape[0]))
+        #print((masks == 1).sum(), planeAreaThreshold)
+        #print(planeAreaThreshold)
         #exit(1)
-        for maskIndex in xrange(1, masks.max() + 1):
+        for maskIndex in xrange(masks.min() + 1, masks.max() + 1):
             mask = masks == maskIndex
             if mask.sum() < planeAreaThreshold:
                 continue
@@ -4502,14 +4514,13 @@ def copyWallTexture(folder, index, image, depth, planes, segmentation, info, wal
             
             #rectangleMask = np.logical_and(np.logical_and(projection_u >= 0, projection_u <= 1), np.logical_and(projection_v >= 0, projection_v <= 1))
             #rectangleMask = np.logical_and(rectangleMask, mask)
-            #maskImage[rectangleMask] = planeIndex
 
             textureSize = 1
             projection_u = (projection_u / textureSize) % 1
             projection_v = (projection_v / textureSize) % 1
             rectangleMask = mask
 
-            maskImage[rectangleMask] = planeIndex
+            #maskImage[rectangleMask] = planeIndex
             
             for y in xrange(height - 1):
                 for x in xrange(width - 1):
@@ -4522,6 +4533,19 @@ def copyWallTexture(folder, index, image, depth, planes, segmentation, info, wal
                             # v = min(max(textureHeight - 1 - int(round(v * textureHeight)), 0), textureHeight - 1)
                             # if background[v][u] == False:
                             facePixels.append(pixel)
+
+                            #print(pixel, (x, y))
+                            if pixel == (x, y):
+                                u = projection_u[pixel[1]][pixel[0]]
+                                v = projection_v[pixel[1]][pixel[0]]
+                                u = min(max(int(round(u * textureWidth)), 0), textureWidth - 1)
+                                v = min(max(textureHeight - 1 - int(round(v * textureHeight)), 0), textureHeight - 1)
+
+                                #print(x, y)
+                                #print(u, v)
+                                
+                                maskImage[y][x] = textureImage[v][u]
+                                pass
                             pass
                         continue
                     
@@ -4554,7 +4578,7 @@ def copyWallTexture(folder, index, image, depth, planes, segmentation, info, wal
             continue
         continue
 
-    cv2.imwrite('test/mask.png', drawSegmentationImage(maskImage, blackIndex=planes.shape[0]))
+    #cv2.imwrite('test/mask.png', drawSegmentationImage(maskImage, blackIndex=planes.shape[0]))
     
     
     with open(folder + '/' + str(index) + '_logo.ply', 'w') as f:
@@ -4613,6 +4637,6 @@ end_header
             continue
         f.close()
         pass
-    return
+    return maskImage
 
 
