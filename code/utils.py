@@ -2302,6 +2302,7 @@ def plotCurvesSplit(x, ys, filenames, xlabel='', ylabel='', title='', labels=[])
             sizes.append(2)
             pass        
         continue
+    
     final_labels = ['PlaneNet', '[30] + GT depth', '[30] + Inferred depth', '[12] + GT depth', '[12] + Inferred depth', '[31] + GT depth', '[31] + Inferred depth'] 
 
     if drawLegend:
@@ -2322,6 +2323,7 @@ def plotCurvesSplit(x, ys, filenames, xlabel='', ylabel='', title='', labels=[])
             plt.plot(x, ys[order], figure=fig, label=final_labels[order], color=colors[order], marker=markers[order], linewidth=sizes[order])
             pass
         continue
+
     if drawLegend:
         plt.legend(loc='upper right')
         pass
@@ -2354,6 +2356,7 @@ def plotCurvesSplit(x, ys, filenames, xlabel='', ylabel='', title='', labels=[])
     else:
         fig = plt.figure()
         pass
+    
     ax = plt.gca()
     
     ordering = [1, 3, 5, 0]
@@ -2366,6 +2369,7 @@ def plotCurvesSplit(x, ys, filenames, xlabel='', ylabel='', title='', labels=[])
             plt.plot(x, ys[order], figure=fig, label=final_labels[order], color=colors[order], marker=markers[order], linewidth=sizes[order])
             pass
         continue
+
     if drawLegend:
         plt.legend(loc='upper right')
         pass
