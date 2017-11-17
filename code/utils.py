@@ -5059,7 +5059,8 @@ def copyLogoVideo(folder, index, image, depth, planes, segmentation, info):
     
     return 
 
-def addRuler(folder, index, image, depth, planes, segmentation, info, startPixel, endPixel, fixedEndPoint=False):
+    
+def addRulerPlane(folder, index, image, depth, planes, segmentation, info, startPixel, endPixel, fixedEndPoint=False):
 
     width = segmentation.shape[1]
     height = segmentation.shape[0]
@@ -5100,7 +5101,7 @@ def addRuler(folder, index, image, depth, planes, segmentation, info, startPixel
 
     #textureImage = cv2.imread('../texture_images/CVPR_transparent.png')
     textureImage = cv2.imread('../texture_images/ruler.png')
-
+    alphaMask = np.ones((textureImage.shape[0], textureImage.shape[1], 1), dtype=np.float32)
     #alphaMask = (textureImage.mean(2) < 224).astype(np.float32)
     #alphaMask = np.expand_dims(alphaMask, -1)
     
@@ -5130,7 +5131,7 @@ def addRuler(folder, index, image, depth, planes, segmentation, info, startPixel
 
     if startPlaneIndex != endPlaneIndex:
         boundary = mask - cv2.erode(mask, np.ones((3, 3), dtype=np.uint8))
-        boundaryPoints = XYZ[boundary.nonzero]
+        boundaryPoints = XYZ[boundary.nonzero()]
         if fixedEndPoint:
             distances = np.linalg.norm(boundaryPoints - startPoint, axis=-1) + np.linalg.norm(boundaryPoints - endPoint, axis=-1)
             boundaryPoint = boundaryPoints[np.argmin(distances)]
@@ -5138,7 +5139,7 @@ def addRuler(folder, index, image, depth, planes, segmentation, info, startPixel
             endPlane = planes[endPlaneIndex]
             endPlaneD = np.linalg.norm(endPlane)
             endPlaneNormal = endPlane / endPlaneD
-            endDistances = endPlaneD - boundaryPoints * endPlaneNormal
+            endDistances = endPlaneD - np.tensordot(boundaryPoints, endPlaneNormal, axes=(1, 0))
             distances = np.linalg.norm(boundaryPoints - startPoint, axis=-1) + np.abs(endDistances)
             boundaryPointIndex = np.argmin(distances)
             boundaryPoint = boundaryPoints[boundaryPointIndex]
@@ -5149,33 +5150,62 @@ def addRuler(folder, index, image, depth, planes, segmentation, info, startPixel
         boundaryPoint = startPoint
         pass
 
+    
+    passbyPlaneInds = []
+    for offset in np.arange(0.1, 1, 0.1):
+        point = boundaryPoint + (endPoint - boundaryPoint) * offset
+        u = int(round(point[0] / point[1] * camera['fx'] + camera['cx']))
+        v = int(round(-point[2] / point[1] * camera['fy'] + camera['cy']))
+        planeIndex = segmentation[v][u]
+        if planeIndex != startPlaneIndex and planeIndex < planes.shape[0] and planeIndex not in passbyPlaneInds:
+            passbyPlaneInds.append(planeIndex)
+            pass
+        continue
+    print(passbyPlaneInds)
+    if len(passbyPlaneInds):
+        passbyPlaneNormal = planesNormal[passbyPlaneInds[0]]
+    else:
+        passbyPlaneNormal = np.array([0, 1, 0])
+        pass
+
+    
     resultImage = image.copy().reshape((-1, 3))    
     distanceOffset = 0
-    for point_1, point_2 in [(startPoint, boundaryPoint), (boundaryPoint, endPoint)]:
-        if point_1 == point_2:
+    
+    for point_1, point_2, planeNormal, planeInds in [(startPoint, boundaryPoint, planesNormal[startPlaneIndex], [startPlaneIndex]), (boundaryPoint, endPoint, passbyPlaneNormal, passbyPlaneInds)]:
+        if point_1[0] == point_2[0] and point_1[1] == point_2[1]:
             continue
         direction_u = point_2 - point_1
+        direction_u = direction_u / np.maximum(np.linalg.norm(direction_u), 1e-4)
         direction_v = -np.cross(planeNormal, direction_u)
         direction_v = direction_v / np.maximum(np.linalg.norm(direction_v), 1e-4)
+        projection_u = np.tensordot(XYZ, direction_u, axes=([2], [0])).reshape(-1)
+        projection_v = np.tensordot(XYZ, direction_v, axes=([2], [0])).reshape(-1)
 
-        projection_u = np.tensordot(XYZ, direction_u, axes=([2], [0]))
-        projection_v = np.tensordot(XYZ, direction_v, axes=([2], [0]))
-
-        offset_u = np.dot(point_1, direction_u) - distanceOffset
+        offset_u = np.dot(point_1, direction_u)
         offset_v = np.dot(point_1, direction_v)
 
         projection_u = (projection_u - offset_u) / textureSizeU
         projection_v = (projection_v - offset_v) / textureSizeV
         
-        rectangleMask = np.logical_and(np.logical_and(projection_u >= 0, projection_u <= 1), np.logical_and(projection_v >= 0, projection_v <= 1))
+        rectangleMask = np.logical_and(np.logical_and(projection_u >= distanceOffset / textureSizeU, projection_u <= (distanceOffset + np.linalg.norm(point_2 - point_1)) / textureSizeU), np.logical_and(projection_v >= 0, projection_v <= 1))
 
-        rectangleIndices = rectangleMask.reshape(-1).nonzero()[0]
+        if len(planeInds) > 0:
+            validMask = np.zeros(segmentation.shape, dtype=np.bool)
+            for planeIndex in planeInds:
+                validMask = np.logical_or(validMask, segmentation == planeIndex)
+                continue
+            rectangleMask = np.logical_and(rectangleMask, validMask.reshape(-1))
+            pass
+        
+        rectangleIndices = rectangleMask.nonzero()[0]
 
-        projections = np.stack([projection_u[rectangleIndices], projection_v[rectangleIndices]], axis=2).reshape((-1, 2))
-        uv = projection * textureSizes2D
+        projections = np.stack([projection_u[rectangleIndices], projection_v[rectangleIndices]], axis=1)
+        uv = projections * textureSizes2D
         
         uv[:, 1] = textureSizes2D[1] - 1 - uv[:, 1]
         uv = np.maximum(np.minimum(uv, textureSizes2D - 1), 0)
+
 
         u = uv[:, 0]
         v = uv[:, 1]
@@ -5211,6 +5241,233 @@ def addRuler(folder, index, image, depth, planes, segmentation, info, startPixel
         resultImage[rectangleIndices] = resultImage[rectangleIndices] * (1 - alphas) + colors * alphas
 
         distanceOffset += np.linalg.norm(point_2 - point_1)
+        print(point_1, point_2)
+        print(direction_u)
+        print(direction_v)
+        cv2.imwrite('test/result.png', resultImage.reshape(image.shape))
+        exit(1)
         continue
-    cv2.imwrite('test/result.png', resultImage)
     return
+
+
+def addRuler(folder, indexOffset, image, depth, planes, segmentation, info, startPoint, endPoint, boundaryPoints, startPlaneIndex, fixedEndPoint=False, numFrames=1):
+    width = segmentation.shape[1]
+    height = segmentation.shape[0]
+
+    camera = getCameraFromInfo(info)
+
+    planesD = np.linalg.norm(planes, axis=-1, keepdims=True)
+    planesNormal = planes / np.maximum(planesD, 1e-4)
+    
+    textureImage = cv2.imread('../texture_images/ruler_15.png')
+    alphaMask = np.ones((textureImage.shape[0], textureImage.shape[1], 1), dtype=np.float32)
+    #alphaMask = (textureImage.mean(2) < 224).astype(np.float32)
+    #alphaMask = np.expand_dims(alphaMask, -1)
+    
+    #backgroundMask = cv2.erode(backgroundMask.astype(np.uint8), np.ones((3, 3)))
+    #cv2.imwrite('test/mask.png', drawMaskImage(background))
+    #exit(1)
+
+    textureHeight = float(textureImage.shape[0])
+    textureWidth = float(textureImage.shape[1])
+    textureRatio = textureHeight / textureWidth
+    textureSizes2D = np.array([textureWidth, textureHeight])
+    
+    textureSizeU = 0.96
+    textureSizeV = textureSizeU * textureRatio
+    textureSizes = np.array([textureSizeU, textureSizeV])
+    #textureImage = cv2.imread('../textures/texture_2.jpg')
+    #textureImage = cv2.resize(textureImage, (width, height), interpolation=cv2.INTER_LINEAR)
+
+
+    distances = np.linalg.norm(boundaryPoints - startPoint, axis=-1) + np.linalg.norm(boundaryPoints - endPoint, axis=-1)
+    boundaryPoint = boundaryPoints[np.argmin(distances)]
+
+
+    boundaryPointNeighbors = boundaryPoints[np.linalg.norm(boundaryPoints - boundaryPoint, axis=-1) < 0.05]
+    boundaryDirections = []
+    for boundaryPointNeighbor in boundaryPointNeighbors:
+        boundaryDirection = boundaryPointNeighbor - boundaryPoint
+        norm = np.linalg.norm(boundaryDirection, axis=-1)
+        if norm < 1e-4:
+            continue
+        boundaryDirection /= norm
+        if np.dot(np.cross(boundaryPoint - startPoint, planesNormal[startPlaneIndex]), boundaryDirection) > 0:
+            boundaryDirections.append(boundaryDirection)
+        else:
+            boundaryDirections.append(-boundaryDirection)
+            pass
+        continue
+
+    
+    if len(boundaryDirections) == 0:
+        distances = np.argmin(np.linalg.norm(boundaryPoints - boundaryPoint, axis=-1))
+        neighborIndex = np.argpartition(distances, 2)[1]
+        boundaryNeighbor = boundaryPoints[neighborIndex]
+        boundaryDirection = boundaryPointNeighbor - boundaryPoint
+        norm = np.linalg.norm(boundaryDirection, axis=-1)
+        boundaryDirection /= norm
+        boundaryDirections.append(boundaryDirection)
+        pass
+    
+    boundaryDirections = np.array(boundaryDirections)
+
+    boundaryDirection = boundaryDirections.mean(0)
+    boundaryDirection /= np.linalg.norm(boundaryDirection)
+
+
+    boundaryNormal = np.cross(boundaryDirection, endPoint - boundaryPoint)
+    boundaryNormal /= np.linalg.norm(boundaryNormal)
+
+    totalLength = np.linalg.norm(endPoint - boundaryPoint) + np.linalg.norm(boundaryPoint - startPoint)
+    distanceOffset = 0
+
+    resultImage = image.copy().reshape((-1, 3))    
+    
+    for point_1, point_2, planeNormal in [(startPoint, boundaryPoint, planesNormal[startPlaneIndex]), (boundaryPoint, endPoint, boundaryNormal)]:
+        if point_1[0] == point_2[0] and point_1[1] == point_2[1]:
+            continue
+        
+        #planeNormal = np.cross(endPoint - startPoint, verticalDirection)
+        #planeNormal = planeNormal / np.linalg.norm(planeNormal)
+        planeD = np.dot(point_1, planeNormal)
+        camera = getCameraFromInfo(info)
+    
+        urange = (np.arange(width, dtype=np.float32) / width * camera['width'] - camera['cx']) / camera['fx']
+        urange = urange.reshape(1, -1).repeat(height, 0)
+        vrange = (np.arange(height, dtype=np.float32) / height * camera['height'] - camera['cy']) / camera['fy']
+        vrange = vrange.reshape(-1, 1).repeat(width, 1)
+
+        coef = urange * planeNormal[0] + planeNormal[1] + (-vrange) * planeNormal[2]
+        Y = planeD / coef
+        X = urange * Y
+        Z = -vrange * Y
+        XYZ = np.stack([X, Y, Z], axis=2)    
+
+
+        direction_u = point_2 - point_1
+        direction_u = direction_u / np.maximum(np.linalg.norm(direction_u), 1e-4)
+        direction_v = -np.cross(planeNormal, direction_u)
+        direction_v = direction_v / np.maximum(np.linalg.norm(direction_v), 1e-4)
+        
+        projection_u = np.tensordot(XYZ, direction_u, axes=([2], [0])).reshape(-1)
+        projection_v = np.tensordot(XYZ, direction_v, axes=([2], [0])).reshape(-1)
+
+        
+        offset_u = np.dot(point_1, direction_u)
+        offset_v = np.dot(point_1, direction_v)
+
+        projection_u = (projection_u - offset_u) / textureSizeU + distanceOffset
+        projection_v = (projection_v - offset_v) / textureSizeV
+
+        for frameIndex in xrange(numFrames):
+            maxOffset = min(float(frameIndex + 1) / numFrames * totalLength, distanceOffset + np.linalg.norm(point_2 - point_1))
+            minOffset = max(float(frameIndex) / numFrames * totalLength, distanceOffset)
+            if minOffset >= maxOffset:
+                continue
+            rectangleMask = np.logical_and(np.logical_and(projection_u >= minOffset / textureSizeU, projection_u < maxOffset / textureSizeU), np.logical_and(projection_v >= 0, projection_v <= 1))
+
+            rectangleIndices = rectangleMask.nonzero()[0]
+
+            projections = np.stack([projection_u[rectangleIndices], projection_v[rectangleIndices]], axis=1)
+            uv = projections * textureSizes2D
+        
+            uv[:, 1] = textureSizes2D[1] - 1 - uv[:, 1]
+            uv = np.maximum(np.minimum(uv, textureSizes2D - 1), 0)
+
+
+            u = uv[:, 0]
+            v = uv[:, 1]
+            u_min = np.floor(u).astype(np.int32)
+            u_max = np.ceil(u).astype(np.int32)
+            v_min = np.floor(v).astype(np.int32)
+            v_max = np.ceil(v).astype(np.int32)
+
+            area_11 = (u_max - u) * (v_max - v)
+            area_12 = (u_max - u) * (v - v_min)
+            area_21 = (u - u_min) * (v_max - v)
+            area_22 = (u - u_min) * (v - v_min)
+
+            area_11 = np.expand_dims(area_11, -1)
+            area_12 = np.expand_dims(area_12, -1)
+            area_21 = np.expand_dims(area_21, -1)
+            area_22 = np.expand_dims(area_22, -1)
+
+
+            colors_11 = textureImage[v_min, u_min]
+            colors_12 = textureImage[v_max, u_min]
+            colors_21 = textureImage[v_min, u_max]
+            colors_22 = textureImage[v_max, u_max]
+
+            alphas_11 = alphaMask[v_min, u_min]
+            alphas_12 = alphaMask[v_max, u_min]
+            alphas_21 = alphaMask[v_min, u_max]
+            alphas_22 = alphaMask[v_max, u_max]
+
+            colors = colors_11 * area_11 + colors_12 * area_12 + colors_21 * area_21 + colors_22 * area_22
+            alphas = alphas_11 * area_11 + alphas_12 * area_12 + alphas_21 * area_21 + alphas_22 * area_22
+
+            resultImage[rectangleIndices] = resultImage[rectangleIndices] * (1 - alphas) + colors * alphas
+            cv2.imwrite(folder + ('/%04d.png' % (indexOffset + frameIndex)), resultImage.reshape(image.shape))
+            continue
+
+        distanceOffset += np.linalg.norm(point_2 - point_1)
+        print(point_1, point_2)
+        print(direction_u)
+        print(direction_v)
+        continue
+    return
+
+def addRulerComplete(folder, indexOffset, image, depth, planes, segmentation, info, startPixel, endPixel, fixedEndPoint=False, numFrames=1):
+    width = segmentation.shape[1]
+    height = segmentation.shape[0]
+
+    camera = getCameraFromInfo(info)
+    
+    urange = (np.arange(width, dtype=np.float32) / width * camera['width'] - camera['cx']) / camera['fx']
+    urange = urange.reshape(1, -1).repeat(height, 0)
+    vrange = (np.arange(height, dtype=np.float32) / height * camera['height'] - camera['cy']) / camera['fy']
+    vrange = vrange.reshape(-1, 1).repeat(width, 1)
+    X = depth * urange
+    Y = depth
+    Z = -depth * vrange
+    XYZ = np.stack([X, Y, Z], axis=2)    
+    #plane_depths = calcPlaneDepths(planes, width, height, info)
+
+    planesD = np.linalg.norm(planes, axis=-1, keepdims=True)
+    planesNormal = planes / np.maximum(planesD, 1e-4)
+
+    
+    startPlaneIndex = segmentation[startPixel[1]][startPixel[0]]
+    endPlaneIndex = segmentation[endPixel[1]][endPixel[0]]
+    assert(startPlaneIndex < planes.shape[0] and endPlaneIndex < planes.shape[0])
+    startPoint = XYZ[startPixel[1]][startPixel[0]]
+    endPoint = XYZ[endPixel[1]][endPixel[0]]
+
+    mask = (segmentation == startPlaneIndex).astype(np.uint8)
+
+    boundary = mask - cv2.erode(mask, np.ones((3, 3), dtype=np.uint8))
+    boundaryPoints = XYZ[boundary.nonzero()]
+    
+    endPlane = planes[endPlaneIndex]
+    endPlaneD = np.linalg.norm(endPlane)
+    endPlaneNormal = endPlane / endPlaneD
+    endDistances = endPlaneD - np.tensordot(boundaryPoints, endPlaneNormal, axes=(1, 0))
+    distances = np.linalg.norm(boundaryPoints - startPoint, axis=-1) + np.abs(endDistances)
+    boundaryPointIndex = np.argmin(distances)
+    boundaryPoint = boundaryPoints[boundaryPointIndex]
+    endDistance = endDistances[boundaryPointIndex]
+    finalEndPoint = boundaryPoint + endDistance * endPlaneNormal
+
+    numExtendingFrames = 1000
+    numAdjustFrames = 100
+    addRuler(folder, 0, image, depth, planes, segmentation, info, startPoint, endPoint, boundaryPoints, startPlaneIndex=startPlaneIndex, fixedEndPoint=True, numFrames=numExtendingFrames)
+        
+    for frameIndex in xrange(numAdjustFrames):
+        newEndPoint = endPoint + (finalEndPoint - endPoint) * (frameIndex + 1) / numAdjustFrames
+        addRuler(folder, numExtendingFrames + frameIndex, image, depth, planes, segmentation, info, startPoint, newEndPoint, boundaryPoints, startPlaneIndex=startPlaneIndex, fixedEndPoint=True, numFrames=1)
+        continue
+    exit(1)
+
+
+    
