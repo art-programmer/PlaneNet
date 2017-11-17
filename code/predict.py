@@ -169,6 +169,12 @@ def evaluatePlanes(options):
 
             segmentationImageBlended = np.minimum(segmentationImage * 0.3 + gt_dict['image'][image_index] * 0.7, 255).astype(np.uint8)            
             if options.imageIndex >= 0:
+                if options.suffix == 'video':
+                    if not os.path.exists(options.test_dir + '/logo_video/'):
+                        os.system("mkdir -p %s" % (options.test_dir + '/logo_video/'))
+                        pass
+                    copyLogoVideo(options.test_dir + '/logo_video/', image_index + options.startIndex, gt_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, gt_dict['info'][image_index])
+                    exit(1)
                 if options.suffix == 'texture':
                     for planeIndex in xrange(options.numOutputPlanes):
                         cv2.imwrite('test/mask_' + str(planeIndex) + '.png', drawMaskImage(segmentation == planeIndex))
@@ -177,7 +183,8 @@ def evaluatePlanes(options):
                     #for resultIndex, resultImage in enumerate(resultImages):
                     #cv2.imwrite('test/texture_' + str(image_index + options.startIndex) + '_' + str(resultIndex) + '.png', resultImage)
                     #continue
-                    
+
+
                     resultImage = copyLogo(options.test_dir, image_index + options.startIndex, gt_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, gt_dict['info'][image_index])
                     #resultImage = copyWallTexture(options.test_dir, image_index + options.startIndex, gt_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, gt_dict['info'][image_index], [7, 9])
                     cv2.imwrite(options.test_dir + '/' + str(image_index + options.startIndex) + '_result.png', resultImage)

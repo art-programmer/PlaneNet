@@ -658,9 +658,9 @@ def drawNormalImage(normal):
     
 def drawSegmentationImage(segmentations, randomColor=None, numColors=22, blackIndex=-1):
     if segmentations.ndim == 2:
-        numColors = max(numColors, segmentations.max() + 2)
+        numColors = max(numColors, segmentations.max() + 2, blackIndex + 1)
     else:
-        numColors = max(numColors, segmentations.shape[2] + 2)
+        numColors = max(numColors, segmentations.shape[2] + 2, blackIndex + 1)
         pass
     randomColor = ColorPalette(numColors).getColorMap()
     if blackIndex >= 0:
@@ -1445,6 +1445,7 @@ def fitPlanesNYU(image, depth, normal, semantics, info, numOutputPlanes=20, loca
             
             diff = np.abs(np.matmul(XYZ, plane) - np.ones(XYZ.shape[0])) / np.linalg.norm(plane)
             inlierIndices = diff < distanceThreshold
+            #print(np.sum(inlierIndices), planeAreaThreshold)
             if np.sum(inlierIndices) < planeAreaThreshold:
                 continue
             
@@ -1490,8 +1491,9 @@ def fitPlanesNYU(image, depth, normal, semantics, info, numOutputPlanes=20, loca
     
     planeSegmentation = getSegmentationsGraphCut(planes, image, depth, normal, semantics, info, parameters=parameters)
 
-    cv2.imwrite('test/segmentation_refined.png', drawSegmentationImage(planeSegmentation))
-
+    cv2.imwrite('test/segmentation_refined.png', drawSegmentationImage(planeSegmentation, blackIndex=planes.shape[0]))
+    
+    #planeSegmentation[planes.shape[0]] = numOutputPlanes
 
     
     return planes, planeSegmentation
@@ -2170,12 +2172,12 @@ def evaluatePlanePrediction(predDepths, predSegmentations, predNumPlanes, gtDept
         stride = 0.1
         planeStatistics = []        
         pixelRecalls = []
-        for step in xrange(int(1 / stride + 1)):
+        for step in xrange(int(1.21 / stride + 1)):
             IOU = step * stride
             pixelRecalls.append(np.minimum((intersection * (planeIOUs >= IOU).astype(np.float32) * diffMask).sum(1), planeAreas).sum(0) / numPixels)
             planeStatistics.append((((maxIOU >= IOU)[:gtNumPlanes]).sum(), gtNumPlanes, numPredictions))
             continue
-        
+
         pixel_curves.append(pixelRecalls)
         plane_curves.append(planeStatistics)
         pass
@@ -2187,7 +2189,7 @@ def evaluatePlanePrediction(predDepths, predSegmentations, predNumPlanes, gtDept
         stride = 0.05
         planeStatistics = []
         pixelRecalls = []
-        for step in xrange(int(0.5 / stride + 1)):
+        for step in xrange(int(0.61 / stride + 1)):
             diff = step * stride
             pixelRecalls.append(np.minimum((intersection * (planeDiffs <= diff).astype(np.float32) * IOUMask).sum(1), planeAreas).sum() / numPixels)
             planeStatistics.append((((minDiff <= diff)[:gtNumPlanes]).sum(), gtNumPlanes, numPredictions))
@@ -2259,10 +2261,23 @@ def plotCurves(x, ys, filename = 'test/test.png', xlabel='', ylabel='', title=''
 
 
 def plotCurvesSplit(x, ys, filenames, xlabel='', ylabel='', title='', labels=[]):
+    import matplotlib
+    matplotlib.rcParams.update({'font.size': 16})
+    matplotlib.rcParams.update({'font.family': 'Times New Roman'})
+    #font = {'size'   : 22}
+    #matplotlib.rc('font', **font)
+    #matplotlib.rc('xtick', labelsize=22)
+    #matplotlib.rc('ytick', labelsize=22)
+    #matplotlib.rc('xticklabels', fontsize=22)
+    #matplotlib.rc('yticklabels', fontsize=22)    
+    #matplotlib.rc('xlabel', size=22)
+    #matplotlib.rc('xlabel', size=22)    
     import matplotlib.pyplot as plt
 
-    plt.rcParams.update({'font.size': 16})
+    #plt.rcParams.update({'font.size': 16})
 
+    drawLegend = True
+    
     colors = []
     markers = []
     sizes = []
@@ -2282,29 +2297,48 @@ def plotCurvesSplit(x, ys, filenames, xlabel='', ylabel='', title='', labels=[])
             markers.append('')
             pass
         if 'PlaneNet' in label:
-            sizes.append(2)
+            sizes.append(3)
         else:
-            sizes.append(1)
+            sizes.append(2)
             pass        
         continue
-    final_labels = ['PlaneNet', '[25]+GT depth', '[25]', '[9]+GT depth', '[9]', '[26]+GT depth', '[26]'] 
+    final_labels = ['PlaneNet', '[30] + GT depth', '[30] + Inferred depth', '[12] + GT depth', '[12] + Inferred depth', '[31] + GT depth', '[31] + Inferred depth'] 
 
-    fig = plt.figure()
+    if drawLegend:
+        fig = plt.figure(figsize=(12, 6))
+    else:
+        fig = plt.figure()
+        pass
+    
     ax = plt.gca()
     
     ordering = [2, 4, 6, 0]
     
     #for index, y in enumerate(ys):
     for order in ordering:
-        plt.plot(x, ys[order], figure=fig, label=final_labels[order], color=colors[order], marker=markers[order], linewidth=sizes[order])
+        if drawLegend:
+            plt.plot(x, np.zeros(ys[order].shape), figure=fig, label=final_labels[order], color=colors[order], marker=markers[order], linewidth=sizes[order])
+        else:
+            plt.plot(x, ys[order], figure=fig, label=final_labels[order], color=colors[order], marker=markers[order], linewidth=sizes[order])
+            pass
         continue
-    #plt.legend(loc='upper right')
+    if drawLegend:
+        plt.legend(loc='upper right')
+        pass
     #plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.05), ncol=4, fancybox=True, shadow=True, handletextpad=0.1)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel + ' %')
+
+    for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] +
+                 ax.get_xticklabels() + ax.get_yticklabels()):
+        item.set_fontsize(22)
+    
     ax.set_yticklabels(np.arange(0, 101, 20))
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_linewidth(2)
+    ax.spines['left'].set_linewidth(2)
+    ax.tick_params(width=2, length=8)
     ax.get_xaxis().tick_bottom()
     ax.get_yaxis().tick_left()    
     #ax.xaxis.set_label_coords(1.1, -0.025)
@@ -2314,23 +2348,41 @@ def plotCurvesSplit(x, ys, filenames, xlabel='', ylabel='', title='', labels=[])
     plt.tight_layout(w_pad=0.3)
     plt.savefig(filenames[0])
 
-
-    fig = plt.figure()
+    
+    if drawLegend:
+        fig = plt.figure(figsize=(12, 6))
+    else:
+        fig = plt.figure()
+        pass
     ax = plt.gca()
     
     ordering = [1, 3, 5, 0]
     
     #for index, y in enumerate(ys):
     for order in ordering:
-        plt.plot(x, ys[order], figure=fig, label=final_labels[order], color=colors[order], marker=markers[order], linewidth=sizes[order])
+        if drawLegend:
+            plt.plot(x, np.zeros(ys[order].shape), figure=fig, label=final_labels[order], color=colors[order], marker=markers[order], linewidth=sizes[order])
+        else:
+            plt.plot(x, ys[order], figure=fig, label=final_labels[order], color=colors[order], marker=markers[order], linewidth=sizes[order])
+            pass
         continue
-    #plt.legend(loc='upper right')
+    if drawLegend:
+        plt.legend(loc='upper right')
+        pass
     #plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.05), ncol=4, fancybox=True, shadow=True, handletextpad=0.1)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel + ' %')
+
+    for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] +
+                 ax.get_xticklabels() + ax.get_yticklabels()):
+        item.set_fontsize(22)
+        
     ax.set_yticklabels(np.arange(0, 101, 20))
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_linewidth(2)
+    ax.spines['left'].set_linewidth(2)
+    ax.tick_params(width=2, length=8)    
     ax.get_xaxis().tick_bottom()
     ax.get_yaxis().tick_left()    
     #ax.xaxis.set_label_coords(1.1, -0.025)
@@ -4795,3 +4847,320 @@ end_header
     return maskImage
 
 
+
+def copyLogoVideo(folder, index, image, depth, planes, segmentation, info, startPixel, endPixel):
+    import glob
+    from sklearn.cluster import KMeans
+    from skimage import measure
+    #from sklearn.decomposition import PCA
+    
+    width = segmentation.shape[1]
+    height = segmentation.shape[0]
+
+    camera = getCameraFromInfo(info)
+    
+    urange = (np.arange(width, dtype=np.float32) / width * camera['width'] - camera['cx']) / camera['fx']
+    urange = urange.reshape(1, -1).repeat(height, 0)
+    vrange = (np.arange(height, dtype=np.float32) / height * camera['height'] - camera['cy']) / camera['fy']
+    vrange = vrange.reshape(-1, 1).repeat(width, 1)
+    X = depth * urange
+    Y = depth
+    Z = -depth * vrange
+    XYZ = np.stack([X, Y, Z], axis=2)    
+    #plane_depths = calcPlaneDepths(planes, width, height, info)
+
+    planesD = np.linalg.norm(planes, axis=-1, keepdims=True)
+    planesNormal = planes / np.maximum(planesD, 1e-4)
+
+    planeAreaThreshold = width * height / 100
+    
+    normals = []
+    for planeIndex in xrange(planes.shape[0]):
+        mask = segmentation == planeIndex
+        if mask.sum() < planeAreaThreshold:
+            continue
+        normals.append(planesNormal[planeIndex])
+        continue
+    normals = np.stack(normals, axis=0)
+    normals[normals[:, 1] < 0] *= -1
+
+
+    
+    #texture_image_names = glob.glob('../texture_images/*.png') + glob.glob('../texture_images/*.jpg')
+    
+    #imageFilename = '/home/chenliu/Projects/PlaneNet/texture_images/CVPR.jpg'
+    #textureImage = cv2.imread(imageFilename)
+
+    #textureImage = cv2.imread('../texture_images/CVPR_transparent.png')
+    textureImage = cv2.imread('../texture_images/CVPR.jpg')
+    imageFilename = 'CVPR.png'
+    cv2.imwrite(folder + '/' + imageFilename, textureImage)
+
+    alphaMask = (textureImage.mean(2) < 224).astype(np.float32)
+    alphaMask = np.expand_dims(alphaMask, -1)
+    #backgroundMask = cv2.erode(backgroundMask.astype(np.uint8), np.ones((3, 3)))
+    #cv2.imwrite('test/mask.png', drawMaskImage(background))
+    #exit(1)
+
+    textureHeight = float(textureImage.shape[0])
+    textureWidth = float(textureImage.shape[1])
+    textureRatio = textureHeight / textureWidth
+    textureSizes2D = np.array([textureWidth, textureHeight])
+        
+    textureSizeU = 0.75
+    textureSizeV = textureSizeU * textureRatio
+    textureSizes = np.array([textureSizeU, textureSizeV])
+    
+
+
+    planeMasks = []
+    planeProjections = []
+    planeRanges = []
+    plane
+    for planeIndex in xrange(planes.shape[0]):
+        globalMask = segmentation == planeIndex
+        if globalMask.sum() < planeAreaThreshold:
+            continue
+        
+        masks = measure.label(globalMask.astype(np.int32), background=0)
+        #print(masks.max())
+        #print(masks.min())        
+        #cv2.imwrite('test/mask.png', drawSegmentationImage(masks, blackIndex=planes.shape[0]))
+        #exit(1)
+        for maskIndex in xrange(masks.min() + 1, masks.max() + 1):
+            mask = masks == maskIndex
+            if mask.sum() < planeAreaThreshold:
+                continue
+
+            planeNormal = planesNormal[planeIndex]
+
+            cluster = planeClusters[planeIndex]
+            dominantNormal = dominantNormals[(cluster + 1) % 3]
+            direction_u = np.cross(planeNormal, dominantNormal)
+            direction_u = direction_u / np.maximum(np.linalg.norm(direction_u), 1e-4)
+            direction_v = np.cross(planeNormal, direction_u)
+            direction_v = direction_v / np.maximum(np.linalg.norm(direction_v), 1e-4)
+
+            points = XYZ[mask]        
+            projection_u = np.tensordot(points, direction_u, axes=([1], [0]))
+            range_u = [projection_u.min(), projection_u.max()]       
+            projection_v = np.tensordot(points, direction_v, axes=([1], [0]))                
+            range_v = [projection_v.min(), projection_v.max()]
+            if range_v[1] - range_v[0] > range_u[1] - range_u[0]:
+                range_u, range_v = range_v, range_u
+                direction_u, direction_v = direction_v, direction_u
+                pass
+
+            if (np.argmax(np.abs(direction_v)) == 2 and direction_v[2] < 0) or (np.argmax(np.abs(direction_v)) != 2 and np.dot(np.array([0, 1, 0]), direction_v) < 0):
+                direction_v *= -1
+                projection_v *= -1
+                range_v = [-range_v[1], -range_v[0]]
+                pass
+            if np.dot(np.cross(planeNormal, direction_v), direction_u) < 0:
+                direction_u *= -1
+                projection_u *= -1
+                range_u = [-range_u[1], -range_u[0]]
+                pass
+
+            #print(planeIndex, dominantNormal, direction_u, direction_v)
+            projection_u = np.tensordot(XYZ, direction_u, axes=([2], [0]))
+            projection_v = np.tensordot(XYZ, direction_v, axes=([2], [0]))
+            planeProjections.append(np.stack([projection_u, projection_v], axis=-1).reshape((-1, 2)))
+            ranges = np.stack([range_u, range_v], axis=-1)
+            ranges = np.stack([ranges.mean(0) - (ranges[1] - ranges[0]) * 0.35, ranges.mean(0) + (ranges[1] - ranges[0]) * 0.35], axis=0)
+            planeRanges.append(ranges)
+            planeMasks.append(mask)
+            continue
+        continue
+    
+    numMasks = len(planeProjections)
+                
+    #maskImage = np.full(segmentation.shape, planes.shape[0])
+    #ratios = np.full(2, 0.5)
+    planeRatios = np.random.random((numMasks, 2))
+    randomDirection = np.random.random((numMasks, 2))
+    randomDirection = randomDirection / np.linalg.norm(randomDirection)
+    stride = 0.01
+    
+    #textureImage = textureImage.reshape((-1, 3))
+    
+    for frameIndex in xrange(1000):
+        planeRatios += randomDirection * stride
+        invalidMask = np.logical_or(planeRatios >= 1, planeRatios <= 0)
+        planeRatios = np.maximum(np.minimum(planeRatios, 1), 0)
+        randomDirection[invalidMask] *= -1
+        
+        resultImage = image.copy().reshape((-1, 3))
+        for planeIndex in xrange(numMasks):
+            mask = planeMasks[planeIndex]
+            ranges = planeRanges[planeIndex]
+            projections = planeProjections[planeIndex]
+            ratios = planeRatios[planeIndex]
+            
+            offsets = ranges[0] + (ranges[1] - ranges[0]) * ratios - textureSizes / 2
+            
+            projectionsMoved = (projections - offsets) / textureSizes
+            
+            rectangleMask = np.logical_and(projectionsMoved >= 0, projectionsMoved <= 1)
+            rectangleMask = np.logical_and(rectangleMask[:, 0], rectangleMask[:, 1])
+            rectangleMask = np.logical_and(rectangleMask, mask)
+            
+            rectangleIndices = rectangleMask.nonzero()[0]
+            
+            uv = projectionsMoved[rectangleIndices] * textureSizes2D
+            uv[:, 1] = textureSizes2D[1] - 1 - uv[:, 1]
+            uv = np.maximum(np.minimum(uv, textureSizes2D - 1), 0)
+
+            u = uv[:, 0]
+            v = uv[:, 1]
+            u_min = np.floor(u).astype(np.int32)
+            u_max = np.ceil(u).astype(np.int32)
+            v_min = np.floor(v).astype(np.int32)
+            v_max = np.ceil(v).astype(np.int32)
+
+            area_11 = (u_max - u) * (v_max - v)
+            area_12 = (u_max - u) * (v - v_min)
+            area_21 = (u - u_min) * (v_max - v)
+            area_22 = (u - u_min) * (v - v_min)
+
+            area_11 = np.expand_dims(area_11, -1)
+            area_12 = np.expand_dims(area_12, -1)
+            area_21 = np.expand_dims(area_21, -1)
+            area_22 = np.expand_dims(area_22, -1)
+
+            
+            colors_11 = textureImage[v_min, u_min]
+            colors_12 = textureImage[v_max, u_min]
+            colors_21 = textureImage[v_min, u_max]
+            colors_22 = textureImage[v_max, u_max]
+
+            alphas_11 = alphaMask[v_min, u_min]
+            alphas_12 = alphaMask[v_max, u_min]
+            alphas_21 = alphaMask[v_min, u_max]
+            alphas_22 = alphaMask[v_max, u_max]
+            
+            colors = colors_11 * area_11 + colors_12 * area_12 + colors_21 * area_21 + colors_22 * area_22
+            alphas = alphas_11 * area_11 + alphas_12 * area_12 + alphas_21 * area_21 + alphas_22 * area_22
+            #alphas = np.expand_dims(alphas, -1)
+            #foreground = foregroundMask[uv[:, 1], uv[:, 0]]
+            #indices = rectangleIndices[foreground]
+            #uv = uv[foreground]
+            
+            #rectangleMask = np.logical_and(rectangleMask, foreground)
+
+            resultImage[rectangleIndices] = resultImage[rectangleIndices] * (1 - alphas) + colors * alphas
+            continue
+        cv2.imwrite(folder + '/' + ('%04d' % frameIndex) + '.png', resultImage.reshape(image.shape))
+        continue
+    #cv2.imwrite('test/mask.png', drawSegmentationImage(maskImage, blackIndex=planes.shape[0]))
+    #cv2.imwrite('test/mask.png', drawSegmentationImage(maskImage, blackIndex=planes.shape[0]))
+    
+    return 
+
+def addRuler(folder, index, image, depth, planes, segmentation, info):
+
+    width = segmentation.shape[1]
+    height = segmentation.shape[0]
+
+    camera = getCameraFromInfo(info)
+    
+    urange = (np.arange(width, dtype=np.float32) / width * camera['width'] - camera['cx']) / camera['fx']
+    urange = urange.reshape(1, -1).repeat(height, 0)
+    vrange = (np.arange(height, dtype=np.float32) / height * camera['height'] - camera['cy']) / camera['fy']
+    vrange = vrange.reshape(-1, 1).repeat(width, 1)
+    X = depth * urange
+    Y = depth
+    Z = -depth * vrange
+    XYZ = np.stack([X, Y, Z], axis=2)    
+    #plane_depths = calcPlaneDepths(planes, width, height, info)
+
+    planesD = np.linalg.norm(planes, axis=-1, keepdims=True)
+    planesNormal = planes / np.maximum(planesD, 1e-4)
+
+    planeAreaThreshold = width * height / 100
+    
+    normals = []
+    for planeIndex in xrange(planes.shape[0]):
+        mask = segmentation == planeIndex
+        if mask.sum() < planeAreaThreshold:
+            continue
+        normals.append(planesNormal[planeIndex])
+        continue
+    normals = np.stack(normals, axis=0)
+    normals[normals[:, 1] < 0] *= -1
+
+
+    
+    #texture_image_names = glob.glob('../texture_images/*.png') + glob.glob('../texture_images/*.jpg')
+    
+    #imageFilename = '/home/chenliu/Projects/PlaneNet/texture_images/CVPR.jpg'
+    #textureImage = cv2.imread(imageFilename)
+
+    #textureImage = cv2.imread('../texture_images/CVPR_transparent.png')
+    textureImage = cv2.imread('../texture_images/CVPR.jpg')
+    imageFilename = 'CVPR.png'
+    cv2.imwrite(folder + '/' + imageFilename, textureImage)
+
+    alphaMask = (textureImage.mean(2) < 224).astype(np.float32)
+    alphaMask = np.expand_dims(alphaMask, -1)
+    #backgroundMask = cv2.erode(backgroundMask.astype(np.uint8), np.ones((3, 3)))
+    #cv2.imwrite('test/mask.png', drawMaskImage(background))
+    #exit(1)
+
+    textureHeight = float(textureImage.shape[0])
+    textureWidth = float(textureImage.shape[1])
+    textureRatio = textureHeight / textureWidth
+    textureSizes2D = np.array([textureWidth, textureHeight])
+    
+    textureSizeU = 0.96
+    textureSizeV = textureSizeU * textureRatio
+    textureSizes = np.array([textureSizeU, textureSizeV])
+    #textureImage = cv2.imread('../textures/texture_2.jpg')
+    #textureImage = cv2.resize(textureImage, (width, height), interpolation=cv2.INTER_LINEAR)
+
+
+    startPlaneIndex = segmentation[startPixel[1]][startPixel[0]]
+    endPlaneIndex = segmentation[endPixel[1]][endPixel[0]]
+    assert(startPlaneIndex < planes.shape[0] and endPlaneIndex < planes.shape[0])
+    startPoint = XYZ[startPixel[1]][startPixel[0]]
+    endPoint = XYZ[endPixel[1]][endPixel[0]]
+
+    mask = (segmentation == startPlaneIndex).astype(np.uint8)
+
+    if startPlaneIndex != endPlaneIndex:
+        boundary = mask - cv2.erode(mask, np.ones((3, 3), dtype=np.uint8))
+        boundaryPoints = XYZ[boundary.nonzero]
+        if fixedEndPoint:
+            distances = np.linalg.norm(boundaryPoints - startPoint, axis=-1) + np.linalg.norm(boundaryPoints - endPoint, axis=-1)
+            boundaryPoint = boundaryPoints[np.argmin(distances)]
+        else:
+            endPlane = planes[endPlaneIndex]
+            endPlaneD = np.linalg.norm(endPlane)
+            endPlaneNormal = endPlane / endPlaneD
+            endDistances = endPlaneD - boundaryPoints * endPlaneNormal
+            distances = np.linalg.norm(boundaryPoints - startPoint, axis=-1) + np.abs(endDistances)
+            boundaryPointIndex = np.argmin(distances)
+            boundaryPoint = boundaryPoints[boundaryPointIndex]
+            endDistance = endDistances[boundaryPointIndex]
+            endPoint = boundaryPoint + endDistance * endPlaneNormal
+            pass
+    else:
+        boundaryPoint = startPoint
+        pass
+
+    distanceOffset = 0
+    for point_1, point_2 in [(startPoint, boundaryPoint), (boundaryPoint, endPoint)]:
+        if point_1 == point_2:
+            continue
+        direction_u = point_2 - point_1
+        direction_v = -np.cross(planeNormal, direction_u)
+        direction_v = direction_v / np.maximum(np.linalg.norm(direction_v), 1e-4)
+
+        projection_u = np.tensordot(XYZ, direction_u, axes=([2], [0]))
+        projection_v = np.tensordot(XYZ, direction_v, axes=([2], [0]))
+
+        offset_u = np.dot(point_1, direction_u) - distanceOffset
+        offset_v = np.dot(point_1, direction_v)
+
+        projection_u = (projection_u - offset_u) / textureSizeU
+        projection_v = (projection_v - offset_v) / textureSizeV

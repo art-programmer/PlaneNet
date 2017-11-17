@@ -128,7 +128,7 @@ def evaluatePlanes(options):
 
 
     saving = True
-    if gt_dict['image'].shape[0] != options.numImages:
+    if gt_dict['image'].shape[0] != options.numImages or options.useCache == 1:
         saving = False
         pass
         
@@ -157,7 +157,7 @@ def evaluatePlanes(options):
     #predictions[2] = predictions[3]
 
 
-            
+
     
     for image_index in xrange(options.visualizeImages):
         cv2.imwrite(options.test_dir + '/' + str(image_index) + '_image.png', gt_dict['image'][image_index])
@@ -172,19 +172,26 @@ def evaluatePlanes(options):
         depth = np.sum(all_depths * np.concatenate([gt_dict['segmentation'][image_index], 1 - np.expand_dims(gt_dict['plane_mask'][image_index], -1)], axis=2), axis=2)
         cv2.imwrite(options.test_dir + '/' + str(image_index) + '_depth_gt_plane.png', drawDepthImage(depth))
         cv2.imwrite(options.test_dir + '/' + str(image_index) + '_depth_gt_diff.png', drawMaskImage((depth - gt_dict['depth'][image_index]) * 5 + 0.5))        
-        
+
+
         for method_index, pred_dict in enumerate(predictions):
             cv2.imwrite(options.test_dir + '/' + str(image_index) + '_depth_pred_' + str(method_index) + '.png', drawDepthImage(pred_dict['depth'][image_index]))
 
-            if 'pixelwise' in options.methods[method_index][1]:
-                continue
+            #if 'pixelwise' in options.methods[method_index][1]:
+            #continue
             segmentation = pred_dict['segmentation'][image_index]
             #segmentation = np.concatenate([segmentation, pred_dict['np_mask'][image_index]], axis=2)
-            cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_pred_' + str(method_index) + '.png', drawSegmentationImage(segmentation, blackIndex=options.numOutputPlanes))
+            numPlanes = options.numOutputPlanes
+            if 'pixelwise' in options.methods[method_index][1]:
+                numPlanes = pred_dict['plane'][image_index].shape[0]
+                #print(numPlanes)
+                pass
+            cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_pred_' + str(method_index) + '.png', drawSegmentationImage(segmentation, blackIndex=numPlanes))
             continue
         continue
 
-
+    exit(1)
+    
     #post processing
     for method_index, method in enumerate(options.methods):
         if method[1] == '':
@@ -347,9 +354,9 @@ def evaluatePlanes(options):
                 cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_pred_' + str(method_index) + '.png', drawSegmentationImage(pred_s, blackIndex=options.numOutputPlanes))
 
                 #segmentation = np.argmax(allSegmentations, axis=-1)
-                for planeIndex in xrange(options.numOutputPlanes + 1):
-                    cv2.imwrite('test/mask_' + str(planeIndex) + '.png', drawMaskImage(allSegmentations[:, :, planeIndex]))
-                    continue
+                # for planeIndex in xrange(options.numOutputPlanes + 1):
+                #     cv2.imwrite('test/mask_' + str(planeIndex) + '.png', drawMaskImage(allSegmentations[:, :, planeIndex]))
+                #     continue
                 #cv2.imwrite(options.test_dir + '/mask_' + str(21) + '.png', drawDepthImage(pred_dict['np_depth'][0]))
                 #for plane_index in xrange(options.numOutputPlanes + 1):
                 #cv2.imwrite(options.test_dir + '/mask_' + str(plane_index) + '.png', drawMaskImage(pred_s == plane_index))
@@ -384,25 +391,25 @@ def evaluatePlanes(options):
                     pred_p = np.zeros(pred_dict['plane'][image_index].shape)
                 elif '_2' in method[1]:
                     parameters = {'distanceCostThreshold': 0.1, 'smoothnessWeight': 0.05, 'semantics': True}
-                    pred_p, pred_s = fitPlanesNYU(gt_dict['image'], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['semantics'][image_index], gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
+                    pred_p, pred_s = fitPlanesNYU(gt_dict['image'], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['semantics'][image_index], gt_dict['info'][image_index], numOutputPlanes=options.numOutputPlanes, parameters=parameters)
                 elif '_3' in method[1]:
-                    parameters = {'distanceCostThreshold': 0.1, 'smoothnessWeight': 0.03, 'semantics': True, 'distanceThreshold': 0.2}
-                    pred_p, pred_s = fitPlanesNYU(gt_dict['image'], pred_d, pred_n, pred_dict['semantics'][image_index], gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
+                    parameters = {'distanceCostThreshold': 0.1, 'smoothnessWeight': 0.03, 'semantics': True, 'distanceThreshold': 0.05}
+                    pred_p, pred_s = fitPlanesNYU(gt_dict['image'], pred_d, pred_n, pred_dict['semantics'][image_index], gt_dict['info'][image_index], numOutputPlanes=options.numOutputPlanes, parameters=parameters)
                 elif '_4' in method[1]:
                     parameters = {'numProposals': 5, 'distanceCostThreshold': 0.1, 'smoothnessWeight': 30, 'dominantLineThreshold': 3, 'offsetGap': 0.1}
-                    pred_p, pred_s = fitPlanesManhattan(gt_dict['image'][image_index], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
+                    pred_p, pred_s = fitPlanesManhattan(gt_dict['image'][image_index], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['info'][image_index], numOutputPlanes=options.numOutputPlanes, parameters=parameters)
                     pred_d = np.zeros((HEIGHT, WIDTH))
                 elif '_5' in method[1]:
                     parameters = {'numProposals': 5, 'distanceCostThreshold': 0.1, 'smoothnessWeight': 100, 'dominantLineThreshold': 3, 'offsetGap': 0.6}
-                    pred_p, pred_s = fitPlanesManhattan(gt_dict['image'][image_index], pred_d, pred_n, gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
+                    pred_p, pred_s = fitPlanesManhattan(gt_dict['image'][image_index], pred_d, pred_n, gt_dict['info'][image_index], numOutputPlanes=options.numOutputPlanes, parameters=parameters)
                     pred_d = np.zeros((HEIGHT, WIDTH))
                 elif '_6' in method[1]:
                     parameters = {'distanceCostThreshold': 0.1, 'smoothnessWeight': 300, 'numProposals': 5, 'normalWeight': 1, 'meanshift': 0.2}
-                    pred_p, pred_s = fitPlanesPiecewise(gt_dict['image'][image_index], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
+                    pred_p, pred_s = fitPlanesPiecewise(gt_dict['image'][image_index], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['info'][image_index], numOutputPlanes=options.numOutputPlanes, parameters=parameters)
                     pred_d = np.zeros((HEIGHT, WIDTH))
                 elif '_7' in method[1]:
                     parameters = {'numProposals': 5, 'distanceCostThreshold': 0.1, 'smoothnessWeight': 300, 'normalWeight': 1, 'meanshift': 0.2}
-                    pred_p, pred_s = fitPlanesPiecewise(gt_dict['image'][image_index], pred_d, pred_n, gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
+                    pred_p, pred_s = fitPlanesPiecewise(gt_dict['image'][image_index], pred_d, pred_n, gt_dict['info'][image_index], numOutputPlanes=options.numOutputPlanes, parameters=parameters)
                     pred_d = np.zeros((HEIGHT, WIDTH))
                     pass
                 predPlanes.append(pred_p)                
@@ -411,7 +418,7 @@ def evaluatePlanes(options):
                 predNumPlanes.append(pred_p.shape[0])                    
 
                 cv2.imwrite(options.test_dir + '/' + str(image_index) + '_depth_pred_' + str(method_index) + '.png', drawDepthImage(pred_d))
-                cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_pred_' + str(method_index) + '.png', drawSegmentationImage(pred_s))
+                cv2.imwrite(options.test_dir + '/' + str(image_index) + '_segmentation_pred_' + str(method_index) + '.png', drawSegmentationImage(pred_s, blackIndex=pred_p.shape[0]))
                 #exit(1)
                 continue
             new_pred_dict = {}
@@ -570,8 +577,8 @@ def plotResults(gt_dict, predictions, options):
         #pass
         #pixel_curves, plane_curves = evaluatePlaneSegmentation(pred_dict['plane'], segmentations, gt_dict['plane'], gt_dict['segmentation'], gt_dict['num_planes'], numOutputPlanes = options.numOutputPlanes)
 
-        pixel_curves = np.zeros((6, 11))
-        plane_curves = np.zeros((6, 11, 3))
+        pixel_curves = np.zeros((6, 13))
+        plane_curves = np.zeros((6, 13, 3))
         numImages = segmentations.shape[0]
         for image_index in xrange(numImages):
             gtDepths = calcPlaneDepths(gt_dict['plane'][image_index], WIDTH, HEIGHT, gt_dict['info'][image_index])
@@ -581,11 +588,37 @@ def plotResults(gt_dict, predictions, options):
             else:
                 predNumPlanes = options.numOutputPlanes
                 pass
+
+            #if image_index != 2:
+            #continue
+            
             pixelStatistics, planeStatistics = evaluatePlanePrediction(predDepths, segmentations[image_index], predNumPlanes, gtDepths, gt_dict['segmentation'][image_index], gt_dict['num_planes'][image_index])
 
+            # for planeIndex in xrange(options.numOutputPlanes):
+            #     cv2.imwrite('test/mask_' + str(planeIndex) + '.png', drawMaskImage(gt_dict['segmentation'][image_index][:, :, planeIndex]))
+            #     continue
+            
+            # mask_1 = segmentations[image_index] == 8
+            # mask_2 = gt_dict['segmentation'][image_index][:, :, 3]
+            # print(mask_1.sum())
+            # print(mask_2.sum())
+            # cv2.imwrite('test/mask_pred.png', drawMaskImage(mask_1))
+            # cv2.imwrite('test/mask_gt.png', drawMaskImage(mask_2))
+            # cv2.imwrite('test/mask_intersection.png', drawMaskImage(mask_2 * mask_1 > 0.5))
+            # cv2.imwrite('test/mask_union.png', drawMaskImage((mask_2 + mask_1) > 0.5))
+            # print((mask_2 * mask_1 > 0.5).sum())
+            # print(((mask_2 + mask_1) > 0.5).sum())
+            #print(image_index, planeStatistics[4][5])
+            #exit(1)
+            # print(pred_dict['plane'][image_index])
+            # for planeIndex in xrange(options.numOutputPlanes):
+            #     print((segmentations[image_index] == planeIndex).sum())
+            #     continue
+            #exit(1)
             pixel_curves += np.array(pixelStatistics)
             plane_curves += np.array(planeStatistics)
             continue
+
 
         if len(pixel_metric_curves) == 0:
             for metric_index, pixel_curve in enumerate(pixel_curves):
@@ -609,12 +642,12 @@ def plotResults(gt_dict, predictions, options):
 
     
     xs = []
-    xs.append((np.arange(11) * 0.1).tolist())
-    xs.append((np.arange(11) * 0.1).tolist())
-    xs.append((np.arange(11) * 0.1).tolist())    
-    xs.append((np.arange(11) * 0.05).tolist())
-    xs.append((np.arange(11) * 0.05).tolist())
-    xs.append((np.arange(11) * 0.05).tolist())
+    xs.append((np.arange(13) * 0.1).tolist())
+    xs.append((np.arange(13) * 0.1).tolist())
+    xs.append((np.arange(13) * 0.1).tolist())    
+    xs.append((np.arange(13) * 0.05).tolist())
+    xs.append((np.arange(13) * 0.05).tolist())
+    xs.append((np.arange(13) * 0.05).tolist())
     xlabels = ['IOU threshold', 'IOU threshold', 'IOU threshold', 'depth threshold', 'depth threshold', 'depth threshold']
     curve_titles = ['depth threshold 0.1', 'depth threshold 0.2', 'depth threshold 0.3', 'IOU 0.3', 'IOU 0.5', 'IOU 0.7']
     curve_labels = [title for title in titles if title != 'pixelwise']
@@ -734,11 +767,11 @@ def gridSearch(options):
                         for image_index in xrange(options.numImages):
                             #cv2.imwrite('test/normal.png', drawNormalImage(gt_dict['normal'][image_index]))
                             if '_2' in method[1]:
-                                pred_p, pred_s = fitPlanesNYU(gt_dict['image'][image_index], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['semantics'][image_index], gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
+                                pred_p, pred_s = fitPlanesNYU(gt_dict['image'][image_index], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['semantics'][image_index], gt_dict['info'][image_index], numOutputPlanes=options.numOutputPlanes, parameters=parameters)
                             else:
                                 pred_d = pred_dict['np_depth'][image_index].squeeze()
                                 pred_n = pred_dict['np_normal'][image_index].squeeze()
-                                pred_p, pred_s = fitPlanesNYU(gt_dict['image'][image_index], pred_d, pred_n, pred_dict['semantics'][image_index], gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
+                                pred_p, pred_s = fitPlanesNYU(gt_dict['image'][image_index], pred_d, pred_n, pred_dict['semantics'][image_index], gt_dict['info'][image_index], numOutputPlanes=options.numOutputPlanes, parameters=parameters)
                                 pass
 
                             predNumPlanes = pred_p.shape[0]
@@ -784,11 +817,11 @@ def gridSearch(options):
                         score = 0
                         for image_index in xrange(options.numImages):
                             if '_4' in method[1]:
-                                pred_p, pred_s = fitPlanesManhattan(gt_dict['image'][image_index], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
+                                pred_p, pred_s = fitPlanesManhattan(gt_dict['image'][image_index], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['info'][image_index], numOutputPlanes=options.numOutputPlanes, parameters=parameters)
                             else:
                                 pred_d = pred_dict['np_depth'][image_index].squeeze()
                                 pred_n = pred_dict['np_normal'][image_index].squeeze()
-                                pred_p, pred_s = fitPlanesManhattan(gt_dict['image'][image_index], pred_d, pred_n, gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
+                                pred_p, pred_s = fitPlanesManhattan(gt_dict['image'][image_index], pred_d, pred_n, gt_dict['info'][image_index], numOutputPlanes=options.numOutputPlanes, parameters=parameters)
                                 pass
 
                             predNumPlanes = pred_p.shape[0]
@@ -835,11 +868,11 @@ def gridSearch(options):
                             score = 0
                             for image_index in xrange(options.numImages):
                                 if '_6' in method[1]:
-                                    pred_p, pred_s = fitPlanesPiecewise(gt_dict['image'][image_index], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
+                                    pred_p, pred_s = fitPlanesPiecewise(gt_dict['image'][image_index], gt_dict['depth'][image_index].squeeze(), gt_dict['normal'][image_index], gt_dict['info'][image_index], numOutputPlanes=options.numOutputPlanes, parameters=parameters)
                                 else:
                                     pred_d = pred_dict['np_depth'][image_index].squeeze()                
                                     pred_n = pred_dict['np_normal'][image_index].squeeze()                
-                                    pred_p, pred_s = fitPlanesPiecewise(gt_dict['image'][image_index], pred_d, pred_n, gt_dict['info'][image_index], numOutputPlanes=20, parameters=parameters)
+                                    pred_p, pred_s = fitPlanesPiecewise(gt_dict['image'][image_index], pred_d, pred_n, gt_dict['info'][image_index], numOutputPlanes=options.numOutputPlanes, parameters=parameters)
                                     pass
 
                                 predNumPlanes = pred_p.shape[0]
@@ -1166,7 +1199,7 @@ def evaluateDepthPrediction(options):
                 #boundaries = (boundaries > 128).astype(np.float32)[:, :, :2]
 
                 allDepths[:, :, options.numOutputPlanes] = 0
-                pred_s = refineSegmentation(gt_dict['image'][image_index], allSegmentations, allDepths, boundaries, numOutputPlanes = 20, numIterations=20, numProposals=5)
+                pred_s = refineSegmentation(gt_dict['image'][image_index], allSegmentations, allDepths, boundaries, numOutputPlanes = options.numOutputPlanes, numIterations=20, numProposals=5)
                 pred_d = allDepths.reshape(-1, options.numOutputPlanes + 1)[np.arange(WIDTH * HEIGHT), pred_s.reshape(-1)].reshape(HEIGHT, WIDTH)
             
                 predSegmentations.append(pred_s)
@@ -1207,11 +1240,11 @@ def evaluateDepthPrediction(options):
                     pred_s = np.zeros(pred_dict['segmentation'][image_index].shape)
                     pred_p = np.zeros(pred_dict['plane'][image_index].shape)    
                 elif '_2' in methods[1]:
-                    pred_p, pred_s, pred_d = fitPlanes(pred_d, gt_dict['info'][image_index], numPlanes=20, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=0.2)
+                    pred_p, pred_s, pred_d = fitPlanes(pred_d, gt_dict['info'][image_index], numPlanes=options.numOutputPlanes, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=0.2)
                 elif '_3' in methods[1]:
-                    pred_p, pred_s, pred_d = fitPlanes(pred_d, gt_dict['info'][image_index], numPlanes=20, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=0.2)
+                    pred_p, pred_s, pred_d = fitPlanes(pred_d, gt_dict['info'][image_index], numPlanes=options.numOutputPlanes, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=0.2)
                 elif '_4' in methods[1]:
-                    pred_p, pred_s, pred_d = fitPlanesSegmentation(pred_d, pred_dict['semantics'][image_index], gt_dict['info'][image_index], numPlanes=20, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=0.2)
+                    pred_p, pred_s, pred_d = fitPlanesSegmentation(pred_d, pred_dict['semantics'][image_index], gt_dict['info'][image_index], numPlanes=options.numOutputPlanes, planeAreaThreshold=3*4, numIterations=100, distanceThreshold=0.05, local=0.2)
                     pass
                 predPlanes.append(pred_p)                
                 predSegmentations.append(pred_s)
@@ -1426,7 +1459,7 @@ def getPrediction(options):
                 pred_np_d = global_pred['non_plane_depth'][0]
                 pred_np_n = global_pred['non_plane_normal'][0]
                 
-                if global_gt['info'][0][19] > 1 and global_gt['info'][0][19] < 4:
+                if global_gt['info'][0][19] > 1 and global_gt['info'][0][19] < 4 and False:
                     pred_np_n = calcNormal(pred_np_d.squeeze(), global_gt['info'][0])
                     pass
 
@@ -1437,9 +1470,9 @@ def getPrediction(options):
                 predNonPlaneNormals.append(pred_np_n)
                 predBoundaries.append(pred_b)
                     
-                all_segmentations = np.concatenate([pred_np_m, pred_s], axis=2)
+                all_segmentations = np.concatenate([pred_s, pred_np_m], axis=2)
                 plane_depths = calcPlaneDepths(pred_p, WIDTH, HEIGHT, global_gt['info'][0])
-                all_depths = np.concatenate([pred_np_d, plane_depths], axis=2)
+                all_depths = np.concatenate([plane_depths, pred_np_d], axis=2)
 
                 segmentation = np.argmax(all_segmentations, 2)
                 pred_d = all_depths.reshape(-1, options.numOutputPlanes + 1)[np.arange(WIDTH * HEIGHT), segmentation.reshape(-1)].reshape(HEIGHT, WIDTH)
@@ -1454,7 +1487,8 @@ def getPrediction(options):
                                          
                 predDepths.append(pred_d)
                 predPlanes.append(pred_p)
-                predSegmentations.append(pred_s)
+                #predSegmentations.append(pred_s)
+                predSegmentations.append(segmentation)
                     
                 continue
             pred_dict['plane'] = np.array(predPlanes)
