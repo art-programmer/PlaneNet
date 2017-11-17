@@ -174,8 +174,12 @@ def evaluatePlanes(options):
                         os.system("mkdir -p %s" % (options.test_dir + '/logo_video/'))
                         pass
                     copyLogoVideo(options.test_dir + '/logo_video/', image_index + options.startIndex, gt_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, gt_dict['info'][image_index])
-                    exit(1)
-                if options.suffix == 'texture':
+                elif options.suffix == 'ruler':
+                    if not os.path.exists(options.test_dir + '/ruler/'):
+                        os.system("mkdir -p %s" % (options.test_dir + '/ruler/'))
+                        pass
+                    addRuler(options.test_dir + '/ruler/', image_index + options.startIndex, gt_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, gt_dict['info'][image_index], startPixel=(280, 190), endPixel=(380, 390))
+                elif options.suffix == 'texture':
                     for planeIndex in xrange(options.numOutputPlanes):
                         cv2.imwrite('test/mask_' + str(planeIndex) + '.png', drawMaskImage(segmentation == planeIndex))
                         continue

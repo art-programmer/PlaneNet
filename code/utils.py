@@ -4852,7 +4852,7 @@ end_header
 
 
 
-def copyLogoVideo(folder, index, image, depth, planes, segmentation, info, startPixel, endPixel):
+def copyLogoVideo(folder, index, image, depth, planes, segmentation, info):
     import glob
     from sklearn.cluster import KMeans
     from skimage import measure
@@ -4897,8 +4897,6 @@ def copyLogoVideo(folder, index, image, depth, planes, segmentation, info, start
 
     #textureImage = cv2.imread('../texture_images/CVPR_transparent.png')
     textureImage = cv2.imread('../texture_images/CVPR.jpg')
-    imageFilename = 'CVPR.png'
-    cv2.imwrite(folder + '/' + imageFilename, textureImage)
 
     alphaMask = (textureImage.mean(2) < 224).astype(np.float32)
     alphaMask = np.expand_dims(alphaMask, -1)
@@ -5061,7 +5059,7 @@ def copyLogoVideo(folder, index, image, depth, planes, segmentation, info, start
     
     return 
 
-def addRuler(folder, index, image, depth, planes, segmentation, info):
+def addRuler(folder, index, image, depth, planes, segmentation, info, startPixel, endPixel, fixedEndPoint=False):
 
     width = segmentation.shape[1]
     height = segmentation.shape[0]
@@ -5101,12 +5099,11 @@ def addRuler(folder, index, image, depth, planes, segmentation, info):
     #textureImage = cv2.imread(imageFilename)
 
     #textureImage = cv2.imread('../texture_images/CVPR_transparent.png')
-    textureImage = cv2.imread('../texture_images/CVPR.jpg')
-    imageFilename = 'CVPR.png'
-    cv2.imwrite(folder + '/' + imageFilename, textureImage)
+    textureImage = cv2.imread('../texture_images/ruler.png')
 
-    alphaMask = (textureImage.mean(2) < 224).astype(np.float32)
-    alphaMask = np.expand_dims(alphaMask, -1)
+    #alphaMask = (textureImage.mean(2) < 224).astype(np.float32)
+    #alphaMask = np.expand_dims(alphaMask, -1)
+    
     #backgroundMask = cv2.erode(backgroundMask.astype(np.uint8), np.ones((3, 3)))
     #cv2.imwrite('test/mask.png', drawMaskImage(background))
     #exit(1)
@@ -5152,6 +5149,7 @@ def addRuler(folder, index, image, depth, planes, segmentation, info):
         boundaryPoint = startPoint
         pass
 
+    resultImage = image.copy().reshape((-1, 3))    
     distanceOffset = 0
     for point_1, point_2 in [(startPoint, boundaryPoint), (boundaryPoint, endPoint)]:
         if point_1 == point_2:
@@ -5168,3 +5166,51 @@ def addRuler(folder, index, image, depth, planes, segmentation, info):
 
         projection_u = (projection_u - offset_u) / textureSizeU
         projection_v = (projection_v - offset_v) / textureSizeV
+        
+        rectangleMask = np.logical_and(np.logical_and(projection_u >= 0, projection_u <= 1), np.logical_and(projection_v >= 0, projection_v <= 1))
+
+        rectangleIndices = rectangleMask.reshape(-1).nonzero()[0]
+
+        projections = np.stack([projection_u[rectangleIndices], projection_v[rectangleIndices]], axis=2).reshape((-1, 2))
+        uv = projection * textureSizes2D
+        
+        uv[:, 1] = textureSizes2D[1] - 1 - uv[:, 1]
+        uv = np.maximum(np.minimum(uv, textureSizes2D - 1), 0)
+
+        u = uv[:, 0]
+        v = uv[:, 1]
+        u_min = np.floor(u).astype(np.int32)
+        u_max = np.ceil(u).astype(np.int32)
+        v_min = np.floor(v).astype(np.int32)
+        v_max = np.ceil(v).astype(np.int32)
+
+        area_11 = (u_max - u) * (v_max - v)
+        area_12 = (u_max - u) * (v - v_min)
+        area_21 = (u - u_min) * (v_max - v)
+        area_22 = (u - u_min) * (v - v_min)
+
+        area_11 = np.expand_dims(area_11, -1)
+        area_12 = np.expand_dims(area_12, -1)
+        area_21 = np.expand_dims(area_21, -1)
+        area_22 = np.expand_dims(area_22, -1)
+
+
+        colors_11 = textureImage[v_min, u_min]
+        colors_12 = textureImage[v_max, u_min]
+        colors_21 = textureImage[v_min, u_max]
+        colors_22 = textureImage[v_max, u_max]
+
+        alphas_11 = alphaMask[v_min, u_min]
+        alphas_12 = alphaMask[v_max, u_min]
+        alphas_21 = alphaMask[v_min, u_max]
+        alphas_22 = alphaMask[v_max, u_max]
+
+        colors = colors_11 * area_11 + colors_12 * area_12 + colors_21 * area_21 + colors_22 * area_22
+        alphas = alphas_11 * area_11 + alphas_12 * area_12 + alphas_21 * area_21 + alphas_22 * area_22
+
+        resultImage[rectangleIndices] = resultImage[rectangleIndices] * (1 - alphas) + colors * alphas
+
+        distanceOffset += np.linalg.norm(point_2 - point_1)
+        continue
+    cv2.imwrite('test/result.png', resultImage)
+    return
