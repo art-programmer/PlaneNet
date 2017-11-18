@@ -40,7 +40,7 @@ ALL_TITLES = ['planenet', 'pixelwise', 'fine-tuning']
 #ALL_METHODS = [('pb_pp_sm0', 'crf'), ('pb_pp_sm0', '')]
 
 #ALL_METHODS = [('planenet_hybrid1_bl0_ll1_ds0_pp_ps', ''), ('pixelwise_hybrid1_ps', '')]
-ALL_METHODS = [('pixelwise_hybrid1_ps', ''), ('finetuning_hybrid1_ps', ''), ('finetuning_np10_hybrid1_ds0_ps', '')]
+ALL_METHODS = [('pixelwise_np10_hybrid1_ds0', ''), ('finetuning_hybrid1_ps', ''), ('finetuning_np10_hybrid1_ds0_ps', '')]
 
 def writeHTML(options):
     from html import HTML

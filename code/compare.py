@@ -443,7 +443,16 @@ def plotResults(gt_dict, predictions, options):
             # print(np.abs(gt_dict['depth'][image_index] - predDepths[:, :, 4])[gt_dict['segmentation'][image_index][:, :, 3] * segmentations[image_index][:, :, 4] > 0.5].mean())
             # print(np.abs(gt_dict['depth'][image_index] - predDepths[:, :, 5])[gt_dict['segmentation'][image_index][:, :, 1] * segmentations[image_index][:, :, 5] > 0.5].mean())            
             # exit(1)
-            pixelStatistics, planeStatistics = evaluatePlanePrediction(predDepths, segmentations[image_index], predNumPlanes, gtDepths, gt_dict['segmentation'][image_index], gt_dict['num_planes'][image_index], gtPlanes=gt_dict['plane'][image_index], predPlanes=pred_dict['plane'][image_index])
+            #pixelStatistics, planeStatistics = evaluatePlanePrediction(predDepths, segmentations[image_index], predNumPlanes, gtDepths, gt_dict['segmentation'][image_index], gt_dict['num_planes'][image_index], gtPlanes=gt_dict['plane'][image_index], predPlanes=pred_dict['plane'][image_index])
+
+            #if method_index != 6:
+            #continue
+            pixelStatistics, planeStatistics = evaluatePlanePrediction(predDepths, segmentations[image_index], predNumPlanes, gtDepths, gt_dict['segmentation'][image_index], gt_dict['num_planes'][image_index])
+            #print(predNumPlanes, gt_dict['num_planes'][image_index])
+            #print(image_index, planeStatistics[4][5])
+            #print(pred_dict['plane'][image_index])
+            #print(segmentations[image_index].sum(axis=(0, 1)))
+            #exit(1)
             #print(method_index)
             #print(planeStatistics[2][5])
 

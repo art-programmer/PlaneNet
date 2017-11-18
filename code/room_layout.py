@@ -598,10 +598,19 @@ def testRoomLayout(options):
         if index < options.startIndex:
             continue
         if options.imageIndex >= 0 and index != options.imageIndex:
-            continue        
+            continue
+
+        
         segmentation = predSegmentations[index]
         plane_depths = predPlaneDepths[index]
         img_ori = cv2.imread(image_list[index])
+
+        if options.dataset != 'NYU_RGBD':
+            width_high_res = img_ori.shape[1]
+            height_high_res = img_ori.shape[0]
+            pass
+                    
+        
         all_segmentations = predAllSegmentations[index]
         planeNormals = predNormals[index]
         if options.imageIndex >= 0:
@@ -735,8 +744,11 @@ def testRoomLayout(options):
 
         layout_segmentation_img = layout_plane_inds[layout_pred.reshape(-1) - 1].reshape(layout_pred.shape)
         layout_segmentation_img[layout_segmentation_img == -1] = options.numOutputPlanes
-        layout_segmentation_img = drawSegmentationImage(layout_segmentation_img, blackIndex=options.numOutputPlanes)        
-        cv2.imwrite(options.test_dir + '/' + str(index) + '_layout_pred.png', img_ori * 0.7 + layout_segmentation_img * 0.3)
+        edgeMap = calcEdgeMap(layout_segmentation_img, edgeWidth=2)
+        layout_segmentation_img = drawSegmentationImage(layout_segmentation_img, blackIndex=options.numOutputPlanes)
+        layout_segmentation_img = (img_ori * 0.7 + layout_segmentation_img * 0.3).astype(np.uint8)
+        layout_segmentation_img[edgeMap > 0.5] = 255
+        cv2.imwrite(options.test_dir + '/' + str(index) + '_layout_pred.png', layout_segmentation_img)
         cv2.imwrite(options.test_dir + '/' + str(index) + '_layout_gt.png', drawSegmentationImage(layout_gt, blackIndex=0))
 
         pred_d = plane_depths.reshape(-1, options.numOutputPlanes)[np.arange(width_high_res * height_high_res), cv2.resize(segmentation, (width_high_res, height_high_res), interpolation=cv2.INTER_NEAREST).reshape(-1)].reshape(height_high_res, width_high_res)
@@ -786,7 +798,179 @@ def testRoomLayout(options):
             pass
         continue
     print('accuracy', total_accuracy / options.numImages)
+    return
 
+
+
+def testRoomNet(options):
+    import csv
+    from skimage import measure
+    
+    cornerConfigurations = [[[2, 1, 7, 8], [6, 5, 3, 4], [4, 3, 1, 2], [1, 3, 5, 7, 1], [8, 7, 5, 6]],
+                            [[], [6, 4, 1, 3], [3, 1, 2], [2, 1, 4, 5], [5, 4, 6]],
+                            [[2, 1, 4, 5], [], [3, 1, 2], [1, 3, 6, 4], [5, 4, 6]],
+                            [[2, 1, 4], [], [3, 1, 2], [4, 1, 3], []],
+                            [[], [4, 1, 2], [2, 1, 3], [3, 1, 4], []],
+                            [[2, 1, 3], [6, 4, 5], [5, 4, 1, 2], [3, 1, 4, 6], []],
+                            [[1, 2], [4, 3], [], [(3, 4), (2, 1)], []],
+                            [[], [], [2, 1], [(1, 2), (4, 3)], [3, 4]],
+                            [[1, 2], [], [], [2, 1], []],
+                            [[], [2, 1], [], [1, 2], []],
+                            [[], [], [2, 1], [1, 2], []]]
+    
+    
+    #planeAreaThresholds = [WIDTH * HEIGHT / 400, WIDTH * HEIGHT / 400, WIDTH * HEIGHT / 400]
+    planeAreaThresholds = [0, 0, 0]
+
+    indices, room_layouts = getGroundTruth(options)    
+    if options.dataset == 'NYU_RGBD':
+        image_list = ['/mnt/vision/NYU_RGBD/images/' + ('%08d' % (image_index + 1)) + '.png' for image_index in indices]
+    else:
+        image_list = [filename.replace('RoomLayout_Hedau', 'RoomLayout_Hedau/Images').replace('_labels.mat', '.jpg') for filename in indices]
+        #image_list = glob.glob('/mnt/vision/RoomLayout_Hedau/Images/*.png') + glob.glob('/mnt/vision/RoomLayout_Hedau/Images/*.jpg')
+        pass
+    options.numImages = min(options.numImages, len(image_list))
+    dotThreshold = np.cos(np.deg2rad(60))
+
+    
+    predSegmentations = np.load('test/segmentation.npy')
+    predAllSegmentations = np.load('test/all_segmentations.npy')    
+    predPlaneDepths = np.load('test/plane_depths.npy')
+    predNormals = np.load('test/normals.npy')
+    width_high_res = 640
+    height_high_res = 480        
+    
+    total_accuracy = 0
+
+    numImages = 0
+    for index in xrange(predSegmentations.shape[0]):
+        if index < options.startIndex:
+            continue
+        if options.imageIndex >= 0 and index != options.imageIndex:
+            continue        
+
+        img_ori = cv2.imread(image_list[index])
+        cv2.imwrite(options.test_dir + '/' + str(index) + '_image.png', img_ori)
+        
+        predictionFilename = 'roomnet_predictions/' + str(index) + '_image.txt'
+        roomType = -1
+        corners = []
+        with open(predictionFilename) as predictionFile:
+            predictionLoader = csv.reader(predictionFile, delimiter=' ')
+            for lineIndex, line in enumerate(predictionLoader):
+                if lineIndex == 0:
+                    roomType = int(line[0])
+                else:
+                    corners.append((round(float(line[1]) / 320 * width_high_res), round(float(line[0]) / 320 * height_high_res)))
+                    pass
+                continue
+            pass
+
+        assert(roomType >= 1)
+        cornerConfiguration = cornerConfigurations[roomType - 1]
+
+        layout_pred = np.full((height_high_res, width_high_res), -1, dtype=np.int32)
+        for layoutIndex, cornerInds in enumerate(cornerConfiguration):
+            if len(cornerInds) == 0:
+                continue
+            indices = np.arange(width_high_res * height_high_res)
+            us = indices % width_high_res
+            vs = np.floor(indices / width_high_res)
+            mask = np.ones(indices.shape, dtype=np.bool)
+            for i in xrange(len(cornerInds) - 1):
+                assert(not isinstance(cornerInds[i], tuple))
+                assert(not isinstance(cornerInds[i + 1], tuple))                
+                corner_1 = corners[cornerInds[i] - 1]
+                corner_2 = corners[cornerInds[i + 1] - 1]
+                if abs(corner_1[0] - corner_2[0]) <= 1 and abs(corner_1[1] - corner_2[1]) <= 1:
+                    continue
+                lineNormal = np.array([-(corner_1[1] - corner_2[1]), corner_1[0] - corner_2[0]])
+                lineNormal = lineNormal / max(np.linalg.norm(lineNormal), 1e-4)
+                lineOffset = lineNormal[0] * corner_1[0] + lineNormal[1] * corner_1[1]
+                offsets = lineNormal[0] * us + lineNormal[1] * vs
+                mask = np.logical_and(mask, offsets >= lineOffset)
+                continue
+            mask = mask.reshape((height_high_res, width_high_res))
+            layout_pred[mask] = layoutIndex
+            #cv2.imwrite('test/mask.png', drawMaskImage(mask))
+            #exit(1)            
+            continue
+
+        
+        #if roomType != 5:
+        #continue
+        #print(index, corners)
+            
+        if options.imageIndex >= 0:
+            print((layout_pred == 0).sum())
+            print(roomType, cornerConfiguration)
+            print(corners)
+            pass
+            #exit(1)            
+        layout_pred = layout_pred + 1
+        layout_gt = room_layouts[index]
+
+        numWalls = int((layout_pred == 3).max()) + int((layout_pred == 4).max()) + int((layout_pred == 5).max())
+        if numWalls == 2:
+            gtMiddleWallMask = layout_gt == 4
+            leftWallScore = np.logical_and(layout_pred == 3, gtMiddleWallMask).sum()
+            middleWallScore = np.logical_and(layout_pred == 4, gtMiddleWallMask).sum()                        
+            rightWallScore = np.logical_and(layout_pred == 5, gtMiddleWallMask).sum()
+
+            if leftWallScore > middleWallScore:
+                layout_pred[layout_pred >= 3] += 1
+                pass
+            if rightWallScore > middleWallScore:                        
+                layout_pred[layout_pred >= 3] -= 1
+                pass
+            pass
+        if numWalls == 1:
+            mask = layout_pred >= 3
+            bestScore = 0
+            bestLayoutIndex = 4
+            for layoutIndex in xrange(3, 6):
+                score = np.logical_and(mask, layout_gt == layoutIndex).sum()
+                if score > bestScore:
+                    bestLayoutIndex = layoutIndex
+                    bestScore = score
+                    pass
+                continue
+            layout_pred[mask] = bestLayoutIndex
+            pass
+
+        emptyMask = layout_pred == 0
+        if emptyMask.sum() > 0:
+            print(index, emptyMask.sum())
+            masks = measure.label(emptyMask, background=0)
+            for maskIndex in xrange(masks.min() + 1, masks.max() + 1):
+                mask = masks == maskIndex
+                bestScore = 0
+                bestLayoutIndex = 4
+                for layoutIndex in xrange(1, 6):
+                    score = np.logical_and(mask, layout_gt == layoutIndex).sum()
+                    if score > bestScore:
+                        bestLayoutIndex = layoutIndex
+                        bestScore = score
+                        pass
+                    continue
+                layout_pred[mask] = bestLayoutIndex
+                continue
+            pass
+
+        layout_pred_img = drawSegmentationImage(layout_pred, blackIndex=0)
+        cv2.imwrite(options.test_dir + '/' + str(index) + '_layout_pred.png', layout_pred_img)
+        cv2.imwrite(options.test_dir + '/' + str(index) + '_layout_gt.png', drawSegmentationImage(layout_gt, blackIndex=0))
+        
+        accuracy = float((layout_pred == layout_gt).sum()) / (width_high_res * height_high_res)
+        numImages += 1
+        print((index, accuracy))
+        total_accuracy += accuracy                    
+        if options.imageIndex >= 0:                    
+            exit(1)
+            pass
+        continue
+    print('accuracy', total_accuracy / numImages)
+    return
 
 if __name__=='__main__':
     """
@@ -851,6 +1035,8 @@ if __name__=='__main__':
 
     if args.suffix == '':
         getResults(args)
+    elif args.suffix == 'roomnet':
+        testRoomNet(args)
     else:
         testRoomLayout(args)
         pass
