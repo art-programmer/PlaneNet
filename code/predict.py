@@ -170,15 +170,11 @@ def evaluatePlanes(options):
             segmentationImageBlended = np.minimum(segmentationImage * 0.3 + gt_dict['image'][image_index] * 0.7, 255).astype(np.uint8)            
             if options.imageIndex >= 0:
                 if options.suffix == 'video':
-                    if not os.path.exists(options.test_dir + '/logo_video/'):
-                        os.system("mkdir -p %s" % (options.test_dir + '/logo_video/'))
-                        pass
-                    copyLogoVideo(options.test_dir + '/logo_video/', image_index + options.startIndex, gt_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, gt_dict['info'][image_index])
+                    copyLogoVideo(options.test_dir, image_index + options.startIndex, gt_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, gt_dict['info'][image_index], wallTexture=False)
+                elif options.suffix == 'wall_video':
+                    copyLogoVideo(options.test_dir, image_index + options.startIndex, gt_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, gt_dict['info'][image_index], wallTexture=True, wallInds=[7, 9])
                 elif options.suffix == 'ruler':
-                    if not os.path.exists(options.test_dir + '/ruler/'):
-                        os.system("mkdir -p %s" % (options.test_dir + '/ruler/'))
-                        pass
-                    addRulerComplete(options.test_dir + '/ruler/', image_index + options.startIndex, gt_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, gt_dict['info'][image_index], startPixel=(280, 190), endPixel=(380, 390), fixedEndPoint=True, numFrames=1000)
+                    addRulerComplete(options.test_dir, image_index + options.startIndex, gt_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, gt_dict['info'][image_index], startPixel=(280, 190), endPixel=(380, 390), fixedEndPoint=True, numFrames=1000)
                 elif options.suffix == 'texture':
                     for planeIndex in xrange(options.numOutputPlanes):
                         cv2.imwrite('test/mask_' + str(planeIndex) + '.png', drawMaskImage(segmentation == planeIndex))
@@ -194,8 +190,9 @@ def evaluatePlanes(options):
                     cv2.imwrite(options.test_dir + '/' + str(image_index + options.startIndex) + '_result.png', resultImage)
                     writePLYFile(options.test_dir, image_index + options.startIndex, gt_dict['image'][image_index], pred_dict['depth'][image_index], segmentation, pred_dict['plane'][image_index], gt_dict['info'][image_index])
                 elif options.suffix == 'dump':
+                    print('dump')
                     newPlanes = []
-                    newSegmentation = np.zeros(segmentation.shape)
+                    newSegmentation = np.full(segmentation.shape, -1)
                     newPlaneIndex = 0
                     planes = pred_dict['plane'][image_index]
                     for planeIndex in xrange(options.numOutputPlanes):
@@ -206,17 +203,17 @@ def evaluatePlanes(options):
                             newPlaneIndex += 1
                             pass
                         continue
-                    
-                    np.save('test/planes.npy', np.stack(newPlanes, axis=0))
+
+                    np.save('rendering/dump/' + str(image_index + options.startIndex) + '_planes.npy', np.stack(newPlanes, axis=0))
                     #print(global_gt['non_plane_mask'].shape)
-                    np.save('test/segmentation.npy', newSegmentation)
-                    cv2.imwrite('test/image.png', gt_dict['image'][image_index])
+                    np.save('test/' + str(image_index + options.startIndex) + '_segmentation.npy', newSegmentation)
+                    cv2.imwrite('test/' + str(image_index + options.startIndex) + '_image.png', gt_dict['image'][image_index])
                     depth = pred_dict['depth'][image_index]
-                    np.save('test/depth.npy', depth)
+                    np.save('test/' + str(image_index + options.startIndex) + '_depth.npy', depth)
                     info = gt_dict['info'][image_index]
-                    normal = calcNormal(depth, info)
-                    np.save('test/normal.npy', normal)
-                    np.save('test/info.npy', info)
+                    #normal = calcNormal(depth, info)
+                    #np.save('test/' + str(image_index + options.startIndex) + '_normal.npy', normal)
+                    np.save('test/' + str(image_index + options.startIndex) + '_info.npy', info)
                     exit(1)
                                     
                 else:

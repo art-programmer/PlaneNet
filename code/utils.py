@@ -4852,7 +4852,7 @@ end_header
 
 
 
-def copyLogoVideo(folder, index, image, depth, planes, segmentation, info):
+def copyLogoVideo(folder, index, image, depth, planes, segmentation, info, wallTexture=True, wallInds=[]):
     import glob
     from sklearn.cluster import KMeans
     from skimage import measure
@@ -4888,6 +4888,13 @@ def copyLogoVideo(folder, index, image, depth, planes, segmentation, info):
     normals = np.stack(normals, axis=0)
     normals[normals[:, 1] < 0] *= -1
 
+    kmeans = KMeans(n_clusters=3).fit(normals)
+    dominantNormals = kmeans.cluster_centers_
+    dominantNormals = dominantNormals / np.maximum(np.linalg.norm(dominantNormals, axis=-1, keepdims=True), 1e-4)
+
+    normals = planesNormal.copy()
+    normals[normals[:, 1] < 0] *= -1    
+    planeClusters = kmeans.predict(normals)
 
     
     #texture_image_names = glob.glob('../texture_images/*.png') + glob.glob('../texture_images/*.jpg')
@@ -4896,10 +4903,16 @@ def copyLogoVideo(folder, index, image, depth, planes, segmentation, info):
     #textureImage = cv2.imread(imageFilename)
 
     #textureImage = cv2.imread('../texture_images/CVPR_transparent.png')
-    textureImage = cv2.imread('../texture_images/CVPR.jpg')
+    if wallTexture:
+        textureImage = cv2.imread('../texture_images/checkerboard.jpg')
+        alphaMask = np.ones((textureImage.shape[0], textureImage.shape[1], 1))
+    else:
+        textureImage = cv2.imread('../texture_images/CVPR.jpg')
+        alphaMask = (textureImage.mean(2) < 224).astype(np.float32)
+        alphaMask = np.expand_dims(alphaMask, -1)
+        pass
 
-    alphaMask = (textureImage.mean(2) < 224).astype(np.float32)
-    alphaMask = np.expand_dims(alphaMask, -1)
+
     #backgroundMask = cv2.erode(backgroundMask.astype(np.uint8), np.ones((3, 3)))
     #cv2.imwrite('test/mask.png', drawMaskImage(background))
     #exit(1)
@@ -4918,8 +4931,10 @@ def copyLogoVideo(folder, index, image, depth, planes, segmentation, info):
     planeMasks = []
     planeProjections = []
     planeRanges = []
-    plane
     for planeIndex in xrange(planes.shape[0]):
+        if wallTexture and planeIndex not in wallInds:
+            continue            
+        
         globalMask = segmentation == planeIndex
         if globalMask.sum() < planeAreaThreshold:
             continue
@@ -4948,11 +4963,15 @@ def copyLogoVideo(folder, index, image, depth, planes, segmentation, info):
             range_u = [projection_u.min(), projection_u.max()]       
             projection_v = np.tensordot(points, direction_v, axes=([1], [0]))                
             range_v = [projection_v.min(), projection_v.max()]
-            if range_v[1] - range_v[0] > range_u[1] - range_u[0]:
+            if wallTexture == False and range_v[1] - range_v[0] > range_u[1] - range_u[0]:
                 range_u, range_v = range_v, range_u
                 direction_u, direction_v = direction_v, direction_u
                 pass
-
+            if wallTexture == True and abs(direction_u[2]) > abs(direction_v[2]):
+                range_u, range_v = range_v, range_u
+                direction_u, direction_v = direction_v, direction_u
+                pass
+            
             if (np.argmax(np.abs(direction_v)) == 2 and direction_v[2] < 0) or (np.argmax(np.abs(direction_v)) != 2 and np.dot(np.array([0, 1, 0]), direction_v) < 0):
                 direction_v *= -1
                 projection_v *= -1
@@ -4971,7 +4990,7 @@ def copyLogoVideo(folder, index, image, depth, planes, segmentation, info):
             ranges = np.stack([range_u, range_v], axis=-1)
             ranges = np.stack([ranges.mean(0) - (ranges[1] - ranges[0]) * 0.35, ranges.mean(0) + (ranges[1] - ranges[0]) * 0.35], axis=0)
             planeRanges.append(ranges)
-            planeMasks.append(mask)
+            planeMasks.append(mask.reshape(-1))
             continue
         continue
     
@@ -4981,16 +5000,23 @@ def copyLogoVideo(folder, index, image, depth, planes, segmentation, info):
     #ratios = np.full(2, 0.5)
     planeRatios = np.random.random((numMasks, 2))
     randomDirection = np.random.random((numMasks, 2))
+    if wallTexture:
+        randomDirection = np.stack([np.ones(numMasks), np.zeros(numMasks)], axis=1)
+        randomDirection[0] *= -1
+        pass
     randomDirection = randomDirection / np.linalg.norm(randomDirection)
     stride = 0.01
     
     #textureImage = textureImage.reshape((-1, 3))
     
     for frameIndex in xrange(1000):
+        
         planeRatios += randomDirection * stride
-        invalidMask = np.logical_or(planeRatios >= 1, planeRatios <= 0)
-        planeRatios = np.maximum(np.minimum(planeRatios, 1), 0)
-        randomDirection[invalidMask] *= -1
+        if wallTexture == False:
+            invalidMask = np.logical_or(planeRatios >= 1, planeRatios <= 0)
+            planeRatios = np.maximum(np.minimum(planeRatios, 1), 0)
+            randomDirection[invalidMask] *= -1
+            pass
         
         resultImage = image.copy().reshape((-1, 3))
         for planeIndex in xrange(numMasks):
@@ -5002,16 +5028,24 @@ def copyLogoVideo(folder, index, image, depth, planes, segmentation, info):
             offsets = ranges[0] + (ranges[1] - ranges[0]) * ratios - textureSizes / 2
             
             projectionsMoved = (projections - offsets) / textureSizes
-            
-            rectangleMask = np.logical_and(projectionsMoved >= 0, projectionsMoved <= 1)
-            rectangleMask = np.logical_and(rectangleMask[:, 0], rectangleMask[:, 1])
-            rectangleMask = np.logical_and(rectangleMask, mask)
+
+            if wallTexture:
+                rectangleMask = mask
+            else:
+                rectangleMask = np.logical_and(projectionsMoved >= 0, projectionsMoved <= 1)
+                rectangleMask = np.logical_and(rectangleMask[:, 0], rectangleMask[:, 1])
+                rectangleMask = np.logical_and(rectangleMask, mask)
+                pass
             
             rectangleIndices = rectangleMask.nonzero()[0]
             
             uv = projectionsMoved[rectangleIndices] * textureSizes2D
             uv[:, 1] = textureSizes2D[1] - 1 - uv[:, 1]
-            uv = np.maximum(np.minimum(uv, textureSizes2D - 1), 0)
+            if wallTexture:
+                uv = uv % (textureSizes2D - 1)
+            else:
+                uv = np.maximum(np.minimum(uv, textureSizes2D - 1), 0)
+                pass
 
             u = uv[:, 0]
             v = uv[:, 1]
