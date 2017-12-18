@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-np.set_printoptions(precision=2, linewidth=200)
+#np.set_printoptions(precision=2, linewidth=200)
 import cv2
 import os
 import time
@@ -150,17 +150,25 @@ def evaluatePlanes(options):
 
             segmentationImageBlended = np.minimum(segmentationImage * 0.3 + pred_dict['image'][image_index] * 0.7, 255).astype(np.uint8)            
             if options.imageIndex >= 0:
+                for planeIndex in xrange(options.numOutputPlanes):
+                    cv2.imwrite('test/mask_' + str(planeIndex) + '.png', drawMaskImage(segmentation == planeIndex))
+                    continue
                 
                 if options.suffix == 'texture':
-                    for planeIndex in xrange(options.numOutputPlanes):
-                        cv2.imwrite('test/mask_' + str(planeIndex) + '.png', drawMaskImage(segmentation == planeIndex))
-                        continue
-
                     
                     resultImage = copyLogo(options.test_dir, image_index + options.startIndex, pred_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, pred_dict['info'][image_index])
                     #resultImage = copyWallTexture(options.test_dir, image_index + options.startIndex, gt_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, gt_dict['info'][image_index], [7, 9])
                     cv2.imwrite(options.test_dir + '/' + str(image_index + options.startIndex) + '_result.png', resultImage)
                     writePLYFile(options.test_dir, image_index + options.startIndex, pred_dict['image'][image_index], pred_dict['depth'][image_index], segmentation, pred_dict['plane'][image_index], pred_dict['info'][image_index])
+                elif options.suffix == 'ruler':
+                    addRulerComplete(options.test_dir, image_index + options.startIndex, pred_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, pred_dict['info'][image_index], startPixel=(950, 444), endPixel=(1120, 2220), fixedEndPoint=True, numFrames=1000)
+                    #addRulerComplete(options.test_dir, image_index + options.startIndex, pred_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, pred_dict['info'][image_index], startPixel=(950, 444), endPixel=(1120, 2220), fixedEndPoint=True, numFrames=1)
+                    #addRulerComplete(options.test_dir, image_index + options.startIndex, pred_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, pred_dict['info'][image_index], startPixel=(1150, 616), endPixel=(1340, 2100), fixedEndPoint=True, numFrames=1)
+                    #addRulerComplete(options.test_dir, image_index + options.startIndex, pred_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, pred_dict['info'][image_index], startPixel=(1357, 451), endPixel=(1437, 2175), fixedEndPoint=True, numFrames=1)
+                    #addRulerComplete(options.test_dir, image_index + options.startIndex, pred_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, pred_dict['info'][image_index], startPixel=(1149, 609), endPixel=(1330, 2100), fixedEndPoint=True, numFrames=1)
+                    #addRulerComplete(options.test_dir, image_index + options.startIndex, pred_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, pred_dict['info'][image_index], startPixel=(1285, 621), endPixel=(1425, 1940), fixedEndPoint=True, numFrames=1)
+                elif options.suffix == 'TV':
+                    copyLogoVideo(options.test_dir, image_index + options.startIndex, pred_dict['image'][image_index], pred_dict['depth'][image_index], pred_dict['plane'][image_index], segmentation, pred_dict['info'][image_index], textureType='TV', wallInds=[2, 9])
                 elif options.suffix == 'dump':
 
                     print(pred_dict['plane'][image_index])
@@ -286,6 +294,8 @@ def getResults(options):
     #np.save(options.test_dir + '/curves.npy', curves)
     results = predictions
 
+    #print(results)
+    
     if options.useCache != -1:
         np.save(options.result_filename, results)
         pass
@@ -318,7 +328,9 @@ def getPrediction(options):
     height_high_res = 480
                 
 
-    image_list = glob.glob('../my_images/*.jpg') + glob.glob('../my_images/*.png') + glob.glob('../my_images/*.JPG')
+    #image_list = glob.glob('../my_images/*.jpg') + glob.glob('../my_images/*.png') + glob.glob('../my_images/*.JPG')
+    image_list = glob.glob('../my_images/TV/*.jpg') + glob.glob('../my_images/TV/*.png') + glob.glob('../my_images/TV/*.JPG')
+    #image_list = glob.glob('../my_images/TV/*.jpg') + glob.glob('../my_images/TV/*.png') + glob.glob('../my_images/TV/*.JPG')
     
     pred_dict = {}
     with tf.Session(config=config) as sess:
@@ -348,7 +360,9 @@ def getPrediction(options):
                     print(('image', index))
                     pass
                 t0=time.time()
-
+                
+                print(('image', index))
+                
                 img_ori = cv2.imread(image_list[index])
                 images.append(img_ori)
                 img = cv2.resize(img_ori, (WIDTH, HEIGHT))

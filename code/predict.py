@@ -134,11 +134,27 @@ def evaluatePlanes(options):
             
     #predictions[2] = predictions[3]
 
-
+    if options.suffix == 'grids':
+        image_list = glob.glob(options.test_dir + '/*_image.png')
+        print(len(image_list))
+        gridImage = writeGridImage(image_list[80:336], 3200, 1800, (16, 16))
+        cv2.imwrite(options.test_dir + '/grid_images/grid_1616.png', gridImage)
+        exit(1)
     
     for image_index in xrange(options.visualizeImages):
-        if args.imageIndex >= 0 and image_index + options.startIndex != args.imageIndex:
+        if options.imageIndex >= 0 and image_index + options.startIndex != options.imageIndex:
             continue
+        if options.suffix == 'grids':
+            cv2.imwrite(options.test_dir + '/' + str(image_index + options.startIndex) + '_image.png', gt_dict['image'][image_index])
+            segmentation = predictions[0]['segmentation'][image_index]
+            #segmentation = np.argmax(np.concatenate([segmentation, pred_dict['np_mask'][image_index]], axis=2), -1)
+            segmentationImage = drawSegmentationImage(segmentation, blackIndex=options.numOutputPlanes)
+            #cv2.imwrite(options.test_dir + '/' + str(image_index + options.startIndex) + '_segmentation_pred_' + str(0) + '.png', segmentationImage)
+            segmentationImageBlended = (segmentationImage * 0.7 + gt_dict['image'][image_index] * 0.3).astype(np.uint8)
+            cv2.imwrite(options.test_dir + '/' + str(image_index + options.startIndex) + '_segmentation_pred_blended_' + str(0) + '.png', segmentationImageBlended)
+            continue
+
+            
         cv2.imwrite(options.test_dir + '/' + str(image_index + options.startIndex) + '_image.png', gt_dict['image'][image_index])
         cv2.imwrite(options.test_dir + '/' + str(image_index + options.startIndex) + '_depth_gt.png', drawDepthImage(gt_dict['depth'][image_index]))
         #cv2.imwrite(options.test_dir + '/' + str(image_index + options.startIndex) + '_normal_gt.png', drawNormalImage(gt_dict['normal'][image_index]))        
@@ -229,8 +245,7 @@ def evaluatePlanes(options):
         continue
 
     writeHTML(options)
-    exit(1)
-    
+    exit(1)        
 
     #post processing
     for method_index, method in enumerate(options.methods):
@@ -697,6 +712,7 @@ def evaluateDepthPrediction(options):
         cv2.imwrite(options.test_dir + '/' + str(image_index + options.startIndex) + '_segmentation_gt.png', drawSegmentationImage(np.concatenate([gt_dict['segmentation'][image_index], 1 - np.expand_dims(gt_dict['plane_mask'][image_index], -1)], axis=2), blackIndex=options.numOutputPlanes))
         cv2.imwrite(options.test_dir + '/' + str(image_index + options.startIndex) + '_semantics_gt.png', drawSegmentationImage(gt_dict['semantics'][image_index], blackIndex=0))
 
+
         
         # plane_depths = calcPlaneDepths(gt_dict['plane'][image_index], WIDTH, HEIGHT, gt_dict['info'][image_index])
         # all_depths = np.concatenate([plane_depths, np.expand_dims(gt_dict['depth'][image_index], -1)], axis=2)
@@ -713,7 +729,6 @@ def evaluateDepthPrediction(options):
             cv2.imwrite(options.test_dir + '/' + str(image_index + options.startIndex) + '_segmentation_pred_' + str(method_index) + '.png', drawSegmentationImage(segmentation, blackIndex=options.numOutputPlanes))
             continue
         continue
-    
 
     #post processing
     for method_index, method in enumerate(options.methods):
@@ -984,7 +999,7 @@ def getResults(options):
         options.checkpoint_dir = checkpoint_prefix + method[0]
         print(options.checkpoint_dir)
         
-        options.suffix = method[1]
+        #options.suffix = method[1]
 
         method_names = [previous_method[0] for previous_method in methods[:method_index]]
 
@@ -1361,7 +1376,8 @@ if __name__=='__main__':
     
     args.result_filename = args.test_dir + '/results_' + str(args.startIndex) + '.npy'
 
-    if args.imageIndex >= 0 and args.suffix != '':
+    #if args.imageIndex >= 0 and args.suffix != '':
+    if args.suffix != '':
         args.test_dir += '/' + args.suffix + '/'
         pass
     

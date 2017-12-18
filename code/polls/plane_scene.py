@@ -10,7 +10,7 @@ from direct.gui.OnscreenImage import OnscreenImage
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils import getCameraFromInfo
+from utils import getCameraFromInfo, drawSegmentationImage
 
 def calcDistance(point_1, point_2):
   return pow(pow(point_1[0] - point_2[0], 2) + pow(point_1[1] - point_2[1], 2), 0.5)
@@ -32,6 +32,11 @@ class PlaneScene():
     self.depth = np.load('dump/' + str(index) + '_depth.npy')
     #cv2.imwrite('dump/alpha_0.5.png', np.zeros(self.depth[:, :, 0].shape).astype(np.uint8))
     self.segmentation = np.load('dump/' + str(index) + '_segmentation.npy')
+
+    #print(self.segmentation.shape)
+    self.segmentation[self.segmentation == -1] = 10
+    cv2.imwrite('dump/2_segmentation.png', drawSegmentationImage(self.segmentation, blackIndex=10))
+    exit(1)
 
     width = 640
     height = 480
@@ -444,3 +449,45 @@ class PlaneScene():
     
   def getHorizontalPlanes(self):
     return self.gravityDirection, self.horizontalPlanes
+
+  def getHolePos(self):
+    floorPlaneIndex = 2
+    closePoint = np.array([0., 1.22, -0.2])
+    plane = self.planes[floorPlaneIndex]
+    planeD = np.linalg.norm(plane)
+    planeNormal = plane / planeD
+    distance = planeD - np.dot(planeNormal, closePoint)
+    distance *= 0.99
+    holePos = closePoint + planeNormal * distance
+
+    H = P = R = 0
+    H = -90 + np.rad2deg(np.arctan2(planeNormal[1], planeNormal[0]))
+    #P = 90 - np.rad2deg(np.arccos(np.abs(planeNormal[2])))
+    P = -90 + np.rad2deg(np.arccos(np.abs(planeNormal[2])))
+    #print(H, P, R)
+    return holePos, np.array([H, P, R])
+
+
+  def getPortalPos(self):
+    wallPlaneIndex = 1
+    closePoint_1 = np.array([0.5, 1.35, -0.5])
+    closePoint_2 = np.array([-0.4, 1, 0.19])
+    plane = self.planes[wallPlaneIndex]
+    planeD = np.linalg.norm(plane)
+    planeNormal = plane / planeD
+    
+    distance = planeD - np.dot(planeNormal, closePoint_1)
+    distance *= 0.95
+    portalPos_1 = closePoint_1 + planeNormal * distance
+
+    distance = planeD - np.dot(planeNormal, closePoint_2)
+    distance *= 0.95
+    portalPos_2 = closePoint_2 + planeNormal * distance    
+
+    H = P = R = 0
+    H = -90 + np.rad2deg(np.arctan2(planeNormal[1], planeNormal[0]))
+    #P = 90 - np.rad2deg(np.arccos(np.abs(planeNormal[2])))
+    P = -90 + np.rad2deg(np.arccos(-np.abs(planeNormal[2])))
+    #print(H, P, R)
+    return portalPos_1, np.array([H, P, R]), portalPos_2, np.array([H, P, R]), planeNormal
+  

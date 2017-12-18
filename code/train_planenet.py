@@ -1526,30 +1526,10 @@ def parse_args():
     args.predict_dir = 'predict/' + args.keyname + '_' + args.dataset
     args.dump_dir = 'dump/' + args.keyname
     
-    #layers where deep supervision happens
-    args.deepSupervisionLayers = []
-    if args.deepSupervision >= 1:
-        args.deepSupervisionLayers.append('res4b22_relu')
-        pass
-    if args.deepSupervision >= 2:
-        args.deepSupervisionLayers.append('res4b12_relu')
-        pass
     return args
 
 
 if __name__=='__main__':
-
-    # plane = np.load('temp/plane.npy')
-    # depth = np.load('temp/depth.npy')    
-    # segmentation = np.load('temp/segmentation.npy')
-    # info = np.load('temp/info.npy')
-    # num_planes = np.load('temp/num_planes.npy')
-    # segmentation = np.argmax(segmentation, axis=-1)
-    # print(segmentation.shape)
-    # planes, segmentation, numPlanes = removeSmallSegments(plane, np.zeros((HEIGHT, WIDTH, 3)), depth.squeeze(), np.zeros((HEIGHT, WIDTH, 3)), segmentation, np.zeros((HEIGHT, WIDTH)), info, num_planes)
-    # print(planes)
-    # exit(1)
-    
     args = parse_args()
 
     print "keyname=%s task=%s started"%(args.keyname, args.task)
