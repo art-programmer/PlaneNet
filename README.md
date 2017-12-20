@@ -5,7 +5,19 @@ Python 2.7, TensorFlow (>= 1.0), numpy, opencv 3.
 
 ## Getting started
 ### Compilation
-Please run the *make* command under the root folder to compile the library for computing the set matching loss. (See [here](https://github.com/fanhqme/PointSetGeneration) for details.)
+Please run the following commands to compile the library for the [crfasrnn module](https://github.com/sadeepj/crfasrnn_keras).
+```bash
+cd cpp
+sh compile.sh
+cd ..
+```
+
+To train the network, you also need to run the following commands to compile the library for computing the set matching loss. (See [here](https://github.com/fanhqme/PointSetGeneration) for details.)
+```bash
+cd nndistance
+make
+cd ..
+```
 
 ### Data preparation
 We convert [ScanNet](http://www.scan-net.org/) data to *.tfrecords* files for training and testing. The *.tfrecords* file can be downloaded from [here](https://mega.nz/#!IvAixABb!PD3wJtXX_6W3qtfKZQtl_P07mYPLwWst3cwbvuTXlSY).
