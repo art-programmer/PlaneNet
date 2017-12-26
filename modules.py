@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+import os
 
 # def segmentationRefinementModule(segmentation, planeDepths, numOutputPlanes = 20, gpu_id = 0, coef = [1, 1, 1], beta = 10):
 #     with tf.device('/gpu:%d'%gpu_id):
@@ -1142,15 +1143,20 @@ def calcMessages(planeSegmentations, planeDepths, planesY, numOutputPlanes = 21,
 
 
 def crfrnnModule(inputs, image_dims, num_classes, theta_alpha, theta_beta, theta_gamma, num_iterations):
-    custom_module = tf.load_op_library('./cpp/high_dim_filter.so')
-    import high_dim_filter_grad  # Register gradients for the custom op
+    custom_module = tf.load_op_library('./crfasrnn/high_dim_filter.so')
+    from crfasrnn import high_dim_filter_grad  # Register gradients for the custom op
 
-    weights = np.load('weights.npy')
-    weights = [weights[0], weights[1], weights[2]]
+    if os.path.exists('weights.npy'):
+        weights = np.load('weights.npy')
+        weights = [weights[0], weights[1], weights[2]]
+    else:
+        weights = np.random.normal(size=(3, 21, 21)).astype(np.float32)
+        pass
+    
     spatial_ker_weights = tf.Variable(weights[0][:num_classes, :num_classes], name='spatial_ker_weights', trainable=True)
     bilateral_ker_weights = tf.Variable(weights[1][:num_classes, :num_classes], name='bilateral_ker_weights', trainable=True)
-    compatibility_matrix = tf.Variable(weights[2][:num_classes, :num_classes], name='compatibility_matrix', trainable=True)
-    
+    compatibility_matrix = tf.Variable(weights[2][:num_classes, :num_classes], name='compatibility_matrix', trainable=True)    
+        
 
     batchSize = int(inputs[0].shape[0])
     c, h, w = num_classes, image_dims[0], image_dims[1]

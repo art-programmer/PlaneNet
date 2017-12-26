@@ -5,7 +5,6 @@ import cv2
 import os
 import time
 import sys
-import tf_nndistance
 import argparse
 import glob
 import PIL
@@ -13,16 +12,12 @@ import scipy.ndimage as ndimage
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import *
-from plane_utils import *
 from modules import *
 
 
 from planenet import PlaneNet
-from RecordReader import *
-from RecordReaderRGBD import *
-from RecordReader3D import *
 from RecordReaderAll import *
-from crfasrnn_layer import CrfRnnLayer
+from crfasrnn.crfasrnn_layer import CrfRnnLayer
 
 #from SegmentationRefinement import *
 
@@ -114,6 +109,8 @@ def build_graph(img_inp_train, img_inp_val, training_flag, options):
 
 
 def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_gt_dict_val, training_flag, options):
+    from nndistance import tf_nndistance
+
     with tf.device('/gpu:%d'%options.gpu_id):
         debug_dict = {}
 
@@ -439,23 +436,23 @@ def main(options):
     train_inputs = []
     val_inputs = []
     if '0' in options.hybrid:
-        train_inputs.append(options.rootFolder + '/planes_SUNCG_train.tfrecords')
-        val_inputs.append(options.rootFolder + '/planes_SUNCG_val.tfrecords')        
+        train_inputs.append(options.dataFolder + '/planes_SUNCG_train.tfrecords')
+        val_inputs.append(options.dataFolder + '/planes_SUNCG_val.tfrecords')        
         pass
     if '1' in options.hybrid:
         for _ in xrange(10):
-            train_inputs.append(options.rootFolder + '/planes_nyu_rgbd_train.tfrecords')
-            train_inputs.append(options.rootFolder + '/planes_nyu_rgbd_labeled_train.tfrecords')
-            val_inputs.append(options.rootFolder + '/planes_nyu_rgbd_val.tfrecords')
+            train_inputs.append(options.dataFolder + '/planes_nyu_rgbd_train.tfrecords')
+            train_inputs.append(options.dataFolder + '/planes_nyu_rgbd_labeled_train.tfrecords')
+            val_inputs.append(options.dataFolder + '/planes_nyu_rgbd_val.tfrecords')
             continue
         pass
     if '2' in options.hybrid:
-        train_inputs.append(options.rootFolder + '/planes_matterport_train.tfrecords')
-        val_inputs.append(options.rootFolder + '/planes_matterport_val.tfrecords')
+        train_inputs.append(options.dataFolder + '/planes_matterport_train.tfrecords')
+        val_inputs.append(options.dataFolder + '/planes_matterport_val.tfrecords')
         pass
     if '3' in options.hybrid:
-        train_inputs.append(options.rootFolder + '/planes_scannet_train.tfrecords')
-        val_inputs.append(options.rootFolder + '/planes_scannet_val.tfrecords')
+        train_inputs.append(options.dataFolder + '/planes_scannet_train.tfrecords')
+        val_inputs.append(options.dataFolder + '/planes_scannet_val.tfrecords')
         pass
     
     reader_train = RecordReaderAll()
@@ -529,57 +526,6 @@ def main(options):
             loader.restore(sess,"%s/checkpoint.ckpt"%(options.checkpoint_dir))
             bno=sess.run(batchno)
             print(bno)
-        elif options.restore == 2:
-            var_to_restore = [v for v in var_to_restore if 'plane' not in v.name and 'segmentation_conv2' not in v.name and 'crfrnn' not in v.name]
-            loader = tf.train.Saver(var_to_restore)
-            loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + options.hybrid + '_bl0_dl0_ll1_pb_pp_sm0/checkpoint.ckpt')
-            #restore the same model from checkpoint but reset batchno to 1
-            #loader = tf.train.Saver(var_to_restore)
-            #loader.restore(sess,"%s/checkpoint.ckpt"%(options.checkpoint_dir))
-            #sess.run(batchno.assign(1))
-        elif options.restore == 3:            
-            #restore the same model from standard training
-            # if options.predictBoundary == 1:
-            #     var_to_restore = [v for v in var_to_restore if 'boundary' not in v.name]
-            #     pass            
-            # if options.predictConfidence == 1:
-            #     var_to_restore = [v for v in var_to_restore if 'confidence' not in v.name]
-            #     pass
-            # if options.predictSemantics == 1:
-            #     var_to_restore = [v for v in var_to_restore if 'semantics' not in v.name]
-            #     pass
-            # if np.abs(options.crfrnn) > 0:
-            #     var_to_restore = [v for v in var_to_restore if 'crfrnn' not in v.name]
-            #     pass
-
-            if options.deepSupervision == 1:
-                var_to_restore = [v for v in var_to_restore if 'deep_supervision' not in v.name]
-                pass
-            
-            loader = tf.train.Saver(var_to_restore)
-            if len(options.hybrid) == 1:
-                hybrid = options.hybrid
-            else:
-                hybrid = str(3)
-                pass
-            loader.restore(sess, options.rootFolder + '/checkpoint/sample_np10_hybrid3_bl0_dl0_hl2_ds0_crfrnn5_sm0/checkpoint.ckpt')
-            #loader.restore(sess,"checkpoint/planenet/checkpoint.ckpt")
-            sess.run(batchno.assign(1))
-        elif options.restore == 4:
-            #fine-tune another model
-            #var_to_restore = [v for v in var_to_restore if 'res4b22_relu_non_plane' not in v.name]
-            loader = tf.train.Saver(var_to_restore)
-            loader.restore(sess, options.fineTuningCheckpoint)
-            sess.run(batchno.assign(1))
-            pass
-        elif options.restore == 5:
-            #fine-tune another model
-            #var_to_restore = [v for v in var_to_restore if 'res4b22_relu_non_plane' not in v.name]
-            loader = tf.train.Saver(var_to_restore)
-            print(options.checkpoint_dir.replace('crfrnn', 'crfrnn-'))
-            #exit(1)
-            loader.restore(sess,"%s/checkpoint.ckpt"%(options.checkpoint_dir.replace('crfrnn', 'crfrnn-')))            
-            sess.run(batchno.assign(1))
             pass
         # Start input enqueue threads.
         coord = tf.train.Coordinator()
@@ -671,15 +617,15 @@ def test(options):
 
     reader = RecordReaderAll()
     if options.dataset == 'SUNCG':
-        filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_SUNCG_val.tfrecords'], num_epochs=10000)
+        filename_queue = tf.train.string_input_producer([options.dataFolder + '/planes_SUNCG_val.tfrecords'], num_epochs=10000)
     elif options.dataset == 'NYU_RGBD':
-        filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer([options.dataFolder + '/planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
         options.deepSupervision = 0
         options.predictLocal = 0
     elif options.dataset == 'matterport':
-        filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_matterport_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer([options.dataFolder + '/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
-        filename_queue = tf.train.string_input_producer([options.rootFolder + '/planes_scannet_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer([options.dataFolder + '/planes_scannet_val.tfrecords'], num_epochs=1)
         pass
     img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
 
@@ -1253,8 +1199,8 @@ def parse_args():
     parser.add_argument('--hybrid', dest='hybrid',
                         help='hybrid training',
                         default='3', type=str)
-    parser.add_argument('--rootFolder', dest='rootFolder',
-                        help='root folder',
+    parser.add_argument('--dataFolder', dest='dataFolder',
+                        help='data folder',
                         default='/mnt/vision/PlaneNet/', type=str)
     parser.add_argument('--dataFolder', dest='dataFolder',
                         help='data folder',
@@ -1264,7 +1210,7 @@ def parse_args():
                         default=900, type=int)
     parser.add_argument('--modelPathDeepLab', dest='modelPathDeepLab',
                         help='DeepLab model path',
-                        default='../PretrainedModels/deeplab_resnet.ckpt"
+                        default='../PretrainedModels/deeplab_resnet.ckpt', type=str)
 
     args = parser.parse_args()
     args.keyname = os.path.basename(__file__).rstrip('.py')
@@ -1328,7 +1274,7 @@ def parse_args():
     #args.predictSemantics = 0
     #args.predictBoundary = 0
     
-    args.checkpoint_dir = args.rootFolder + '/checkpoint/' + args.keyname
+    args.checkpoint_dir = 'checkpoint/' + args.keyname
     args.log_dir = 'log/' + args.keyname
     args.test_dir = 'test/' + args.keyname + '_' + args.dataset
     args.predict_dir = 'predict/' + args.keyname + '_' + args.dataset

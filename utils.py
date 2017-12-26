@@ -4234,54 +4234,54 @@ def findCornerPoints2D(mask):
     exit(1)
     
 
-def copyTexture(image, planes, segmentation, info, denotedPlaneIndex=-1, textureIndex=-1):
-    import glob
+# def copyTexture(image, planes, segmentation, info, denotedPlaneIndex=-1, textureIndex=-1):
+#     import glob
     
-    width = segmentation.shape[1]
-    height = segmentation.shape[0]
+#     width = segmentation.shape[1]
+#     height = segmentation.shape[0]
     
-    plane_depths = calcPlaneDepths(planes, width, height, info)
+#     plane_depths = calcPlaneDepths(planes, width, height, info)
     
-    texture_image_names = glob.glob('../texture_images/*.png') + glob.glob('../texture_images/*.jpg')
-    if textureIndex >= 0:
-        texture_image_names = [texture_image_names[textureIndex]]
-        pass
+#     texture_image_names = glob.glob('../texture_images/*.png') + glob.glob('../texture_images/*.jpg')
+#     if textureIndex >= 0:
+#         texture_image_names = [texture_image_names[textureIndex]]
+#         pass
     
-    resultImages = []
-    for texture_index, texture_image_name in enumerate(texture_image_names):
-        textureImage = cv2.imread(texture_image_name)
-        #textureImage = cv2.imread('../textures/texture_2.jpg')
-        textureImage = cv2.resize(textureImage, (width, height), interpolation=cv2.INTER_LINEAR)
+#     resultImages = []
+#     for texture_index, texture_image_name in enumerate(texture_image_names):
+#         textureImage = cv2.imread(texture_image_name)
+#         #textureImage = cv2.imread('../textures/texture_2.jpg')
+#         textureImage = cv2.resize(textureImage, (width, height), interpolation=cv2.INTER_LINEAR)
 
-        if denotedPlaneIndex < 0:
-            denotedPlaneIndex = findFloorPlane(planes, segmentation)
-            pass
+#         if denotedPlaneIndex < 0:
+#             denotedPlaneIndex = findFloorPlane(planes, segmentation)
+#             pass
         
-        mask = segmentation == denotedPlaneIndex
-        #mask = cv2.resize(mask.astype(np.float32), (width, height), interpolation=cv2.INTER_LINEAR) > 0.5
-        #plane_depths = calcPlaneDepths(pred_p, width, height)
-        depth = plane_depths[:, :, denotedPlaneIndex]
-        #depth = cv2.resize(depth, (width, height), interpolation=cv2.INTER_LINEAR) > 0.5
-        #uv = findCornerPoints(planes[denotedPlaneIndex], depth, mask, info)
-        uv = findCornerPoints2D(mask.astype(np.uint8) * 255)
-        #print(uv)
-        source_uv = np.array([[0, 0], [0, height], [width, 0], [width, height]])
+#         mask = segmentation == denotedPlaneIndex
+#         #mask = cv2.resize(mask.astype(np.float32), (width, height), interpolation=cv2.INTER_LINEAR) > 0.5
+#         #plane_depths = calcPlaneDepths(pred_p, width, height)
+#         depth = plane_depths[:, :, denotedPlaneIndex]
+#         #depth = cv2.resize(depth, (width, height), interpolation=cv2.INTER_LINEAR) > 0.5
+#         #uv = findCornerPoints(planes[denotedPlaneIndex], depth, mask, info)
+#         uv = findCornerPoints2D(mask.astype(np.uint8) * 255)
+#         #print(uv)
+#         source_uv = np.array([[0, 0], [0, height], [width, 0], [width, height]])
 
-        h, status = cv2.findHomography(source_uv, uv)
-        #textureImageWarped = cv2.warpPerspective(textureImage, h, (WIDTH, HEIGHT))
-        textureImageWarped = cv2.warpPerspective(textureImage, h, (width, height))
-        resultImage = image.copy()
+#         h, status = cv2.findHomography(source_uv, uv)
+#         #textureImageWarped = cv2.warpPerspective(textureImage, h, (WIDTH, HEIGHT))
+#         textureImageWarped = cv2.warpPerspective(textureImage, h, (width, height))
+#         resultImage = image.copy()
 
-        resultImage[mask] = textureImageWarped[mask]
-        resultImages.append(resultImage)
-        #cv2.imwrite(options.test_dir + '/' + str(index) + '_texture.png', textureImageWarped)
-        #cv2.imwrite(options.test_dir + '/' + str(index) + '_result_' + str(texture_index) + '.png', resultImage)
-        continue
-    return resultImages
+#         resultImage[mask] = textureImageWarped[mask]
+#         resultImages.append(resultImage)
+#         #cv2.imwrite(options.test_dir + '/' + str(index) + '_texture.png', textureImageWarped)
+#         #cv2.imwrite(options.test_dir + '/' + str(index) + '_result_' + str(texture_index) + '.png', resultImage)
+#         continue
+#     return resultImages
 
 
-def copyLogo(folder, index, image, depth, planes, segmentation, info):
-    import glob
+# the logo copying application
+def copyLogo(textureImageFilename, folder, index, image, depth, planes, segmentation, info):
     from sklearn.cluster import KMeans
     from skimage import measure
     #from sklearn.decomposition import PCA
@@ -4290,7 +4290,8 @@ def copyLogo(folder, index, image, depth, planes, segmentation, info):
     height = segmentation.shape[0]
 
     camera = getCameraFromInfo(info)
-    
+
+    # calculate corresponding 3D position for each pixel
     urange = (np.arange(width, dtype=np.float32) / width * camera['width'] - camera['cx']) / camera['fx']
     urange = urange.reshape(1, -1).repeat(height, 0)
     vrange = (np.arange(height, dtype=np.float32) / height * camera['height'] - camera['cy']) / camera['fy']
@@ -4301,6 +4302,7 @@ def copyLogo(folder, index, image, depth, planes, segmentation, info):
     XYZ = np.stack([X, Y, Z], axis=2)    
     #plane_depths = calcPlaneDepths(planes, width, height, info)
 
+    # calculate plane offsets and normals
     planesD = np.linalg.norm(planes, axis=-1, keepdims=True)
     planesNormal = planes / np.maximum(planesD, 1e-4)
 
@@ -4316,7 +4318,7 @@ def copyLogo(folder, index, image, depth, planes, segmentation, info):
     normals = np.stack(normals, axis=0)
     normals[normals[:, 1] < 0] *= -1
         
-
+    # find dominant directions
     kmeans = KMeans(n_clusters=3).fit(normals)
     dominantNormals = kmeans.cluster_centers_
     dominantNormals = dominantNormals / np.maximum(np.linalg.norm(dominantNormals, axis=-1, keepdims=True), 1e-4)
@@ -4331,7 +4333,7 @@ def copyLogo(folder, index, image, depth, planes, segmentation, info):
     #textureImage = cv2.imread(imageFilename)
 
     #textureImage = cv2.imread('../texture_images/CVPR_transparent.png')
-    textureImage = cv2.imread('../texture_images/CVPR.jpg')
+    textureImage = cv2.imread(textureImageFilename)
     imageFilename = 'CVPR.png'
     cv2.imwrite(folder + '/' + imageFilename, textureImage)
 
@@ -4346,6 +4348,7 @@ def copyLogo(folder, index, image, depth, planes, segmentation, info):
     #textureImage = cv2.imread('../textures/texture_2.jpg')
     #textureImage = cv2.resize(textureImage, (width, height), interpolation=cv2.INTER_LINEAR)
 
+    # copy the texture image in 3D
     faces = []
     texcoords = []        
     #maskImage = np.full(segmentation.shape, planes.shape[0])
@@ -4496,7 +4499,8 @@ def copyLogo(folder, index, image, depth, planes, segmentation, info):
     #cv2.imwrite('test/mask.png', drawSegmentationImage(maskImage, blackIndex=planes.shape[0]))
     #cv2.imwrite('test/mask.png', drawSegmentationImage(maskImage, blackIndex=planes.shape[0]))
     
-    
+
+    # write a .ply file
     with open(folder + '/' + str(index) + '_logo.ply', 'w') as f:
         header = """ply
 format ascii 1.0
@@ -4556,8 +4560,8 @@ end_header
     return maskImage
 
 
-def copyWallTexture(folder, index, image, depth, planes, segmentation, info, wallPlanes=[]):
-    import glob
+# the wall texture copying application, similar with the logo copying application
+def copyWallTexture(textureImageFilename, folder, index, image, depth, planes, segmentation, info, wallPlanes=[]):
     from sklearn.cluster import KMeans
     from skimage import measure
     #from sklearn.decomposition import PCA
@@ -4566,7 +4570,8 @@ def copyWallTexture(folder, index, image, depth, planes, segmentation, info, wal
     height = segmentation.shape[0]
 
     camera = getCameraFromInfo(info)
-    
+
+    # calculate corresponding 3D position for each pixel
     urange = (np.arange(width, dtype=np.float32) / width * camera['width'] - camera['cx']) / camera['fx']
     urange = urange.reshape(1, -1).repeat(height, 0)
     vrange = (np.arange(height, dtype=np.float32) / height * camera['height'] - camera['cy']) / camera['fy']
@@ -4577,6 +4582,7 @@ def copyWallTexture(folder, index, image, depth, planes, segmentation, info, wal
     XYZ = np.stack([X, Y, Z], axis=2)    
     #plane_depths = calcPlaneDepths(planes, width, height, info)
 
+    # calculate plane offsets and normals
     planesD = np.linalg.norm(planes, axis=-1, keepdims=True)
     planesNormal = planes / np.maximum(planesD, 1e-4)
 
@@ -4592,7 +4598,7 @@ def copyWallTexture(folder, index, image, depth, planes, segmentation, info, wal
     normals = np.stack(normals, axis=0)
     normals[normals[:, 1] < 0] *= -1
         
-
+    # find dominant directions
     kmeans = KMeans(n_clusters=3).fit(normals)
     dominantNormals = kmeans.cluster_centers_
     dominantNormals = dominantNormals / np.maximum(np.linalg.norm(dominantNormals, axis=-1, keepdims=True), 1e-4)
@@ -4607,8 +4613,9 @@ def copyWallTexture(folder, index, image, depth, planes, segmentation, info, wal
     #textureImage = cv2.imread(imageFilename)
 
     #textureImage = cv2.imread('../texture_images/CVPR_transparent.png')
-    textureImage = cv2.imread('../texture_images/checkerboard.jpg')
-    imageFilename = 'checkerboard.png'
+    #textureImage = cv2.imread('../texture_images/checkerboard.jpg')
+    textureImage = cv2.imread(textureImageFilename)
+    imageFilename = 'texture.png'
     cv2.imwrite(folder + '/' + imageFilename, textureImage)
 
     #background = textureImage.mean(2) > 224
@@ -4622,12 +4629,11 @@ def copyWallTexture(folder, index, image, depth, planes, segmentation, info, wal
     #textureImage = cv2.imread('../textures/texture_2.jpg')
     #textureImage = cv2.resize(textureImage, (width, height), interpolation=cv2.INTER_LINEAR)
 
+    # copy wall texture in 3D
     faces = []
     texcoords = []        
     #maskImage = np.full(segmentation.shape, planes.shape[0])
     maskImage = image.copy()
-    print(wallPlanes)
-    print(textureImage.shape)
     for planeIndex in xrange(planes.shape[0]):
         if planeIndex not in wallPlanes:
             continue
@@ -4791,7 +4797,8 @@ def copyWallTexture(folder, index, image, depth, planes, segmentation, info, wal
 
     #cv2.imwrite('test/mask.png', drawSegmentationImage(maskImage, blackIndex=planes.shape[0]))
     
-    
+
+    # write a .ply file
     with open(folder + '/' + str(index) + '_logo.ply', 'w') as f:
         header = """ply
 format ascii 1.0
@@ -4851,9 +4858,8 @@ end_header
     return maskImage
 
 
-
-def copyLogoVideo(folder, index, image, depth, planes, segmentation, info, textureType='logo', wallInds=[]):
-    import glob
+# video applications (extension the logo/texture copying application)
+def copyLogoVideo(textureImageFilename, folder, index, image, depth, planes, segmentation, info, textureType='logo', wallInds=[]):
     from sklearn.cluster import KMeans
     from skimage import measure
     #from sklearn.decomposition import PCA
@@ -4877,7 +4883,6 @@ def copyLogoVideo(folder, index, image, depth, planes, segmentation, info, textu
     planesNormal = planes / np.maximum(planesD, 1e-4)
 
     planeAreaThreshold = width * height / 100
-    
     normals = []
     for planeIndex in xrange(planes.shape[0]):
         mask = segmentation == planeIndex
@@ -4885,6 +4890,7 @@ def copyLogoVideo(folder, index, image, depth, planes, segmentation, info, textu
             continue
         normals.append(planesNormal[planeIndex])
         continue
+
     normals = np.stack(normals, axis=0)
     normals[normals[:, 1] < 0] *= -1
 
@@ -4903,15 +4909,17 @@ def copyLogoVideo(folder, index, image, depth, planes, segmentation, info, textu
     #textureImage = cv2.imread(imageFilename)
 
     #textureImage = cv2.imread('../texture_images/CVPR_transparent.png')
+
+    # either copy a logo or a wall texture or a TV screen
     if textureType == 'wall':
-        textureImage = cv2.imread('../texture_images/checkerboard.jpg')
+        textureImage = cv2.imread(textureImageFilename)
         alphaMask = np.ones((textureImage.shape[0], textureImage.shape[1], 1))
     elif textureType == 'logo':
-        textureImage = cv2.imread('../texture_images/CVPR.jpg')
+        textureImage = cv2.imread(textureImageFilename)
         alphaMask = (textureImage.mean(2) < 224).astype(np.float32)
         alphaMask = np.expand_dims(alphaMask, -1)
     else:
-        textureVideo = cv2.VideoCapture('../texture_images/TV.mp4')
+        textureVideo = cv2.VideoCapture(textureImageFilename)
         ret, textureImage = textureVideo.read()
         # numFrames = 0
         # for i in xrange(500):
@@ -4922,8 +4930,9 @@ def copyLogoVideo(folder, index, image, depth, planes, segmentation, info, textu
         #     print(i, textureImage.shape)
         #     continue
         # print(numFrames)
+        # print(textureImage.shape)
         # exit(1)
-        alphaMask = np.ones((textureImage.shape[0], textureImage.shape[1], 1))        
+        alphaMask = np.ones((textureImage.shape[0], textureImage.shape[1], 1))
         pass
 
 
@@ -4939,9 +4948,9 @@ def copyLogoVideo(folder, index, image, depth, planes, segmentation, info, textu
     textureSizeU = 0.75
     textureSizeV = textureSizeU * textureRatio
     textureSizes = np.array([textureSizeU, textureSizeV])
-    
 
 
+    # calculate projection information
     planeMasks = []
     planeProjections = []
     planeRanges = []
@@ -5009,9 +5018,12 @@ def copyLogoVideo(folder, index, image, depth, planes, segmentation, info, textu
         continue
     
     numMasks = len(planeProjections)
+    print('the number of masks', numMasks)
                 
     #maskImage = np.full(segmentation.shape, planes.shape[0])
     #ratios = np.full(2, 0.5)
+
+    # move textures around
     planeRatios = np.random.random((numMasks, 2))
     randomDirection = np.random.random((numMasks, 2))
     if textureType == 'wall':
@@ -5020,19 +5032,22 @@ def copyLogoVideo(folder, index, image, depth, planes, segmentation, info, textu
         pass
     randomDirection = randomDirection / np.linalg.norm(randomDirection)
     stride = 0.01
-    
-    #textureImage = textureImage.reshape((-1, 3))
-    
-    #for frameIndex in xrange(1000):
+
+
+    # write a sequence of images
     numFrames = 500
     for frameIndex in xrange(numFrames):
 
+        # different ways of moving textures for different applications
         if textureType != 'TV':
             planeRatios += randomDirection * stride
         else:
-            #planeDynamicRanges = np.array([[0.55, -0.33, 0, 0], [-1.45, -0.395, 0, 0], [1.2, -0.6, 0, 0]])
-            planeDynamicRanges = np.array([[0.55, -0.33, 0, 0], [1.2, -0.6, 0, 0]])
-            TVSize = np.array([[0.4, 0.3], [0.4, 0.3], [0.4, 0.3]])
+
+            # tweak planeDynamicRanges and TVSize for better visualization
+            ranges = np.array(planeRanges)
+            planeDynamicRanges = np.concatenate([ranges[:, 0], ranges[:, 1]], axis=1)
+            TVSize = ranges[:, 1] - ranges[:, 0]
+            
             for planeIndex in xrange(2):
                 planeDynamicRanges[planeIndex, 2:] = planeDynamicRanges[planeIndex, :2] + max(min(float(frameIndex - numFrames / 2 * planeIndex) / (numFrames / 3), 1.0), 0.0) * TVSize[planeIndex]
                 continue
@@ -5058,7 +5073,7 @@ def copyLogoVideo(folder, index, image, depth, planes, segmentation, info, textu
             
             offsets = ranges[0] + (ranges[1] - ranges[0]) * ratios - textureSizes / 2
 
-            print(projections.max(0), projections.min(0))
+            #print(projections.max(0), projections.min(0))
             if textureType == 'TV':
                 projectionsMoved = (projections - planeDynamicRanges[planeIndex, :2]) / np.maximum(planeDynamicRanges[planeIndex, 2:] - planeDynamicRanges[planeIndex, :2], 1e-4)
             else:
@@ -5129,14 +5144,16 @@ def copyLogoVideo(folder, index, image, depth, planes, segmentation, info, textu
     
     return 
 
-    
-def addRulerPlane(folder, index, image, depth, planes, segmentation, info, startPixel, endPixel, fixedEndPoint=False):
+
+# the ruler application
+def addRulerPlane(textureImageFilename, folder, index, image, depth, planes, segmentation, info, startPixel, endPixel, fixedEndPoint=False):
 
     width = segmentation.shape[1]
     height = segmentation.shape[0]
 
     camera = getCameraFromInfo(info)
-    
+
+    # calculate corresponding 3D position for each pixel
     urange = (np.arange(width, dtype=np.float32) / width * camera['width'] - camera['cx']) / camera['fx']
     urange = urange.reshape(1, -1).repeat(height, 0)
     vrange = (np.arange(height, dtype=np.float32) / height * camera['height'] - camera['cy']) / camera['fy']
@@ -5147,6 +5164,7 @@ def addRulerPlane(folder, index, image, depth, planes, segmentation, info, start
     XYZ = np.stack([X, Y, Z], axis=2)    
     #plane_depths = calcPlaneDepths(planes, width, height, info)
 
+    # calculate plane offsets and normals
     planesD = np.linalg.norm(planes, axis=-1, keepdims=True)
     planesNormal = planes / np.maximum(planesD, 1e-4)
 
@@ -5163,14 +5181,13 @@ def addRulerPlane(folder, index, image, depth, planes, segmentation, info, start
     normals[normals[:, 1] < 0] *= -1
 
 
-    
     #texture_image_names = glob.glob('../texture_images/*.png') + glob.glob('../texture_images/*.jpg')
     
     #imageFilename = '/home/chenliu/Projects/PlaneNet/texture_images/CVPR.jpg'
     #textureImage = cv2.imread(imageFilename)
 
     #textureImage = cv2.imread('../texture_images/CVPR_transparent.png')
-    textureImage = cv2.imread('../texture_images/ruler.png')
+    textureImage = cv2.imread(textureImageFilename)
     alphaMask = np.ones((textureImage.shape[0], textureImage.shape[1], 1), dtype=np.float32)
     #alphaMask = (textureImage.mean(2) < 224).astype(np.float32)
     #alphaMask = np.expand_dims(alphaMask, -1)
@@ -5191,6 +5208,7 @@ def addRulerPlane(folder, index, image, depth, planes, segmentation, info, start
     #textureImage = cv2.resize(textureImage, (width, height), interpolation=cv2.INTER_LINEAR)
 
 
+    # find the starting plane, the ending plane, and the boundary point
     startPlaneIndex = segmentation[startPixel[1]][startPixel[0]]
     endPlaneIndex = segmentation[endPixel[1]][endPixel[0]]
     assert(startPlaneIndex < planes.shape[0] and endPlaneIndex < planes.shape[0])
@@ -5221,6 +5239,7 @@ def addRulerPlane(folder, index, image, depth, planes, segmentation, info, start
         pass
 
     
+    # find planes which the ruler passes by on the image domain
     passbyPlaneInds = []
     for offset in np.arange(0.1, 1, 0.1):
         point = boundaryPoint + (endPoint - boundaryPoint) * offset
@@ -5242,6 +5261,7 @@ def addRulerPlane(folder, index, image, depth, planes, segmentation, info, start
     resultImage = image.copy().reshape((-1, 3))    
     distanceOffset = 0
 
+    # draw two segments of ruler (from the starting point to the boundary point and from the boundary point to the ending point)
     for point_1, point_2, planeNormal, planeInds in [(startPoint, boundaryPoint, planesNormal[startPlaneIndex], [startPlaneIndex]), (boundaryPoint, endPoint, passbyPlaneNormal, passbyPlaneInds)]:
         if point_1[0] == point_2[0] and point_1[1] == point_2[1]:
             continue
@@ -5320,8 +5340,8 @@ def addRulerPlane(folder, index, image, depth, planes, segmentation, info, start
         continue
     return
 
-
-def addRuler(folder, indexOffset, image, depth, planes, segmentation, info, startPoint, endPoint, boundaryPoints, startPlaneIndex, fixedEndPoint=False, numFrames=1):
+# the ruler application (video version)
+def addRuler(textureImage, folder, indexOffset, image, depth, planes, segmentation, info, startPoint, endPoint, boundaryPoints, startPlaneIndex, fixedEndPoint=False, numFrames=1):
     width = segmentation.shape[1]
     height = segmentation.shape[0]
 
@@ -5330,10 +5350,10 @@ def addRuler(folder, indexOffset, image, depth, planes, segmentation, info, star
     
     camera = getCameraFromInfo(info)
 
+    # calculate plane offsets and normals
     planesD = np.linalg.norm(planes, axis=-1, keepdims=True)
     planesNormal = planes / np.maximum(planesD, 1e-4)
     
-    textureImage = cv2.imread('../texture_images/ruler_36.png')
     alphaMask = np.ones((textureImage.shape[0], textureImage.shape[1], 1), dtype=np.float32)
     #alphaMask = (textureImage.mean(2) < 224).astype(np.float32)
     #alphaMask = np.expand_dims(alphaMask, -1)
@@ -5341,7 +5361,7 @@ def addRuler(folder, indexOffset, image, depth, planes, segmentation, info, star
     #backgroundMask = cv2.erode(backgroundMask.astype(np.uint8), np.ones((3, 3)))
     #cv2.imwrite('test/mask.png', drawMaskImage(background))
     #exit(1)
-
+    
     textureHeight = float(textureImage.shape[0])
     textureWidth = float(textureImage.shape[1])
     textureRatio = textureHeight / textureWidth
@@ -5357,6 +5377,7 @@ def addRuler(folder, indexOffset, image, depth, planes, segmentation, info, star
     #textureImage = cv2.resize(textureImage, (width, height), interpolation=cv2.INTER_LINEAR)
 
 
+    # find the boundary point
     distances = np.linalg.norm(boundaryPoints - startPoint, axis=-1) + np.linalg.norm(boundaryPoints - endPoint, axis=-1)
     boundaryPoint = boundaryPoints[np.argmin(distances)]
 
@@ -5412,7 +5433,8 @@ def addRuler(folder, indexOffset, image, depth, planes, segmentation, info, star
     firstSegment = True
 
     #IBL = IBL.reshape((width * height, -1))
-    
+
+    # draw two segments of ruler (from the starting point to the boundary point and from the boundary point to the ending point)
     for point_1, point_2, planeNormal in [(startPoint, boundaryPoint, planesNormal[startPlaneIndex]), (boundaryPoint, endPoint, boundaryNormal)]:
         if point_1[0] == point_2[0] and point_1[1] == point_2[1]:
             continue
@@ -5535,7 +5557,7 @@ def addRuler(folder, indexOffset, image, depth, planes, segmentation, info, star
         continue
     return
 
-def addRulerComplete(folder, indexOffset, image, depth, planes, segmentation, info, startPixel, endPixel, fixedEndPoint=False, numFrames=1):
+def addRulerComplete(textureImageFilename, folder, indexOffset, image, depth, planes, segmentation, info, startPixel, endPixel, fixedEndPoint=False, numFrames=1):
     width = segmentation.shape[1]
     height = segmentation.shape[0]
 
@@ -5553,7 +5575,7 @@ def addRulerComplete(folder, indexOffset, image, depth, planes, segmentation, in
     
     camera = getCameraFromInfo(info)
 
-    
+    # calculate corresponding 3D position for each pixel
     urange = (np.arange(width, dtype=np.float32) / width * camera['width'] - camera['cx']) / camera['fx']
     urange = urange.reshape(1, -1).repeat(height, 0)
     vrange = (np.arange(height, dtype=np.float32) / height * camera['height'] - camera['cy']) / camera['fy']
@@ -5567,12 +5589,12 @@ def addRulerComplete(folder, indexOffset, image, depth, planes, segmentation, in
     planesD = np.linalg.norm(planes, axis=-1, keepdims=True)
     planesNormal = planes / np.maximum(planesD, 1e-4)
 
+    # find the starting plane, the ending plane, and the boundary point
     startPlaneIndex = segmentation[startPixel[1]][startPixel[0]]
     endPlaneIndex = segmentation[endPixel[1]][endPixel[0]]
     assert(startPlaneIndex < planes.shape[0] and endPlaneIndex < planes.shape[0])
     startPoint = XYZ[startPixel[1]][startPixel[0]]
     endPoint = XYZ[endPixel[1]][endPixel[0]]
-
 
 
     mask = (segmentation == startPlaneIndex).astype(np.uint8)
@@ -5610,13 +5632,17 @@ def addRulerComplete(folder, indexOffset, image, depth, planes, segmentation, in
     #numExtendingFrames = 1000
     #numAdjustFrames = 100
     numExtendingFrames = 200
-    numAdjustFrames = 0
-    addRuler(folder, 0, image, depth, planes, segmentation, info, startPoint, endPoint, boundaryPoints, startPlaneIndex=startPlaneIndex, fixedEndPoint=True, numFrames=numExtendingFrames)
-        
-    for frameIndex in xrange(numAdjustFrames):
-        newEndPoint = endPoint + (finalEndPoint - endPoint) * (frameIndex + 1) / numAdjustFrames
-        addRuler(folder, numExtendingFrames + frameIndex, image, depth, planes, segmentation, info, startPoint, newEndPoint, boundaryPoints, startPlaneIndex=startPlaneIndex, fixedEndPoint=True, numFrames=1)
-        continue
+
+    textureImage = cv2.imread(textureImageFilename)
+
+    #draw the image sequence
+    addRuler(textureImage, folder, 0, image, depth, planes, segmentation, info, startPoint, endPoint, boundaryPoints, startPlaneIndex=startPlaneIndex, fixedEndPoint=True, numFrames=numExtendingFrames)
+
+    # numAdjustFrames = 0    
+    # for frameIndex in xrange(numAdjustFrames):
+    #     newEndPoint = endPoint + (finalEndPoint - endPoint) * (frameIndex + 1) / numAdjustFrames
+    #     addRuler(textureImage, folder, numExtendingFrames + frameIndex, image, depth, planes, segmentation, info, startPoint, newEndPoint, boundaryPoints, startPlaneIndex=startPlaneIndex, fixedEndPoint=True, numFrames=1)
+    #     continue
     return
 
     

@@ -5,7 +5,7 @@ import cv2
 import os
 import time
 import sys
-import tf_nndistance
+#import tf_nndistance
 import argparse
 import glob
 import PIL
@@ -13,15 +13,15 @@ import scipy.ndimage as ndimage
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import *
-from plane_utils import *
+#from plane_utils import *
 from modules import *
 
 from train_planenet import build_graph
-from train_sample import build_graph as build_graph_sample
+#from train_sample import build_graph as build_graph_sample
 from planenet import PlaneNet
 from RecordReaderAll import *
-from SegmentationRefinement import *
-from crfasrnn_layer import CrfRnnLayer
+#from SegmentationRefinement import *
+from crfasrnn.crfasrnn_layer import CrfRnnLayer
 
 #ALL_TITLES = ['planenet', 'pixelwise', 'pixelwise+RANSAC', 'depth observation+RANSAC', 'pixelwise+semantics+RANSAC', 'gt']
 #ALL_METHODS = [('bl2_ll1_bw0.5_pb_pp_sm0', ''), ('pb_pp', 'pixelwise_1'), ('pb_pp', 'pixelwise_2'), ('pb_pp', 'pixelwise_3'), ('pb_pp', 'semantics'), ('pb_pp', 'gt')]
@@ -190,7 +190,6 @@ def evaluatePlanes(options):
             continue
         continue
 
-    exit(1)
     
     #post processing
     for method_index, method in enumerate(options.methods):
@@ -1274,7 +1273,7 @@ def evaluateDepthPrediction(options):
     return
 
 def getResults(options):
-    checkpoint_prefix = options.rootFolder + '/checkpoint/'
+    checkpoint_prefix = 'checkpoint/'
 
     methods = options.methods
     predictions = []
@@ -1386,15 +1385,15 @@ def getPrediction(options):
 
     reader = RecordReaderAll()
     if options.dataset == 'SUNCG':
-        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_SUNCG_val.tfrecords'], num_epochs=10000)
+        filename_queue = tf.train.string_input_producer([options.dataFolder + '/planes_SUNCG_val.tfrecords'], num_epochs=10000)
     elif options.dataset == 'NYU_RGBD':
-        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer([options.dataFolder + '/planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
         options.deepSupervision = 0
         options.predictLocal = 0
     elif options.dataset == 'matterport':
-        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_matterport_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer([options.dataFolder + '/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
-        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer([options.dataFolder + '/planes_scannet_val.tfrecords'], num_epochs=1)
         pass
 
     img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
@@ -1404,11 +1403,12 @@ def getPrediction(options):
     training_flag = tf.constant(False, tf.bool)
 
     options.gpu_id = 0
-    if 'sample' not in options.checkpoint_dir:
-        global_pred_dict, _, _ = build_graph(img_inp, img_inp, training_flag, options)
-    else:
-        global_pred_dict, _, _ = build_graph_sample(img_inp, img_inp, training_flag, options)
-
+    # if 'sample' not in options.checkpoint_dir:
+    #     global_pred_dict, _, _ = build_graph(img_inp, img_inp, training_flag, options)
+    # else:
+    #     global_pred_dict, _, _ = build_graph_sample(img_inp, img_inp, training_flag, options)
+    global_pred_dict, _, _ = build_graph(img_inp, img_inp, training_flag, options)
+    
     var_to_restore = tf.global_variables()
 
 
@@ -1519,15 +1519,15 @@ def getGroundTruth(options):
 
     reader = RecordReaderAll()
     if options.dataset == 'SUNCG':
-        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_SUNCG_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer([options.dataFolder + '/planes_SUNCG_val.tfrecords'], num_epochs=1)
     elif options.dataset == 'NYU_RGBD':
-        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer([options.dataFolder + '/planes_nyu_rgbd_val.tfrecords'], num_epochs=1)
         options.deepSupervision = 0
         options.predictLocal = 0
     elif options.dataset == 'matterport':
-        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_matterport_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer([options.dataFolder + '/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
-        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer([options.dataFolder + '/planes_scannet_val.tfrecords'], num_epochs=1)
         pass
 
 
@@ -1671,7 +1671,7 @@ if __name__=='__main__':
                         default=0, type=int)    
     parser.add_argument('--useCache', dest='useCache',
                         help='use cache',
-                        default=0, type=int)
+                        default=-1, type=int)
     # parser.add_argument('--useCRF', dest='useCRF',
     #                     help='use crf',
     #                     default=0, type=int)
@@ -1687,13 +1687,13 @@ if __name__=='__main__':
     parser.add_argument('--methods', dest='methods',
                         help='methods',
                         default='0000000', type=str)
-    parser.add_argument('--rootFolder', dest='rootFolder',
-                        help='root folder',
+    parser.add_argument('--dataFolder', dest='dataFolder',
+                        help='data folder',
                         default='/mnt/vision/PlaneNet/', type=str)
     
     args = parser.parse_args()
     #args.hybrid = 'hybrid' + args.hybrid
-    args.test_dir = 'evaluate/' + args.task.replace('search', 'plane') + '/' + args.dataset + '/hybrid' + args.hybrid + '/'
+    args.test_dir = 'evaluate/'
     args.visualizeImages = min(args.visualizeImages, args.numImages)
     if args.imageIndex >= 0:
         args.visualizeImages = 1

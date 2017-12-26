@@ -1,0 +1,28 @@
+import csv
+import sys
+import numpy as np
+import cv2
+
+texture = cv2.imread(sys.argv[3])
+
+with open(sys.argv[1]) as modelFile, open(sys.argv[2], 'w') as outputFile:
+    modelLoader = csv.reader(modelFile, delimiter=' ')
+    xs = []
+    ys = []
+    zs = []        
+    for lineIndex, line in enumerate(modelLoader):
+        if len(line) == 0:
+            outputFile.write('\n')
+            continue
+        if line[0] == 'vt':
+            continue
+        if line[0] == 'v':
+            line[1] = str(-(float(line[1]) - centerX) * scale)
+            line[2] = str(-(float(line[2]) - centerY) * scale)
+            line[3] = str((float(line[3]) - centerZ) * scale)
+            pass
+        outputFile.write(' '.join(line) + '\n')
+        continue
+    modelFile.close()
+    outputFile.close()
+    pass
