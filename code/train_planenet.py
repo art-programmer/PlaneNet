@@ -694,7 +694,10 @@ def test(options):
             ranges = np.array([urange / imageWidth * 640 / focalLength, np.ones(urange.shape), -vrange / imageHeight * 480 / focalLength]).transpose([1, 2, 0])
 
 
-            for index in xrange(10):
+            segmentationCorrectSums = np.zeros(41)
+            segmentationCounts = np.zeros(41)
+            
+            for index in xrange(options.numImages):
                 print(('image', index))
                 t0=time.time()
 
@@ -886,15 +889,25 @@ def test(options):
                 evaluateDepths(predDepths[-1], gtDepths[-1], gtDepths[-1] > 0, planeMasks[-1])
                 
                 
-                if index >= 10:
-                    continue
 
                 if options.predictSemantics:
                     cv2.imwrite(options.test_dir + '/' + str(index) + '_semantics_pred.png', drawSegmentationImage(global_pred['semantics'][0], blackIndex=0))
                     cv2.imwrite(options.test_dir + '/' + str(index) + '_semantics_gt.png', drawSegmentationImage(global_gt['semantics'][0], blackIndex=0))
+
+                    pred = np.argmax(global_pred['semantics'][0], axis=-1)
+                    gt = global_gt['semantics'][0]
+                    correctMask = pred == gt
+                    for label in xrange(41):
+                        mask = gt == label
+                        segmentationCorrectSums[label] += correctMask[mask].sum()
+                        segmentationCounts[label] += mask.sum()
+                        continue
                     pass
 
-                if 'cost_mask' in debug:
+                if index >= 10:
+                    continue
+                
+                if 'cost_mask' in debug and False:
                     cv2.imwrite(options.test_dir + '/' + str(index) + '_cost_mask.png', drawMaskImage(np.sum(debug['cost_mask'][0], axis=-1)))
 
                     for planeIndex in xrange(options.numOutputPlanes + 1):
@@ -1089,6 +1102,8 @@ def test(options):
             #         evaluatePlaneSegmentation(np.array(predPlanes), np.array(predSegmentations), np.array(gtPlanes), np.array(gtSegmentations), np.array(gtNumPlanes), planeDistanceThreshold = 0.3, IOUThreshold = 0.5, prefix='test/pixelwise_gt_')
             #         pass
             #     pass
+
+            print('segmentation accuracy', segmentationCorrectSums / segmentationCounts, segmentationCorrectSums.sum() / segmentationCounts.sum())
             
             predDepths = np.array(predDepths)
             gtDepths = np.array(gtDepths)
@@ -1525,7 +1540,15 @@ def parse_args():
     args.test_dir = 'test/' + args.keyname + '_' + args.dataset
     args.predict_dir = 'predict/' + args.keyname + '_' + args.dataset
     args.dump_dir = 'dump/' + args.keyname
-    
+
+    #layers where deep supervision happens    
+    args.deepSupervisionLayers = []
+    if args.deepSupervision >= 1:
+        args.deepSupervisionLayers.append('res4b22_relu')
+        pass
+    if args.deepSupervision >= 2:
+        args.deepSupervisionLayers.append('res4b12_relu')
+        pass    
     return args
 
 

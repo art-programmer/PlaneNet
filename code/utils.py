@@ -19,7 +19,7 @@ from pystruct.inference import get_installed, inference_ogm, inference_dispatch
 
 class ColorPalette:
     def __init__(self, numColors):
-        #np.random.seed(2)
+        np.random.seed(2)
         #self.colorMap = np.random.randint(255, size = (numColors, 3))
         #self.colorMap[0] = 0
 
@@ -49,7 +49,7 @@ class ColorPalette:
         ])
 
         if numColors > self.colorMap.shape[0]:
-            self.colorMap = np.random.randint(255, size = (numColors, 3))
+            self.colorMap = np.concatenate([self.colorMap, np.random.randint(255, size = (numColors - self.colorMap.shape[0], 3))], axis=0)
             pass
         
         return
