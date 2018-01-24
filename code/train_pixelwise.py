@@ -17,87 +17,17 @@ from plane_utils import *
 from modules import *
 
 
+from train_sample import build_graph as build_graph
 from planenet import PlaneNet
 from RecordReader import *
 from RecordReaderRGBD import *
 from RecordReader3D import *
 from RecordReaderAll import *
 #from SegmentationRefinement import *
-
 #training_flag: toggle dropout and batch normalization mode
 #it's true for training and false for validation, testing, prediction
 #it also controls which data batch to use (*_train or *_val)
 
-
-def build_graph(img_inp_train, img_inp_val, training_flag, options):
-    with tf.device('/gpu:%d'%options.gpu_id):
-        img_inp = tf.cond(training_flag, lambda: img_inp_train, lambda: img_inp_val)
-        
-        net = PlaneNet({'img_inp': img_inp}, is_training=training_flag, options=options)
-
-        #global predictions
-        plane_pred = net.layers['plane_pred']
-        
-        segmentation_pred = net.layers['segmentation_pred']
-        non_plane_mask_pred = net.layers['non_plane_mask_pred']
-        non_plane_depth_pred = net.layers['non_plane_depth_pred']
-        non_plane_normal_pred = net.layers['non_plane_normal_pred']
-        non_plane_normal_pred = tf.nn.l2_normalize(non_plane_normal_pred, dim=-1)
-
-
-        if False:
-            plane_pred = gt_dict['plane']
-            non_plane_mask_pred = gt_dict['non_plane_mask'] * 10
-            non_plane_depth_pred = gt_dict['depth']
-            non_plane_normal_pred = gt_dict['normal']
-            segmentation_pred = gt_dict['segmentation'][:, :, :, :20] * 10
-            pass
-        
-        
-        global_pred_dict = {'plane': plane_pred, 'segmentation': segmentation_pred, 'non_plane_mask': non_plane_mask_pred, 'non_plane_depth': non_plane_depth_pred, 'non_plane_normal': non_plane_normal_pred}
-
-        if options.predictBoundary:
-            global_pred_dict['boundary'] = net.layers['boundary_pred']
-            pass
-        if options.predictConfidence:
-            global_pred_dict['confidence'] = net.layers['plane_confidence_pred']
-            pass
-        if options.predictSemantics:
-            global_pred_dict['semantics'] = net.layers['semantics_pred']
-            pass
-
-        #local predictions
-        if options.predictLocal:
-            local_pred_dict = {'score': net.layers['local_score_pred'], 'plane': net.layers['local_plane_pred'], 'mask': net.layers['local_mask_pred']}
-        else:
-            local_pred_dict = {}
-            pass
-
-        
-        #deep supervision
-        deep_pred_dicts = []
-        for layer in options.deepSupervisionLayers:
-            pred_dict = {'plane': net.layers[layer+'_plane_pred'], 'segmentation': net.layers[layer+'_segmentation_pred'], 'non_plane_mask': net.layers[layer+'_non_plane_mask_pred']}
-            #if options.predictConfidence:
-            #pred_dict['confidence'] = net.layers[layer+'_plane_confidence_pred']
-            #pass
-            deep_pred_dicts.append(pred_dict)
-            continue
-
-        
-        if options.anchorPlanes:
-            anchors_np = np.load('dump/anchors_' + options.hybrid + '.npy')
-            anchors = tf.reshape(tf.constant(anchors_np.reshape(-1)), anchors_np.shape)
-            anchors = tf.tile(tf.expand_dims(anchors, 0), [options.batchSize, 1, 1])
-            all_pred_dicts = deep_pred_dicts + [global_pred_dict]            
-            for pred_index, pred_dict in enumerate(all_pred_dicts):
-                all_pred_dicts[pred_index]['plane'] += anchors
-                continue
-            pass
-
-        pass
-    
-    return global_pred_dict, local_pred_dict, deep_pred_dicts
 
 
 def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, global_gt_dict_train, global_gt_dict_val, training_flag, options):
@@ -149,21 +79,25 @@ def build_loss(img_inp_train, img_inp_val, global_pred_dict, deep_pred_dicts, gl
         #normal_loss = tf.reduce_mean(tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_normal'], global_gt_dict['normal']) * validDepthMask, axis=[1, 2, 3]) * valid_normal_mask) * 1000
         #normal_loss = tf.constant(0.0)
 
-        valid_semantics_mask = tf.squeeze(tf.cast(tf.not_equal(tf.slice(global_gt_dict['info'], [0, 19], [options.batchSize, 1]), 1), tf.float32))
-        semantics_loss = tf.reduce_mean(tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=global_pred_dict['semantics'], labels=global_gt_dict['semantics']), axis=[1, 2]) * valid_semantics_mask) * 1000
+        if options.predictSemantics:
+            valid_semantics_mask = tf.squeeze(tf.cast(tf.not_equal(tf.slice(global_gt_dict['info'], [0, 19], [options.batchSize, 1]), 1), tf.float32))
+            semantics_loss = tf.reduce_mean(tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=global_pred_dict['semantics'], labels=global_gt_dict['semantics']), axis=[1, 2]) * valid_semantics_mask) * 1000
+            pass
         
 
         l2_losses = tf.add_n([options.l2Weight * tf.nn.l2_loss(v) for v in tf.trainable_variables() if 'weights' in v.name])
 
 
-        loss = depth_loss + normal_loss + semantics_loss + l2_losses
+        #loss = depth_loss + normal_loss + semantics_loss + l2_losses
+        loss = depth_loss + l2_losses
 
         #if options.pixelwiseLoss:
         #normal_loss = tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_normal'], global_gt_dict['normal'])) * 1000
         #depth_loss = tf.reduce_mean(tf.squared_difference(global_pred_dict['non_plane_depth'], global_gt_dict['depth']) * validDepthMask) * 1000
         #pass
 
-        loss_dict = {'depth': depth_loss, 'normal': normal_loss, 'semantics': semantics_loss}
+        #loss_dict = {'depth': depth_loss, 'normal': normal_loss, 'semantics': semantics_loss}
+        loss_dict = {'depth': depth_loss}
         pass
     return loss, loss_dict, debug_dict
 
@@ -282,7 +216,7 @@ def main(options):
             if options.predictSemantics == 1:
                 var_to_restore = [v for v in var_to_restore if 'semantics' not in v.name]
                 pass
-            
+
             loader = tf.train.Saver(var_to_restore)
             if len(options.hybrid) == 1:
                 hybrid = options.hybrid
@@ -290,7 +224,8 @@ def main(options):
                 hybrid = str(3)
                 pass
             #loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + hybrid + '_bl0_ll1_bw0.5_pb_pp_ps_sm0/checkpoint.ckpt')
-            loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + hybrid + '_bl0_dl0_ll1_bw0.5_pb_pp/checkpoint.ckpt')            
+            #loader.restore(sess, options.rootFolder + '/checkpoint/planenet_hybrid' + hybrid + '_bl0_dl0_ll1_bw0.5_pb_pp/checkpoint.ckpt')
+            loader.restore(sess, options.rootFolder + '/checkpoint/sample_np10_hybrid3_bl0_dl0_hl2_ds0_crfrnn5_sm0/checkpoint.ckpt')            
             #loader.restore(sess,"checkpoint/planenet/checkpoint.ckpt")
             sess.run(batchno.assign(1))
         elif options.restore == 4:
@@ -1157,13 +1092,13 @@ def parse_args():
                         default=0, type=int)
     parser.add_argument('--diverseLoss', dest='diverseLoss',
                         help='use diverse loss: [0, 1]',
-                        default=1, type=int)
+                        default=0, type=int)
     parser.add_argument('--labelLoss', dest='labelLoss',
                         help='use label loss: [0, 1]',
-                        default=1, type=int)    
+                        default=0, type=int)    
     parser.add_argument('--deepSupervision', dest='deepSupervision',
                         help='deep supervision level: [0, 1, 2]',
-                        default=1, type=int)
+                        default=0, type=int)
     parser.add_argument('--sameMatching', dest='sameMatching',
                         help='use the same matching for all deep supervision layers and the final prediction: [0, 1]',
                         default=0, type=int)    
@@ -1173,6 +1108,9 @@ def parse_args():
     parser.add_argument('--crf', dest='crf',
                         help='the number of CRF iterations',
                         default=0, type=int)
+    parser.add_argument('--crfrnn', dest='crfrnn',
+                        help='the number of CRF (as RNN) iterations',
+                        default=0, type=int)    
     parser.add_argument('--backwardLossWeight', dest='backwardLossWeight',
                         help='backward matching loss',
                         default=0.5, type=float)
@@ -1181,7 +1119,7 @@ def parse_args():
                         default=0, type=int)
     parser.add_argument('--predictSemantics', dest='predictSemantics',
                         help='whether predict semantics or not: [0, 1]',
-                        default=1, type=int)    
+                        default=0, type=int)    
     parser.add_argument('--predictLocal', dest='predictLocal',
                         help='whether predict local planes or not: [0, 1]',
                         default=0, type=int)
@@ -1205,7 +1143,7 @@ def parse_args():
                         default=3e-5, type=float)
     parser.add_argument('--hybrid', dest='hybrid',
                         help='hybrid training',
-                        default='3', type=str)
+                        default='1', type=str)
     parser.add_argument('--rootFolder', dest='rootFolder',
                         help='root folder',
                         default='/mnt/vision/PlaneNet/', type=str)
@@ -1235,6 +1173,9 @@ def parse_args():
     if args.predictSemantics == 1:
         args.keyname += '_ps'
         pass    
+    if args.crf > 0:
+        args.keyname += '_crf' + str(args.crf)
+        pass
 
     #args.predictSemantics = 0
     #args.predictBoundary = 0
