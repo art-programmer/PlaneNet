@@ -34,10 +34,10 @@ def planeDepthsModule(plane_parameters, width, height, info):
     urange = tf.tile(tf.reshape(urange, [1, -1]), [height, 1])
     vrange = (tf.range(height, dtype=tf.float32) / (height + 1) * (info[17] + 1) - info[6]) / info[5]
     vrange = tf.tile(tf.reshape(vrange, [-1, 1]), [1, width])
-            
+
     ranges = tf.stack([urange, np.ones([height, width]), -vrange], axis=2)
     ranges = tf.reshape(ranges, [-1, 3])
-            
+
     planesD = tf.norm(plane_parameters, axis=1, keep_dims=True)
     planesD = tf.clip_by_value(planesD, 1e-5, 10)
     planesNormal = tf.div(tf.negative(plane_parameters), tf.tile(planesD, [1, 3]))
@@ -49,7 +49,7 @@ def planeDepthsModule(plane_parameters, width, height, info):
     plane_depths = tf.reshape(plane_depths, [height, width, -1])
 
     plane_depths = tf.clip_by_value(plane_depths, 0, 10)
-    
+
     return plane_depths
 
 def planeNormalsModule(plane_parameters, width, height):
@@ -102,12 +102,12 @@ def meanfieldModuleLayer(layerSegmentations, planeDepths, numOutputPlanes = 20, 
     DSs = []
     conflictDs = []
     conflictDepthThreshold = 0.1
-    
-    for layer in xrange(numLayers):        
+
+    for layer in xrange(numLayers):
         DS_diff = tf.exp(-tf.pow(1 - tf.clip_by_value(tf.abs(planeDepths - layerDepths[layer]), 0, 1), 2) / sigmaDepthDiff) - tf.exp(-1 / sigmaDepthDiff) * layerSs[layer]
         DS = tf.nn.depthwise_conv2d(DS_diff, tf.tile(neighbor_kernel, [1, 1, numOutputPlanes, 1]), strides=[1, 1, 1, 1], padding='SAME')
         DSs.append(DS)
-        
+
         conflictD = tf.zeros((batchSize, height, width, 1))
         if layer > 0:
             minDepth = tf.min(tf.concat(layerDepths[:layer - 1], axis=3), axis=3, keep_dims=True)
@@ -119,7 +119,7 @@ def meanfieldModuleLayer(layerSegmentations, planeDepths, numOutputPlanes = 20, 
             pass
         conflictDs.append(tf.cast(conflictD > conflictDepthThreshold, tf.float32))
 
-        
+
     P = tf.clip_by_value(P, 1e-4, 1)
     confidence = P * tf.exp(-coef[1] * DS)
     refined_segmentation = tf.nn.softmax(tf.log(confidence))
@@ -141,7 +141,7 @@ def calcImageDiff(images, kernel_size = 9):
     #image_diff = tf.exp(-image_diff)
     #image_diff = tf.nn.max_pool(image_diff, ksize=[1, 3, 3, 1], strides=[1, 1, 1, 1], padding='SAME')
     return image_diff, var_image_diff
-    
+
 def meanfieldModule(planeSegmentations, planeDepths, planesY, imageDiff, numOutputPlanes = 20, coef = [1, 1, 1], beta = 1, iteration = 0, maxDepthDiff = 0.2, varDepthDiff = 0.5, kernel_size = 9):
     batchSize = int(planeSegmentations.shape[0])
     height = int(planeSegmentations.shape[1])
@@ -170,9 +170,9 @@ def meanfieldModule(planeSegmentations, planeDepths, planesY, imageDiff, numOutp
     # DS_weight = tf.exp(-tf.pow(tf.clip_by_value(1 - D_diff / maxDepthDiff, 0, 1), 2) / sigmaDepthDiff)
     # DS_diff = tf.reduce_sum(DS_weight * tf.expand_dims(S, 3), axis=4) - tf.exp(-1 / sigmaDepthDiff) * S
 
-    
-    
-    
+
+
+
     depthWeight = 50.0
     colorWeight = 50.0
     normalY = tf.reduce_sum(S * tf.reshape(planesY, [-1, 1, 1, numOutputPlanes]), axis=3, keep_dims=True)
@@ -188,9 +188,9 @@ def meanfieldModule(planeSegmentations, planeDepths, planesY, imageDiff, numOutp
     neighbor_kernel_array /= neighbor_kernel_array.sum()
     neighbor_kernel = tf.constant(neighbor_kernel_array.reshape(-1), shape=neighbor_kernel_array.shape, dtype=tf.float32)
     neighbor_kernel = tf.reshape(neighbor_kernel, [kernel_size, kernel_size, 1, 1])
-    
+
     DS = tf.nn.depthwise_conv2d(DS_diff, tf.tile(neighbor_kernel, [1, 1, numOutputPlanes, 1]), strides=[1, 1, 1, 1], padding='SAME')
-    
+
 
     P = tf.clip_by_value(P, 1e-4, 1)
     confidence = P * tf.exp(-coef[1] * DS)
@@ -215,8 +215,8 @@ def segmentationRefinementModule(planeSegmentations, planeDepths, planesY, image
     #sigmaDepthDiff = tf.Variable(0.5)
     maxDepthDiff = 0.2
     varDepthDiff = pow(0.2, 2)
-    
-    
+
+
     refined_segmentation = planeSegmentations
     for _ in xrange(numIterations):
         refined_segmentation, _ = meanfieldModule(refined_segmentation, planeDepths, planesY, imageDiff, numOutputPlanes=numOutputPlanes, maxDepthDiff=maxDepthDiff, varDepthDiff=varDepthDiff, kernel_size = kernel_size)
@@ -240,7 +240,7 @@ def meanfieldModuleBoundary(planeSegmentations, originalSegmentations, planeDept
     DS_diff = tf.clip_by_value(D_diff / maxDepthDiff, 0, 1)
     DS_diff = DS_diff * (1 - occlusionBoundary)
     #+ (1 - S) * occlusionBoundary * 0.1
-    
+
     kernel_size = 5
     neighbor_kernel_array = gaussian(kernel_size)
     neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 0
@@ -251,7 +251,7 @@ def meanfieldModuleBoundary(planeSegmentations, originalSegmentations, planeDept
     DS = tf.nn.depthwise_conv2d(DS_diff, tf.tile(neighbor_kernel, [1, 1, numOutputPlanes, 1]), strides=[1, 1, 1, 1], padding='VALID')
     padding = (kernel_size - 1) / 2
     DS = tf.pad(DS, paddings = [[0, 0], [padding, padding], [padding, padding], [0, 0]])
-    
+
     P = originalSegmentations
     P = tf.clip_by_value(P, 1e-4, 1)
     confidence = P * tf.exp(-coef[1] * DS)
@@ -283,7 +283,7 @@ def planeMapModule(depth, normal, ranges):
 
     planes = tf.reduce_sum(normal * ranges, 3, keep_dims=True) * depth * normal
     return planes
-    
+
 # def planeFittingModule(depth, normal, numPlanes=50, numGlobalPlanes=20, planeAreaThreshold=3*4):
 #     width = int(depth.shape[2])
 #     height = int(depth.shape[1])
@@ -293,7 +293,7 @@ def planeMapModule(depth, normal, ranges):
 #     urange = tf.tile(tf.reshape(urange, [1, -1]), [height, 1])
 #     vrange = (tf.range(height, dtype=tf.float32) / (height + 1) - 0.5) / focalLength * 481
 #     vrange = tf.tile(tf.reshape(vrange, [-1, 1]), [1, width])
-            
+
 #     ranges = tf.stack([urange, tf.ones([height, width]), -vrange], axis=2)
 #     ranges = tf.expand_dims(ranges, 0)
 
@@ -301,7 +301,7 @@ def planeMapModule(depth, normal, ranges):
 #     planeDiffThreshold = 0.1
 #     #plane parameter for each pixel
 #     planeMap = planeMapModule(depth, normal, ranges)
-    
+
 #     kernel_size = 3
 #     neighbor_kernel_array = gaussian(kernel_size)
 #     neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 0
@@ -322,12 +322,12 @@ def planeMapModule(depth, normal, ranges):
 #     smoothedPlaneMap = tf.nn.depthwise_conv2d(planeMap, tf.tile(median_kernel, [1, 1, 3, 1]), strides=[1, 1, 1, 1], padding='SAME')
 #     planeDiff = tf.reduce_max(tf.norm(tf.expand_dims(planeMap, -1) - tf.reshape(smoothedPlaneMap, [batchSize, height, width, 3, 9]), axis=3, keep_dims=True), axis=4)
 #     boundaryMask = tf.cast(tf.less(planeDiff, planeDiffThreshold), tf.float32)
-    
+
 #     #opening
 #     erosionKernel = np.array([[-1, 0, -1], [0, 0, 0], [-1, 0, -1]], dtype=np.float32).reshape([3, 3, 1])
 #     dilationKernel = np.array([[-1, 0, -1], [0, 0, 0], [-1, 0, -1]], dtype=np.float32).reshape([3, 3, 1])
 #     boundaryMask = tf.nn.erosion2d(boundaryMask, kernel=erosionKernel, strides=[1, 1, 1, 1], rates=[1, 1, 1, 1], padding='SAME')
-    
+
 #     #region indices
 #     assignment = tf.reshape(tf.range(batchSize * height * width, dtype=tf.float32) + 1, [batchSize, height, width, 1]) * boundaryMask
 #     with tf.variable_scope("flooding") as scope:
@@ -339,13 +339,13 @@ def planeMapModule(depth, normal, ranges):
 #     #inds, mask, count = tf.unique_with_counts(tf.concat([tf.constant(0, shape=[1], dtype=tf.float32), tf.reshape(assignment, [-1])], axis=0))
 #     #ignoredInds = tf.range(count.shape, dtype=tf.float32) * tf.less(count, planeAreaThreshold)
 #     assignment = tf.reshape(assignment, [-1])
-    
+
 #     #find unique regions
 #     inds, mask, count = tf.unique_with_counts(assignment)
 #     ignoredInds = tf.boolean_mask(inds, tf.less(count, planeAreaThreshold))
 #     assignment = assignment * (1 - tf.reduce_max(tf.cast(tf.equal(tf.expand_dims(assignment, -1), tf.expand_dims(ignoredInds, 0)), tf.float32), axis=1))
 #     inds, mask, count = tf.unique_with_counts(tf.concat([tf.constant(0, shape=[1], dtype=tf.float32), assignment], axis=0))
-        
+
 #     mask = tf.slice(mask, [1], [batchSize * height * width])
 #     mask = tf.reshape(mask, [batchSize, height, width, 1])
 #     #inds = tf.boolean_mask(inds, tf.greater(count, width * height / (16 * 16)))
@@ -373,7 +373,7 @@ def planeMapModule(depth, normal, ranges):
 #     planesD = tf.reduce_sum(weightedABC * depth * planeMasks, axis=[1, 2]) / planeAreas
 #     planesD = tf.expand_dims(planesD, -1)
 #     planes = planesNormal * planesD
-    
+
 #     #globalPlanes = tf.slice(planes, [0, 0, 0], [batchSize, numGlobalPlanes, 3])
 #     #planes = tf.transpose(tf.matmul(planes, sortMap, transpose_a=True), [0, 2, 1])
 #     #planesNormal = tf.slice(planesNormal, [0, 0, 0], [batchSize, numGlobalPlanes, 3])
@@ -386,14 +386,14 @@ def planeMapModule(depth, normal, ranges):
 #     Z = -depth * tf.expand_dims(vrange, -1)
 #     XYZ = tf.concat([X, Y, Z], axis=3)
 #     XYZ = tf.reshape(XYZ, [-1, height * width, 3])
-    
+
 #     planesNormal = -planesNormal
 #     distance = tf.reshape(tf.abs(tf.matmul(XYZ, planesNormal, transpose_b=True) + tf.reshape(planesD, [-1, 1, numPlanes])), [-1, height, width, numPlanes])
 #     angle = tf.reshape(tf.abs(tf.matmul(tf.reshape(normal, [-1, height * width, 3]), planesNormal, transpose_b=True)), [-1, height, width, numPlanes])
 
 #     explainedPlaneMasks = tf.cast(tf.logical_and(tf.greater(angle, normalDotThreshold), tf.less(distance, distanceThreshold)), tf.float32)
 #     explainedPlaneMasks = tf.nn.dilation2d(explainedPlaneMasks, filter=np.tile(dilationKernel, [1, 1, numPlanes]), strides=[1, 1, 1, 1], rates=[1, 1, 1, 1], padding='SAME')
-#     explainedPlaneMasks = tf.nn.erosion2d(explainedPlaneMasks, kernel=np.tile(erosionKernel, [1, 1, numPlanes]), strides=[1, 1, 1, 1], rates=[1, 1, 1, 1], padding='SAME')    
+#     explainedPlaneMasks = tf.nn.erosion2d(explainedPlaneMasks, kernel=np.tile(erosionKernel, [1, 1, numPlanes]), strides=[1, 1, 1, 1], rates=[1, 1, 1, 1], padding='SAME')
 
 #     with tf.variable_scope("expansion") as scope:
 #         scope.reuse_variables()
@@ -401,7 +401,7 @@ def planeMapModule(depth, normal, ranges):
 #             planeMasks = tf.nn.max_pool(planeMasks, ksize=[1, 13, 13, 1], strides=[1, 1, 1, 1], padding='SAME', name='max_pool') * explainedPlaneMasks
 #             continue
 #         pass
-        
+
 #     planeAreas = tf.reduce_sum(planeMasks, axis=[1, 2])
 #     planeAreas, sortInds = tf.nn.top_k(planeAreas, k=numPlanes)
 #     sortMap = tf.one_hot(sortInds, depth=numPlanes, axis=1)
@@ -441,7 +441,7 @@ def planeMapModule(depth, normal, ranges):
 #     planeMasks = planeMasks * tf.expand_dims(tf.expand_dims(validPlaneMask, 1), 1)
 #     planes = planes * tf.expand_dims(validPlaneMask, -1)
 #     planeAreas = planeAreas * validPlaneMask
-            
+
 
 #     # planeAreas = tf.reduce_sum(localPlaneMasks, axis=[1, 2])
 #     # planeAreas, sortInds = tf.nn.top_k(planeAreas, k=numPlanes)
@@ -476,7 +476,7 @@ def planeMapModule(depth, normal, ranges):
 #     # planesD = tf.reduce_sum(weightedABC * depth * planeMasksWithoutBoundary, axis=[1, 2]) / planeAreas
 #     # planesD = tf.expand_dims(planesD, -1)
 #     # localPlanes = planesNormal * planesD
-    
+
 
 #     #find local ground truth
 #     urange = tf.reshape(tf.range(width, dtype=tf.float32), [1, -1, 1])
@@ -495,7 +495,7 @@ def planeMapModule(depth, normal, ranges):
 #     localPlaneHeightThreshold = 64
 #     globalPlaneAreaThreshold = 16 * 16
 #     globalPlaneWidthThreshold = 8
-    
+
 #     globalPlaneMask = tf.logical_or(tf.greater(planeMaxX - planeMinX, localPlaneWidthThreshold), tf.greater(planeMaxY - planeMinY, localPlaneHeightThreshold))
 #     globalPlaneMask = tf.logical_and(globalPlaneMask, tf.greater((planeMaxX - planeMinX) * (planeMaxY - planeMinY), globalPlaneAreaThreshold))
 #     globalPlaneMask = tf.logical_and(globalPlaneMask, tf.greater(planeAreas / (planeMaxY + 1 - planeMinY), globalPlaneWidthThreshold))
@@ -508,12 +508,12 @@ def planeMapModule(depth, normal, ranges):
 #     planes = tf.transpose(tf.matmul(planes, sortMap, transpose_a=True), [0, 2, 1])
 #     planeBoxes = tf.transpose(tf.matmul(planeBoxes, sortMap, transpose_a=True), [0, 2, 1])
 #     globalPlaneMask = tf.squeeze(tf.matmul(tf.expand_dims(globalPlaneMask, 1), sortMap), axis=1)
-    
+
 
 
 #     #boundary ground truth
 #     boundary = tf.nn.max_pool(planeMasks, ksize=[1, 5, 5, 1], strides=[1, 1, 1, 1], padding='SAME', name='max_pool')
-    
+
 #     boundaryType = tf.cast(tf.round(tf.reduce_sum(boundary, axis=3, keep_dims=True)), tf.int32)
 #     singleBoundary = tf.cast(tf.equal(tf.reduce_sum(boundary - planeMasks, axis=3, keep_dims=True), 1), tf.float32)
 
@@ -523,7 +523,7 @@ def planeMapModule(depth, normal, ranges):
 
 #     #boundary_1 = tf.cast(tf.equal(boundaryCoef, 1), tf.float32) * boundary
 #     #boundary_1 = tf.cast(tf.equal(boundaryCoef, 1), tf.float32) * boundary
-    
+
 #     boundaryPlane_1 = tf.reshape(tf.matmul(tf.reshape(tf.cast(tf.equal(boundaryCoef, 1), tf.float32) * boundary, [batchSize, height * width, numPlanes]), planes), [batchSize, height, width, 3])
 #     boundaryD_1 = tf.maximum(tf.norm(boundaryPlane_1, axis=3, keep_dims=True), 1e-4)
 #     boundaryNormal_1 = boundaryPlane_1 / boundaryD_1
@@ -541,12 +541,12 @@ def planeMapModule(depth, normal, ranges):
 #     smoothBoundary = tf.nn.max_pool(largerMask * smallerMask, ksize=[1, 3, 3, 1], strides=[1, 1, 1, 1], padding='SAME')
 #     #depthDiff = tf.abs(depth - tf.nn.depthwise_conv2d(depth, neighbor_kernel, strides=[1, 1, 1, 1], padding='SAME'))
 #     #occlusionBoundary = tf.cast(tf.greater(depthDiff, depthDiffThreshold), tf.float32) * commonBoundary
-    
+
 #     #boundaryConvexity = tf.cast(tf.less(tf.reduce_sum(boundaryNormal_1 * boundaryNormal_2, axis=3, keep_dims=True), 0), tf.float32)
 #     #convexBoundary = smoothBoundary * boundaryConvexity
 #     #concaveBoundary = smoothBoundary * (1 - boundaryConvexity)
 
-    
+
 #     occlusionBoundary = commonBoundary - smoothBoundary
 
 #     singleBoundary = tf.maximum(singleBoundary - tf.nn.max_pool(commonBoundary, ksize=[1, 3, 3, 1], strides=[1, 1, 1, 1], padding='SAME'), 0)
@@ -554,7 +554,7 @@ def planeMapModule(depth, normal, ranges):
 #     #boundaries = tf.concat([tf.maximum(tf.minimum((boundaryDepth_1 - boundaryDepth_2) + 0.5, 1), 0)], axis=3)
 #     #boundaries = tf.concat([tf.maximum(tf.minimum(boundaryDepth_1 / 10, 1), 0), tf.maximum(tf.minimum(boundaryDepth_2 / 10, 1), 0), tf.maximum(tf.minimum((boundaryDepth_1 - boundaryDepth_2) + 0.5, 1), 0)], axis=3)
 #     boundaries = 1 - tf.nn.max_pool(1 - boundaries, ksize=[1, 2, 2, 1], strides=[1, 1, 1, 1], padding='SAME')
-    
+
 #     if True:
 #         coef = tf.pow(tf.constant(2, dtype=tf.float64), tf.range(numPlanes, dtype=tf.float64))
 #         planeMask = tf.cast(tf.round(tf.tensordot(tf.cast(planeMasks, tf.float64), coef, axes=[[3], [0]])), tf.int64)
@@ -566,7 +566,7 @@ def planeMapModule(depth, normal, ranges):
 #         gridScores, gridPlanes, gridMasks = findLocalPlanes(planes, planeMasks)
 #         return planes, planeMask, numGlobalPlanes, boundaries, gridScores, gridPlanes, gridMasks
 
-    
+
 #     maskWidth = 32
 #     maskHeight = 32
 #     planeCroppedMasks = []
@@ -592,7 +592,7 @@ def planeMapModule(depth, normal, ranges):
 #             continue
 #         planeCroppedMasks.append(tf.squeeze(tf.concat(croppedMasks, axis=3)))
 #         continue
-#     planeCroppedMasks = tf.stack(planeCroppedMasks, axis=0)   
+#     planeCroppedMasks = tf.stack(planeCroppedMasks, axis=0)
 
 #     gridMinX = []
 #     gridMaxX = []
@@ -607,7 +607,7 @@ def planeMapModule(depth, normal, ranges):
 #         gridMinY.append(tf.reshape(ys - boxSize / 2, [1, -1, 1]))
 #         gridMaxY.append(tf.reshape(ys + boxSize / 2, [1, -1, 1]))
 #         continue
-    
+
 #     gridMinX = tf.tile(tf.concat(gridMinX, axis=1), [batchSize, 1, 1])
 #     gridMaxX = tf.tile(tf.concat(gridMaxX, axis=1), [batchSize, 1, 1])
 #     gridMinY = tf.tile(tf.concat(gridMinY, axis=1), [batchSize, 1, 1])
@@ -646,8 +646,8 @@ def planeMapModule(depth, normal, ranges):
 #     gridW = (gridPlaneMaxX - gridPlaneMinX) / gridWidths
 #     gridH = (gridPlaneMaxY - gridPlaneMinY) / gridHeights
 #     gridBoxes = tf.concat([gridOffsetX, gridOffsetY, gridW, gridH], axis=2)
-    
-    
+
+
 #     offset = 0
 #     gridScoresArray = []
 #     gridPlanesArray = []
@@ -662,7 +662,7 @@ def planeMapModule(depth, normal, ranges):
 #         offset += numGrids
 #         continue
 
-    
+
 #     if True:
 #         coef = tf.pow(tf.constant(2, dtype=tf.float64), tf.range(numPlanes, dtype=tf.float64))
 #         planeMask = tf.cast(tf.round(tf.tensordot(tf.cast(planeMasks, tf.float64), coef, axes=[[3], [0]])), tf.int64)
@@ -672,7 +672,7 @@ def planeMapModule(depth, normal, ranges):
 #         numGlobalPlanes = tf.reduce_sum(globalPlaneMask, axis=1)
 
 #         return planes, planeMask, numGlobalPlanes, boundaries, planeBoxes, planeCroppedMask, gridScoresArray, gridPlanesArray, gridBoxesArray, gridMasksArray, maxIOU, maxIOUInds
-    
+
 #     # coef = tf.pow(tf.constant(0.9, dtype=tf.float64), tf.range(numPlanes, dtype=tf.float64))
 #     # coef = tf.tile(tf.reshape(coef, [1, 1, -1]), [batchSize, 1, 1])
 #     # coef = tf.matmul(coef, tf.cast(sortMap, tf.float64), transpose_b=True)
@@ -686,14 +686,14 @@ def planeMapModule(depth, normal, ranges):
 #     # coef = tf.matmul(coef, tf.cast(sortMap, tf.float64), transpose_b=True)
 #     # coef = tf.reshape(tf.range(numPlanes)
 #     # planeMasks = tf.cast(tf.equal(mask, tf.tile(, [1, 1, 1, numPlanes]), [batchSize, 1, 1, 1])), tf.float32)
-    
+
 #     # planeAreas = tf.clip_by_value(tf.reduce_sum(planeMasks, axis=[1, 2]), 1e-4, width * height)
 #     # planeAreas, sortInds = tf.nn.top_k(planeAreas, k=numPlanes)
 #     # sortMap = tf.one_hot(sortInds, depth=numPlanes, axis=1)
 #     # planeMasks = tf.reshape(tf.matmul(tf.reshape(planeMasks, [-1, height * width, numPlanes]), sortMap), [-1, height, width, numPlanes])
 
 #     #planeAreas = tf.clip_by_value(tf.reduce_sum(planeMasks, axis=[1, 2]), 1e-4, width * height)
-    
+
 #     # planesNormal = tf.reduce_sum(tf.expand_dims(normal, 3) * tf.expand_dims(planeMasks, -1), axis=[1, 2]) / tf.expand_dims(planeAreas, -1)
 #     # planesNormal = tf.nn.l2_normalize(planesNormal, 2)
 #     # weightedABC = tf.reshape(tf.matmul(tf.reshape(ranges, [-1, 3]), tf.reshape(planesNormal, [-1, 3]), transpose_b=True), [batchSize, height, width, numPlanes])
@@ -706,14 +706,14 @@ def planeMapModule(depth, normal, ranges):
 #         planeMask = tf.cast(tf.round(tf.tensordot(tf.cast(planeMasks, tf.float64), coef, axes=[[3], [0]])), tf.int64)
 #         return planes, planeMask, tf.reduce_sum(validPlaneMask, axis=1)
 
-    
+
 #     globalPlanes = tf.slice(planes, [0, 0, 0], [batchSize, numGlobalPlanes, 3])
 #     globalPlaneMasks = tf.slice(planeMasks, [0, 0, 0, 0], [batchSize, height, width, numGlobalPlanes])
 
 #     if True:
 #         return planes, planeMasks, tf.reduce_sum(validPlaneMask, axis=1), planeMasks_test, boundaryMask
 #     #return globalPlanes, globalPlaneMasks, tf.reduce_sum(validPlaneMask, axis=1)
-    
+
 #     globalPlaneMask = tf.reduce_max(globalPlaneMasks, axis=3, keep_dims=True)
 #     smallPlaneMasks = tf.clip_by_value(tf.slice(planeMasks, [0, 0, 0, numGlobalPlanes], [batchSize, height, width, numPlanes - numGlobalPlanes]) - globalPlaneMask, 0, 1)
 #     smallPlaneMasks = tf.nn.dilation2d(smallPlaneMasks, filter=np.tile(dilationKernel, [1, 1, numPlanes - numGlobalPlanes]), strides=[1, 1, 1, 1], rates=[1, 1, 1, 1], padding='SAME')
@@ -725,7 +725,7 @@ def planeMapModule(depth, normal, ranges):
 
 #     blockSize = 16
 #     smallPlaneInds = tf.nn.avg_pool(smallPlaneMasks, ksize=[1, blockSize, blockSize, 1], strides=[1, blockSize, blockSize, 1], padding='VALID')
-#     smallPlaneAreas = tf.clip_by_value(tf.reduce_sum(smallPlaneInds, axis=[1, 2], keep_dims=True), 1e-4, width * height)    
+#     smallPlaneAreas = tf.clip_by_value(tf.reduce_sum(smallPlaneInds, axis=[1, 2], keep_dims=True), 1e-4, width * height)
 #     IOU = smallPlaneInds / smallPlaneAreas
 #     inds = smallPlaneInds
 #     smallPlaneInds = tf.one_hot(tf.argmax(smallPlaneInds, 3), depth=numPlanes) * tf.cast(tf.greater_equal(IOU, IOUThreshold), tf.float32) * tf.cast(tf.greater(smallPlaneInds, areaThreshold), tf.float32)
@@ -735,14 +735,14 @@ def planeMapModule(depth, normal, ranges):
 #     blockSmallPlaneMasks_16 = tf.reduce_sum(tf.expand_dims(smallPlaneInds, 3) * blockSmallPlaneMasks_16, axis=4)
 #     blockPlaneIndicators_16 = tf.reduce_max(smallPlaneInds, axis=3, keep_dims=True)
 
-    
+
 #     blockSize = 32
 #     smallPlaneInds = tf.nn.avg_pool(smallPlaneMasks, ksize=[1, blockSize, blockSize, 1], strides=[1, blockSize, blockSize, 1], padding='VALID')
-#     smallPlaneAreas = tf.clip_by_value(tf.reduce_sum(smallPlaneInds, axis=[1, 2], keep_dims=True), 1e-4, width * height)    
+#     smallPlaneAreas = tf.clip_by_value(tf.reduce_sum(smallPlaneInds, axis=[1, 2], keep_dims=True), 1e-4, width * height)
 #     IOU = smallPlaneInds / smallPlaneAreas
 #     inds = smallPlaneInds
 #     smallPlaneInds = tf.one_hot(tf.argmax(smallPlaneInds, 3), depth=numPlanes) * tf.cast(tf.greater_equal(IOU, IOUThreshold), tf.float32) * tf.cast(tf.greater(smallPlaneInds, areaThreshold), tf.float32)
-    
+
 #     blockSmallPlaneMasks_32 = tf.reshape(tf.space_to_depth(smallPlaneMasks, block_size=blockSize), [batchSize, height / blockSize, width / blockSize, blockSize * blockSize, numPlanes])
 #     blockSmallPlanes_32 = tf.reduce_sum(tf.expand_dims(smallPlaneInds, -1) * tf.expand_dims(tf.expand_dims(planes, 1), 1), axis=3)
 #     blockSmallPlaneMasks_32 = tf.reduce_sum(tf.expand_dims(smallPlaneInds, 3) * blockSmallPlaneMasks_32, axis=4)
@@ -760,7 +760,7 @@ def planeMapModule(depth, normal, ranges):
 #     urange = tf.tile(tf.reshape(urange, [1, -1]), [height, 1])
 #     vrange = (tf.range(height, dtype=tf.float32) / (height + 1) - 0.5) / focalLength * 481
 #     vrange = tf.tile(tf.reshape(vrange, [-1, 1]), [1, width])
-            
+
 #     ranges = tf.stack([urange, tf.ones([height, width]), -vrange], axis=2)
 #     ranges = tf.expand_dims(ranges, 0)
 
@@ -772,14 +772,14 @@ def planeMapModule(depth, normal, ranges):
 #     XYZ = tf.concat([X, Y, Z], axis=3)
 #     XYZ = tf.reshape(XYZ, [-1, height * width, 3])
 
-	
-	
+
+
 def findLocalPlanes(planes, planeMasks):
     batchSize = int(planeMasks.shape[0])
     height = int(planeMasks.shape[1])
     width = int(planeMasks.shape[2])
     numPlanes = int(planeMasks.shape[3])
-    
+
     maskWidth = 16
     maskHeight = 16
 
@@ -798,7 +798,7 @@ def findLocalPlanes(planes, planeMasks):
     localPlaneHeightThreshold = 64
     localPlaneMask = tf.logical_and(tf.less(planeMaxX - planeMinX, localPlaneWidthThreshold), tf.less(planeMaxY - planeMinY, localPlaneHeightThreshold))
 
-    
+
     stride = 8
     boxSize = 64
     xs = tf.tile(tf.expand_dims(tf.range(width / stride, dtype=tf.float32) * stride + stride / 2, 0), [height / stride, 1])
@@ -807,7 +807,7 @@ def findLocalPlanes(planes, planeMasks):
     gridMaxX = tf.reshape(xs + boxSize / 2, [1, -1, 1])
     gridMinY = tf.reshape(ys - boxSize / 2, [1, -1, 1])
     gridMaxY = tf.reshape(ys + boxSize / 2, [1, -1, 1])
-    
+
     gridMinX = tf.tile(gridMinX, [batchSize, 1, 1])
     gridMaxX = tf.tile(gridMaxX, [batchSize, 1, 1])
     gridMinY = tf.tile(gridMinY, [batchSize, 1, 1])
@@ -831,7 +831,7 @@ def findLocalPlanes(planes, planeMasks):
     planeMinX = tf.expand_dims(planeMinX, 1)
     planeMaxX = tf.expand_dims(planeMaxX, 1)
     planeMinY = tf.expand_dims(planeMinY, 1)
-    planeMaxY = tf.expand_dims(planeMaxY, 1)    
+    planeMaxY = tf.expand_dims(planeMaxY, 1)
     intersection = tf.maximum(tf.minimum(gridMaxX, planeMaxX) - tf.maximum(gridMinX, planeMinX) + 1, 0.) * tf.maximum(tf.minimum(gridMaxY, planeMaxY) - tf.maximum(gridMinY, planeMinY) + 1, 0.)
     union = (gridMaxX - gridMinX + 1) * (gridMaxY - gridMinY + 1) + (planeMaxX - planeMinX + 1) * (planeMaxY - planeMinY + 1) - intersection
     IOU = intersection / union
@@ -841,9 +841,9 @@ def findLocalPlanes(planes, planeMasks):
     IOU = IOU * tf.one_hot(tf.argmax(IOU, 1), depth=IOU.shape[1], axis=1)
     IOUThreshold = 1.0 / pow(boxSize / stride, 2)
     activeGridMask = tf.one_hot(tf.argmax(IOU, 2), depth=IOU.shape[2], axis=2) * tf.cast(tf.greater(IOU, IOUThreshold), tf.float32)
-    
+
     #activeGridMask = tf.one_hot(tf.ones((batchSize, IOU.shape[1]), dtype=tf.int32), depth=IOU.shape[2], axis=2)
-    
+
     gridScores = tf.reduce_sum(activeGridMask, axis=2, keep_dims=True)
     activeGridMask = tf.expand_dims(activeGridMask, -1)
     gridPlanes = tf.reduce_sum(activeGridMask * tf.expand_dims(planes, 1), axis=2)
@@ -852,14 +852,14 @@ def findLocalPlanes(planes, planeMasks):
     gridScores = tf.reshape(gridScores, [batchSize, height / stride, width / stride, -1])
     gridPlanes = tf.reshape(gridPlanes, [batchSize, height / stride, width / stride, -1])
     gridMasks = tf.reshape(gridMasks, [batchSize, height / stride, width / stride, -1])
-    
+
     return gridScores, gridPlanes, gridMasks
 
 
 def findBoundaries(planes, planeMasks):
     height = int(planeMasks.shape[0])
     width = int(planeMasks.shape[1])
-    
+
     planesD = tf.norm(planes, axis=1, keep_dims=True)
     planesD = tf.clip_by_value(planesD, 1e-5, 10)
     planesNormal = planes / planesD
@@ -875,7 +875,7 @@ def findBoundaries(planes, planeMasks):
     vs = (coefX * urange + coefY * ones) / coefZ
     pixels.append(tf.stack([tf.floor(vs), urange], axis=1))
     pixels.append(tf.stack([tf.ceil(vs), urange], axis=1))
-    
+
     vrange = tf.range(height, dtype=tf.float32) / focalLength
     ones = tf.ones(vrange.shape)
     us = -(coefY * ones - coefZ * vrange) / coefX
@@ -886,9 +886,9 @@ def findBoundaries(planes, planeMasks):
     validMask = tf.logical_and(tf.less(u, width), tf.less(v, height))
     validMask = tf.logical_and(validMask, tf.greater_equal(u, 0))
     validMask = tf.logical_and(validMask, tf.greater_equal(v, 0))
-    
+
     pixels *= tf.expand_dims(invalidMask, -1)
-    
+
     boundary = tf.sparse_to_dense(pixels, output_shape=[height, width], sparse_values=1)
     return boundary
 
@@ -899,7 +899,7 @@ def fitPlaneMasksModule(planes, depth, normal, width = 640, height = 480, numPla
     urange = tf.tile(tf.reshape(urange, [1, -1]), [height, 1])
     vrange = (tf.range(height, dtype=tf.float32) / (height + 1) - 0.5) / focalLength * 481
     vrange = tf.tile(tf.reshape(vrange, [-1, 1]), [1, width])
-        
+
     X = depth * tf.expand_dims(urange, -1)
     Y = depth
     Z = -depth * tf.expand_dims(vrange, -1)
@@ -926,28 +926,28 @@ def fitPlaneMasksModule(planes, depth, normal, width = 640, height = 480, numPla
         #one-hot encoding
         planeMasks = tf.one_hot(tf.argmax(planeMasks * (distanceThreshold - distance), axis=3), depth=numPlanes) * plane_mask
         pass
-    
+
     return planeMasks, plane_mask
-    
+
 
 def depthToNormalModule(depth):
     batchSize = int(depth.shape[0])
     height = int(depth.shape[1])
     width = int(depth.shape[2])
-    
+
     focalLength = 517.97
     urange = (tf.range(width, dtype=tf.float32) / width - 0.5) / focalLength * 640
     urange = tf.tile(tf.reshape(urange, [1, -1]), [height, 1])
     vrange = (tf.range(height, dtype=tf.float32) / height - 0.5) / focalLength * 480
     vrange = tf.tile(tf.reshape(vrange, [-1, 1]), [1, width])
-        
+
     X = depth * tf.expand_dims(urange, -1)
     Y = depth
     Z = -depth * tf.expand_dims(vrange, -1)
     XYZ = tf.concat([X, Y, Z], axis=3)
     #XYZ = tf.reshape(XYZ, [-1, height * width, 3])
 
-    
+
     kernel_array = np.zeros((3, 3, 1, 4))
     kernel_array[0, 1, 0, 0] = 1
     kernel_array[1, 0, 0, 1] = 1
@@ -981,7 +981,7 @@ def depthToNormalModule(depth):
     neighbor_kernel = tf.constant(neighbor_kernel_array.reshape(-1), shape=neighbor_kernel_array.shape, dtype=tf.float32)
     neighbor_kernel = tf.reshape(neighbor_kernel, [kernel_size, kernel_size, 1, 1])
     normal = tf.nn.depthwise_conv2d(tf.pad(normal, [[0, 0], [padding, padding], [padding, padding], [0, 0]], mode='REFLECT'), tf.tile(neighbor_kernel, [1, 1, 3, 1]), strides=[1, 1, 1, 1], padding='VALID')
-    
+
     normal = normal / tf.norm(normal, axis=3, keep_dims=True)
     return normal
 
@@ -995,7 +995,7 @@ def findBoundaryModule(depth, normal, segmentation, plane_mask, max_depth_diff =
     neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 1
     neighbor_kernel = tf.constant(neighbor_kernel_array.reshape(-1), shape=neighbor_kernel_array.shape, dtype=tf.float32)
     neighbor_kernel = tf.reshape(neighbor_kernel, [kernel_size, kernel_size, 1, 1])
-        
+
     depth_diff = tf.abs(tf.nn.depthwise_conv2d(depth, neighbor_kernel, strides=[1, 1, 1, 1], padding='VALID'))
     depth_diff = tf.pad(depth_diff, paddings = [[0, 0], [padding, padding], [padding, padding], [0, 0]])
     max_depth_diff = 0.1
@@ -1029,7 +1029,7 @@ def findBoundaryModuleSmooth(depth, segmentation, plane_mask, smooth_boundary, m
     neighbor_kernel_array[(kernel_size - 1) / 2][(kernel_size - 1) / 2] = 1
     neighbor_kernel = tf.constant(neighbor_kernel_array.reshape(-1), shape=neighbor_kernel_array.shape, dtype=tf.float32)
     neighbor_kernel = tf.reshape(neighbor_kernel, [kernel_size, kernel_size, 1, 1])
-        
+
     depth_diff = tf.abs(tf.nn.depthwise_conv2d(depth, neighbor_kernel, strides=[1, 1, 1, 1], padding='VALID'))
     depth_diff = tf.pad(depth_diff, paddings = [[0, 0], [padding, padding], [padding, padding], [0, 0]])
     max_depth_diff = 0.1
@@ -1052,7 +1052,7 @@ def findBoundaryModuleSmooth(depth, segmentation, plane_mask, smooth_boundary, m
 def crfModule(segmentations, planes, non_plane_depth, info, numOutputPlanes=20, numIterations=20, kernel_size = 9):
     width = int(segmentations.shape[2])
     height = int(segmentations.shape[1])
-    
+
     #maxDepthDiff = tf.Variable(0.3)
     #sigmaDepthDiff = tf.Variable(0.5)
     maxDepthDiff = 0.3
@@ -1062,7 +1062,7 @@ def crfModule(segmentations, planes, non_plane_depth, info, numOutputPlanes=20, 
     plane_depths = planeDepthsModule(plane_parameters, width, height, info)
     plane_depths = tf.transpose(tf.reshape(plane_depths, [height, width, -1, numOutputPlanes]), [2, 0, 1, 3])
     all_depths = tf.concat([plane_depths, non_plane_depth], axis=3)
-    
+
     refined_segmentation = segmentations
     for _ in xrange(numIterations):
         refined_segmentation = meanfieldModule(refined_segmentation, all_depths, numOutputPlanes=numOutputPlanes + 1, sigmaDepthDiff=sigmaDepthDiff, kernel_size = kernel_size)
@@ -1070,25 +1070,25 @@ def crfModule(segmentations, planes, non_plane_depth, info, numOutputPlanes=20, 
     return refined_segmentation
 
 def divideLayers(segmentations, planes, non_plane_mask, info, num_planes, numOutputPlanes_0=5, validAreaRatio=0.95, distanceThreshold=0.05):
-    batchSize = int(planes.shape[0])    
+    batchSize = int(planes.shape[0])
     numOutputPlanes = int(planes.shape[1])
     width = int(segmentations.shape[2])
     height = int(segmentations.shape[1])
-    
+
     plane_parameters = tf.reshape(planes, (-1, 3))
     plane_depths = planeDepthsModule(plane_parameters, width, height, info)
     plane_depths = tf.transpose(tf.reshape(plane_depths, [height, width, -1, numOutputPlanes]), [2, 0, 1, 3])
     depth = tf.reduce_sum(plane_depths * segmentations[:, :, :, :numOutputPlanes], axis=3, keep_dims=True)
     #non_plane_mask = segmentations[:, :, :, numOutputPlanes:numOutputPlanes+1]
-    
+
     background_mask = tf.logical_or(tf.logical_or(tf.less(plane_depths, 1e-4), tf.greater(plane_depths, depth - distanceThreshold)), tf.cast(non_plane_mask, tf.bool))
     background_planes = tf.greater(tf.reduce_mean(tf.cast(background_mask, tf.float32), axis=[1, 2]), validAreaRatio)
     validPlaneMask = tf.less(tf.tile(tf.expand_dims(tf.range(numOutputPlanes), 0), [batchSize, 1]), tf.expand_dims(num_planes, -1))
     background_planes = tf.logical_and(background_planes, validPlaneMask)
     background_planes = tf.cast(background_planes, tf.float32)
     plane_areas = tf.reduce_sum(segmentations[:, :, :, :numOutputPlanes], axis=[1, 2])
-    
-    layer_plane_areas_0 = plane_areas * background_planes    
+
+    layer_plane_areas_0 = plane_areas * background_planes
     areas, sortInds = tf.nn.top_k(layer_plane_areas_0, k=numOutputPlanes_0)
     sortMap = tf.one_hot(sortInds, depth=numOutputPlanes, axis=1)
     validMask = tf.cast(tf.greater(areas, 1e-4), tf.float32)
@@ -1104,8 +1104,8 @@ def divideLayers(segmentations, planes, non_plane_mask, info, num_planes, numOut
     sortMap *= tf.expand_dims(validMask, 1)
     layer_segmentations_1 = tf.reshape(tf.matmul(tf.reshape(segmentations, [batchSize, height * width, -1]), sortMap), [batchSize, height, width, -1])
     layer_planes_1 = tf.transpose(tf.matmul(planes, sortMap, transpose_a=True), [0, 2, 1])
-    
-    
+
+
     return tf.concat([layer_segmentations_0, layer_segmentations_1], axis=3), tf.concat([layer_planes_0, layer_planes_1], axis=1)
 
 
@@ -1126,9 +1126,9 @@ def calcMessages(planeSegmentations, planeDepths, planesY, numOutputPlanes = 21,
 
     maxDepthDiff = 0.2
     messages = tf.minimum(messages / pow(maxDepthDiff, 2), 1)
-    
+
     # vertical_padding = tf.zeros((batchSize, height, 1, numOutputPlanes))
-    # horizontal_padding = tf.zeros((batchSize, height, 1, numOutputPlanes))    
+    # horizontal_padding = tf.zeros((batchSize, height, 1, numOutputPlanes))
 
 
     # neighbor_kernel_array = gaussian(kernel_size)
@@ -1136,7 +1136,7 @@ def calcMessages(planeSegmentations, planeDepths, planesY, numOutputPlanes = 21,
     # neighbor_kernel_array /= neighbor_kernel_array.sum()
     # neighbor_kernel = tf.constant(neighbor_kernel_array.reshape(-1), shape=neighbor_kernel_array.shape, dtype=tf.float32)
     # neighbor_kernel = tf.reshape(neighbor_kernel, [kernel_size, kernel_size, 1, 1])
-    
+
     # messages = tf.nn.depthwise_conv2d(messages, tf.tile(neighbor_kernel, [1, 1, numOutputPlanes, 1]), strides=[1, 1, 1, 1], padding='SAME')
 
     return messages
@@ -1152,11 +1152,11 @@ def crfrnnModule(inputs, image_dims, num_classes, theta_alpha, theta_beta, theta
     else:
         weights = np.random.normal(size=(3, 21, 21)).astype(np.float32)
         pass
-    
+
     spatial_ker_weights = tf.Variable(weights[0][:num_classes, :num_classes], name='spatial_ker_weights', trainable=True)
     bilateral_ker_weights = tf.Variable(weights[1][:num_classes, :num_classes], name='bilateral_ker_weights', trainable=True)
-    compatibility_matrix = tf.Variable(weights[2][:num_classes, :num_classes], name='compatibility_matrix', trainable=True)    
-        
+    compatibility_matrix = tf.Variable(weights[2][:num_classes, :num_classes], name='compatibility_matrix', trainable=True)
+
 
     batchSize = int(inputs[0].shape[0])
     c, h, w = num_classes, image_dims[0], image_dims[1]
