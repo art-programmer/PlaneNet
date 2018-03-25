@@ -1,4 +1,9 @@
-# PlaneNet
+# PlaneNet: Piece-wise Planar Reconstruction from a Single RGB Image
+By Chen Liu, Jimei Yang, Duygu Ceylan, Ersin Yumer, and Yasutaka Furukawa
+
+## Introduction
+
+This paper presents the first end-to-end neural architecture for piece-wise planar reconstruction from a single RGB image. The proposed network, PlaneNet, learns to directly infer a set of plane parameters and corresponding plane segmentation masks. For more details, please refer to our CVPR 2018 [paper](http://art-programmer.github.io/planenet/paper.pdf) or visit our [project website](http://art-programmer.github.io/planenet.html).
 
 ## Dependencies
 Python 2.7, TensorFlow (>= 1.0), numpy, opencv 3.
@@ -70,3 +75,7 @@ python pool.py
 ```
 
 Use mouse to play:)
+
+## Contact
+
+If you have any questions, please contact me at chenliu@wustl.edu.
