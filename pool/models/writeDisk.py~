@@ -1,0 +1,29 @@
+import csv
+import sys
+import numpy as np
+import cv2
+
+texture = cv2.imread(sys.argv[1])
+
+with open(sys.argv[2], 'w') as outputFile:
+    header = """ply
+format ascii 1.0
+element vertex """
+    header += str(pointCloud.shape[0])
+    header += """
+property float x
+property float y
+property float z
+property uchar red                                     { start of vertex color }
+property uchar green
+property uchar blue
+end_header
+"""
+    outputFile.write(header)
+    for y in xrange(texture.shape[0]):
+        for x in xrange(texture.shape[1]):
+            if np.sqrt(pow(x - texture.shape[1] / 2, 2) + pow(y - texture.shape[0] / 2, 2)) < min(texture.shape[0], texture.shape[1]) / 2:
+                color = texture[y][x].astype(np.float32) / 255
+                outputFile.write(str(float(x) / texture.shape[1] * 2 - 1) + ' ' + str(float(y) / texture.shape[0] * 2 - 1) + ' ' + str(0) + ' ' + str(color[2]) + ' ' + str(color[1]) + ' ' + str(color[0]) + '\n')
+    outputFile.close()
+    pass
