@@ -25,7 +25,13 @@ cd ..
 ```
 
 ### Data preparation
-We convert [ScanNet](http://www.scan-net.org/) data to *.tfrecords* files for training and testing. The *.tfrecords* file can be downloaded from [here](https://mega.nz/#!IvAixABb!PD3wJtXX_6W3qtfKZQtl_P07mYPLwWst3cwbvuTXlSY).
+We convert [ScanNet](http://www.scan-net.org/) data to *.tfrecords* files for training and testing. The *.tfrecords* file can be downloaded from [here](https://wustl.box.com/s/d3vmtei5sin40svky6dcbe2aqhh5tmoz) (training) and [here](https://mega.nz/#!IvAixABb!PD3wJtXX_6W3qtfKZQtl_P07mYPLwWst3cwbvuTXlSY) (testing).
+
+For the training data, please run the following command to merge downloaded files into one *.tfrecords* file.
+
+```bash
+cat training_data_segments/* > planes_scannet_train.tfrecords
+```
 
 ### Training
 To train the network from the pretrained DeepLab network, please first download the DeepLab model [here](https://github.com/DrSleep/tensorflow-deeplab-resnet) (under the Caffe to TensorFlow conversion), and then run the following command.
