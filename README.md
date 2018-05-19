@@ -1,4 +1,9 @@
-# PlaneNet
+# PlaneNet: Piece-wise Planar Reconstruction from a Single RGB Image
+By Chen Liu, Jimei Yang, Duygu Ceylan, Ersin Yumer, and Yasutaka Furukawa
+
+## Introduction
+
+This paper presents the first end-to-end neural architecture for piece-wise planar reconstruction from a single RGB image. The proposed network, PlaneNet, learns to directly infer a set of plane parameters and corresponding plane segmentation masks. For more details, please refer to our CVPR 2018 [paper](http://art-programmer.github.io/planenet/paper.pdf) or visit our [project website](http://art-programmer.github.io/planenet.html).
 
 ## Dependencies
 Python 2.7, TensorFlow (>= 1.0), numpy, opencv 3.
@@ -20,7 +25,13 @@ cd ..
 ```
 
 ### Data preparation
-We convert [ScanNet](http://www.scan-net.org/) data to *.tfrecords* files for training and testing. The *.tfrecords* file can be downloaded from [here](https://mega.nz/#!IvAixABb!PD3wJtXX_6W3qtfKZQtl_P07mYPLwWst3cwbvuTXlSY).
+We convert [ScanNet](http://www.scan-net.org/) data to *.tfrecords* files for training and testing. The *.tfrecords* file can be downloaded from [here](https://wustl.box.com/s/d3vmtei5sin40svky6dcbe2aqhh5tmoz) (training) and [here](https://mega.nz/#!IvAixABb!PD3wJtXX_6W3qtfKZQtl_P07mYPLwWst3cwbvuTXlSY) (testing).
+
+For the training data, please run the following command to merge downloaded files into one *.tfrecords* file.
+
+```bash
+cat training_data_segments/* > planes_scannet_train.tfrecords
+```
 
 ### Training
 To train the network from the pretrained DeepLab network, please first download the DeepLab model [here](https://github.com/DrSleep/tensorflow-deeplab-resnet) (under the Caffe to TensorFlow conversion), and then run the following command.
@@ -70,3 +81,7 @@ python pool.py
 ```
 
 Use mouse to play:)
+
+## Contact
+
+If you have any questions, please contact me at chenliu@wustl.edu.
