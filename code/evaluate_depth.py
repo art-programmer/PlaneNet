@@ -20,6 +20,7 @@ from train_planenet import build_graph
 from train_sample import build_graph as build_graph_sample
 from planenet import PlaneNet
 from RecordReaderAll import *
+from RecordReaderMake3D import *
 #from RecordReaderRGBD import *
 from SegmentationRefinement import *
 import scipy.io as sio
@@ -34,14 +35,14 @@ import csv
 #ALL_METHODS = [('ll1_pb_pp', 'pixelwise_1'), ('crf1_pb_pp', 'pixelwise_2'), ('bl0_ll1_bw0.5_pb_pp_ps_sm0', 'pixelwise_3'), ('ll1_bw0.5_pb_pp_sm0', 'pixelwise_4')]
 
 
-ALL_TITLES = ['planenet', 'pixelwise', 'fine-tuning', 'ScanNet']
+ALL_TITLES = ['planenet', 'pixelwise', 'fine-tuning', 'ScanNet', 'Make3D']
 #ALL_METHODS = [('bl0_ll1_bw0.5_pp_ps_sm0', ''), ('bl0_ll1_bw0.5_pp_ps_sm0', 'pixelwise_1')]
 #ALL_METHODS = [('planenet_hybrid1_bl0_ll1_ds0_pp_ps', ''), ('pixelwise_hybrid1_ps', 'pixelwise_1')]
 #ALL_TITLES = ['crf', 'different matching']
 #ALL_METHODS = [('pb_pp_sm0', 'crf'), ('pb_pp_sm0', '')]
 
 #ALL_METHODS = [('planenet_hybrid1_bl0_ll1_ds0_pp_ps', ''), ('pixelwise_hybrid1_ps', '')]
-ALL_METHODS = [('pixelwise_np10_hybrid1_ds0', ''), ('finetuning_hybrid1_ps', ''), ('finetuning_np10_hybrid1_ds0_ps', ''), ('sample_np10_hybrid3_bl0_dl0_ds0_crfrnn5_sm0', '')]
+ALL_METHODS = [('pixelwise_np10_hybrid1_ds0', ''), ('finetuning_hybrid1_ps', ''), ('finetuning_np10_hybrid1_ds0_ps', ''), ('sample_np10_hybrid3_bl0_dl0_ds0_crfrnn5_sm0', ''), ('finetuning_np10_hybrid4_ds0', '')]
 
 def writeHTML(options):
     from html import HTML
@@ -1053,7 +1054,6 @@ def getPredictionHighRes(options):
     options.batchSize = 1
     min_after_dequeue = 1000
 
-    reader = RecordReaderAll()
     if options.dataset == 'SUNCG':
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_SUNCG_val.tfrecords'], num_epochs=10000)
     elif options.dataset == 'NYU_RGBD_raw':
@@ -1066,6 +1066,14 @@ def getPredictionHighRes(options):
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
     elif options.dataset == 'NYU_RGBD':
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_nyu_rgbd_labeled_val.tfrecords'], num_epochs=1)
+    elif options.dataset == 'Make3D':
+        filename_queue = tf.train.string_input_producer(['../planes_make3d_val.tfrecords'], num_epochs=1)
+        pass
+
+    if options.dataset != 'Make3D':
+        reader = RecordReaderAll()
+    else:
+        reader = RecordReaderMake3D()
         pass
 
     img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
@@ -1338,7 +1346,6 @@ def getGroundTruthHighRes(options):
     options.batchSize = 1
     min_after_dequeue = 1000
 
-    reader = RecordReaderAll()
     if options.dataset == 'SUNCG':
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_SUNCG_val.tfrecords'], num_epochs=10000)
     elif options.dataset == 'NYU_RGBD_raw':
@@ -1351,6 +1358,14 @@ def getGroundTruthHighRes(options):
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
     elif options.dataset == 'NYU_RGBD':
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_nyu_rgbd_labeled_val.tfrecords'], num_epochs=1)
+    elif options.dataset == 'Make3D':
+        filename_queue = tf.train.string_input_producer(['../planes_make3d_val.tfrecords'], num_epochs=1)
+        pass
+
+    if options.dataset != 'Make3D':
+        reader = RecordReaderAll()
+    else:
+        reader = RecordReaderMake3D()
         pass
 
 
@@ -1418,9 +1433,20 @@ def getGroundTruthHighRes(options):
 
                 imagePath = global_gt['image_path'][0]
 
-                image = sio.loadmat(imagePath)['imgRgb']
-                gt_d = sio.loadmat(imagePath.replace('rgb', 'depth'))['imgDepth']
-                gt_n = sio.loadmat(imagePath.replace('images_rgb', 'surface_normals').replace('rgb', 'surface_normals'))['imgNormals']
+
+                if options.dataset == 'NYU_RGBD':
+                    image = sio.loadmat(imagePath)['imgRgb']
+                    gt_d = sio.loadmat(imagePath.replace('rgb', 'depth'))['imgDepth']
+                    gt_n = sio.loadmat(imagePath.replace('images_rgb', 'surface_normals').replace('rgb', 'surface_normals'))['imgNormals']
+                elif options.dataset == 'Make3D':
+                    image = ((img[0] + 0.5) * 255).astype(np.uint8)
+                    gt_d = sio.loadmat(imagePath.replace('images', 'depths').replace('img', 'depth').replace('.jpg', '.mat'))['depthMap']
+                    gt_n = global_gt['normal']
+                else:
+                    image = ((img[0] + 0.5) * 255).astype(np.uint8)
+                    gt_d = global_gt['depth']
+                    gt_n = global_gt['normal']
+                    pass
 
                 images.append(image)
                 gtDepths.append(gt_d)
@@ -1520,7 +1546,6 @@ def evaluateAll(options):
     options.batchSize = 1
     min_after_dequeue = 1000
 
-    reader = RecordReaderAll()
     if options.dataset == 'SUNCG':
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_SUNCG_val.tfrecords'], num_epochs=10000)
     elif options.dataset == 'NYU_RGBD_raw':
@@ -1533,6 +1558,14 @@ def evaluateAll(options):
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
     elif options.dataset == 'NYU_RGBD':
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_nyu_rgbd_labeled_val.tfrecords'], num_epochs=1)
+    elif options.dataset == 'Make3D':
+        filename_queue = tf.train.string_input_producer(['../planes_make3d_val.tfrecords'], num_epochs=1)
+        pass
+
+    if options.dataset != 'Make3D':
+        reader = RecordReaderAll()
+    else:
+        reader = RecordReaderMake3D()
         pass
 
     img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
@@ -1598,23 +1631,6 @@ def evaluateAll(options):
                     continue
 
 
-                imagePath = global_gt['image_path'][0]
-
-                #image = sio.loadmat(imagePath)['imgRgb']
-                gt_d = sio.loadmat(imagePath.replace('rgb', 'depth'))['imgDepth']
-                #gt_n = sio.loadmat(imagePath.replace('images_rgb', 'surface_normals').replace('rgb', 'surface_normals'))['imgNormals']
-
-                # images.append(image)
-                # gtDepths.append(gt_d)
-                # gtNormals.append(gt_n)
-
-                plane_data = sio.loadmat(imagePath.replace('images_rgb', 'planes').replace('rgb', 'plane_data'))['planeData']
-                gt_s = (plane_data[0][0][0] - 1).astype(np.int32)
-                planes = plane_data[0][0][1]
-                numPlanes = planes.shape[0]
-                gt_s[gt_s == numPlanes] = options.numOutputPlanes
-
-
                 info = global_gt['info'][0]
 
                 width_high_res = int(info[16])
@@ -1656,6 +1672,49 @@ def evaluateAll(options):
                 #all_normals = np.concatenate([plane_normals, np.expand_dims(pred_np_n, 2)], axis=2)
                 #pred_n = all_normals.reshape(-1, options.numOutputPlanes + 1, 3)[np.arange(width_high_res * height_high_res), segmentation.reshape(-1)].reshape((height_high_res, width_high_res, 3))
 
+
+                imagePath = global_gt['image_path'][0]
+
+                #image = sio.loadmat(imagePath)['imgRgb']
+
+
+                if options.dataset == 'NYU_RGBD':
+                    gt_d = sio.loadmat(imagePath.replace('rgb', 'depth'))['imgDepth']
+                elif options.dataset == 'Make3D':
+                    gt_d = sio.loadmat(imagePath.replace('images', 'depths').replace('img', 'depth').replace('.jpg', '.mat'))['depthMap']
+                    planenet_result = []
+                    pred_d = cv2.resize(pred_d, (gt_d.shape[1], gt_d.shape[0]))
+                    planenet_result.append(evaluateDepths(pred_d, gt_d, np.ones(gt_d.shape)))
+                    planenet_results.append(planenet_result)
+                    continue
+                else:
+                    gt_d = global_gt['depth']
+                    pass
+
+                if index < options.visualizeImages:
+                    img = sio.loadmat(imagePath)['imgRgb']
+                    #cv2.imwrite(options.test_dir + '/' + str(index) + '_image.png', ((img[0] + 0.5) * 255).astype(np.uint8))
+                    cv2.imwrite(options.test_dir + '/' + str(index) + '_image.png', img.astype(np.uint8))
+                    cv2.imwrite(options.test_dir + '/' + str(index) + '_segmentation.png', drawSegmentationImage(segmentation, blackIndex=options.numOutputPlanes))
+                    cv2.imwrite(options.test_dir + '/' + str(index) + '_depth_pred.png', drawDepthImage(pred_d))
+                    cv2.imwrite(options.test_dir + '/' + str(index) + '_depth_gt.png', drawDepthImage(gt_d))
+                    pass
+
+                #gt_d = sio.loadmat(imagePath.replace('rgb', 'depth'))['imgDepth']
+
+
+                #gt_n = sio.loadmat(imagePath.replace('images_rgb', 'surface_normals').replace('rgb', 'surface_normals'))['imgNormals']
+
+                # images.append(image)
+                # gtDepths.append(gt_d)
+                # gtNormals.append(gt_n)
+
+                plane_data = sio.loadmat(imagePath.replace('images_rgb', 'planes').replace('rgb', 'plane_data'))['planeData']
+                gt_s = (plane_data[0][0][0] - 1).astype(np.int32)
+                planes = plane_data[0][0][1]
+                numPlanes = planes.shape[0]
+                gt_s[gt_s == numPlanes] = options.numOutputPlanes
+
                 planeMask = gt_s < options.numOutputPlanes
                 edgeMap = calcEdgeMap(gt_s, edgeWidth=5)
                 if edgeMap.sum() == 0:
@@ -1683,11 +1742,6 @@ def evaluateAll(options):
                 pixelwise_results.append(pixelwise_result)
                 #exit(1)
 
-                if index < options.visualizeImages:
-                    cv2.imwrite(options.test_dir + '/' + str(index) + '_image.png', ((img + 0.5) * 255).astype(np.uint8))
-                    cv2.imwrite(options.test_dir + '/' + str(index) + '_segmentation.png', drawSegmentationImage(segmentation, blackIndex=options.numOutputPlanes))
-                    cv2.imwrite(options.test_dir + '/' + str(index) + '_depth.png', drawDepthImage(pred_d))
-                    continue
                 #cv2.imwrite('test/mask.png', drawMaskImage(edgeMap))
 
                 #predDepthNormals.append(calcNormal(pred_d, info))
@@ -1780,7 +1834,7 @@ if __name__=='__main__':
 
     args = parser.parse_args()
     #args.hybrid = 'hybrid' + args.hybrid
-    args.test_dir = 'evaluate/' + args.task + '/' + args.dataset + '/hybrid' + args.hybrid
+    args.test_dir = 'evaluate/' + args.task + '/' + args.dataset + '/hybrid' + args.hybrid + '_' + args.methods
     if args.highRes == 1:
         args.test_dir += '_high_res'
         args.width = 561

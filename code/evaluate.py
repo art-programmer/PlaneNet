@@ -5,7 +5,7 @@ import cv2
 import os
 import time
 import sys
-import tf_nndistance
+#import tf_nndistance
 import argparse
 import glob
 import PIL
@@ -22,6 +22,8 @@ from planenet import PlaneNet
 from RecordReaderAll import *
 from SegmentationRefinement import *
 from crfasrnn_layer import CrfRnnLayer
+
+#['/mnt/vision/ScanNet/data/scene0164_01/frames/frame-000068.color.jpg']
 
 #ALL_TITLES = ['planenet', 'pixelwise', 'pixelwise+RANSAC', 'depth observation+RANSAC', 'pixelwise+semantics+RANSAC', 'gt']
 #ALL_METHODS = [('bl2_ll1_bw0.5_pb_pp_sm0', ''), ('pb_pp', 'pixelwise_1'), ('pb_pp', 'pixelwise_2'), ('pb_pp', 'pixelwise_3'), ('pb_pp', 'semantics'), ('pb_pp', 'gt')]
@@ -1394,7 +1396,7 @@ def getPrediction(options):
     elif options.dataset == 'matterport':
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
-        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/Data/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
         pass
 
     img_inp, global_gt_dict, local_gt_dict = reader.getBatch(filename_queue, numOutputPlanes=options.numOutputPlanes, batchSize=options.batchSize, min_after_dequeue=min_after_dequeue, getLocal=True, random=False)
@@ -1528,7 +1530,7 @@ def getGroundTruth(options):
     elif options.dataset == 'matterport':
         filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_matterport_val.tfrecords'], num_epochs=1)
     else:
-        filename_queue = tf.train.string_input_producer(['/mnt/vision/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
+        filename_queue = tf.train.string_input_producer(['/mnt/vision/Data/PlaneNet/planes_scannet_val.tfrecords'], num_epochs=1)
         pass
 
 
@@ -1583,8 +1585,11 @@ def getGroundTruth(options):
                 if index < options.startIndex:
                     continue
 
-
-                # print(global_gt['path'])
+                if index == 100:
+                    print(global_gt['image_path'])
+                    exit(1)
+                    pass
+                continue
                 # if index == 11:
                 #     cv2.imwrite('test/mask.png', drawMaskImage(global_gt['non_plane_mask'].squeeze()))
                 #     exit(1)
