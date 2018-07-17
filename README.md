@@ -17,7 +17,7 @@ sh compile.sh
 cd ..
 ```
 
-To train the network, you also need to run the following commands to compile the library for computing the set matching loss. (See [here](https://github.com/fanhqme/PointSetGeneration) for details.)
+To train the network, you also need to run the following commands to compile the library for computing the set matching loss. You need Eigen (I am using Eigen 3.2.92) for the compilation. (Please see [here](https://github.com/fanhqme/PointSetGeneration) for details.)
 ```bash
 cd nndistance
 make
