@@ -13,7 +13,6 @@ from skimage import segmentation
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from layers import PlaneDepthLayer
-from pystruct.inference import get_installed, inference_ogm, inference_dispatch
 #from layers import PlaneNormalLayer
 #from SegmentationRefinement import *
 
@@ -2858,6 +2857,8 @@ def filterPlanes(planes, segmentations, depth, info, numOutputPlanes=20, covered
 
 
 def getSegmentationsTRWS(planes, image, depth, normal, semantics, info, useSemantics=False, numPlanes=20, numProposals = 3):
+    from pystruct.inference import get_installed, inference_ogm, inference_dispatch
+    
     numOutputPlanes = planes.shape[0]
     height = depth.shape[0]
     width = depth.shape[1]

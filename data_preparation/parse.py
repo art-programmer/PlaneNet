@@ -667,7 +667,8 @@ if __name__=='__main__':
     scene_ids = scene_ids
 
     for scene_id in scene_ids:
-        #scene_id = 'scene0002_00'
+        if scene_id[:5] != 'scene':
+            continue
         if not os.path.exists(ROOT_FOLDER + '/' + scene_id + '/annotation'):
             os.system('mkdir -p ' + ROOT_FOLDER + '/' + scene_id + '/annotation')
             pass

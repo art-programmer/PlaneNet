@@ -1126,7 +1126,7 @@ def parse_args():
                         default=0, type=int)
     parser.add_argument('--numOutputPlanes', dest='numOutputPlanes',
                         help='the number of output planes',
-                        default=20, type=int)
+                        default=10, type=int)
     parser.add_argument('--batchSize', dest='batchSize',
                         help='batch size',
                         default=8, type=int)
