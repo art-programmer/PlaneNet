@@ -1165,7 +1165,7 @@ def parse_args():
                         default=0, type=int)
     parser.add_argument('--crfrnn', dest='crfrnn',
                         help='the number of CRF (as RNN) iterations',
-                        default=0, type=int)
+                        default=5, type=int)
     parser.add_argument('--backwardLossWeight', dest='backwardLossWeight',
                         help='backward matching loss',
                         default=0, type=float)

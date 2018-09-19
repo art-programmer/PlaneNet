@@ -1143,7 +1143,8 @@ def calcMessages(planeSegmentations, planeDepths, planesY, numOutputPlanes = 21,
 
 
 def crfrnnModule(inputs, image_dims, num_classes, theta_alpha, theta_beta, theta_gamma, num_iterations):
-    custom_module = tf.load_op_library('./crfasrnn/high_dim_filter.so')
+    current_path = os.path.dirname(os.path.realpath(__file__))
+    custom_module = tf.load_op_library(current_path + '/crfasrnn/high_dim_filter.so')
     from crfasrnn import high_dim_filter_grad  # Register gradients for the custom op
 
     if os.path.exists('weights.npy'):
