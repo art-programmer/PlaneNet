@@ -1321,7 +1321,7 @@ def getResults(options):
             method_options.predictSemantics = 0
             pass
         if 'crfrnn' in method[0]:
-            method_options.crfrnn = 10
+            method_options.crfrnn = int(method[0].split('crfrnn')[1].split('_')[0])
         else:
             method_options.crfrnn = 0
             pass

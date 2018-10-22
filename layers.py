@@ -27,9 +27,12 @@ def PlaneDepthLayer(planes, ranges):
   planesD = np.maximum(planesD, 1e-4)
   planesNormal = -planes / planesD.reshape(-1, 1).repeat(3, 1)
 
+  print(planesD, planesNormal)
+  print(ranges.min(), ranges.max())
   normalXYZ = np.dot(ranges, planesNormal.transpose())
   normalXYZ[normalXYZ == 0] = 1e-4
   normalXYZ = 1 / normalXYZ
+  print(normalXYZ.min(), normalXYZ.max())
   depths = -normalXYZ
   depths[:, :] *= planesD
   if batchSize > 1:
