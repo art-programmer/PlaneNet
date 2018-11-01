@@ -29,7 +29,7 @@ cd ..
 ```
 
 ### Data preparation
-We convert [ScanNet](http://www.scan-net.org/) data to *.tfrecords* files for training and testing. The *.tfrecords* file can be downloaded from [here](https://wustl.box.com/s/d3vmtei5sin40svky6dcbe2aqhh5tmoz) (training) and [here](https://mega.nz/#!IvAixABb!PD3wJtXX_6W3qtfKZQtl_P07mYPLwWst3cwbvuTXlSY) (testing).
+We convert [ScanNet](http://www.scan-net.org/) data to *.tfrecords* files for training and testing. The *.tfrecords* file can be downloaded from [here](https://wustl.box.com/s/d3vmtei5sin40svky6dcbe2aqhh5tmoz) (training) and [here](https://drive.google.com/open?id=1kfd-kreGQQLSRNF66t447R9WgDqsTh-3) (or [here](https://mega.nz/#!IvAixABb!PD3wJtXX_6W3qtfKZQtl_P07mYPLwWst3cwbvuTXlSY) if you cannont access the previous one) (testing).
 
 For the training data, please run the following command to merge downloaded files into one *.tfrecords* file.
 
