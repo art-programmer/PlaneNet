@@ -44,7 +44,7 @@ python train_planenet.py --restore=0 --modelPathDeepLab="path to the deep lab mo
 ```
 
 ### Evaluation
-Please first download our trained network from [here](https://mega.nz/#!sjpT2DiQ!Uo-6hxyldmtnPoKk3TTdUHKZADRGy6nIPlmAeVzJs_8) and put the uncompressed folder under ./checkpoint folder.
+Please first download our trained network from [here](https://drive.google.com/open?id=1BhSDqDE33K438qZ3KFEFabfOlcIxrXiC) (or [here](https://mega.nz/#!sjpT2DiQ!Uo-6hxyldmtnPoKk3TTdUHKZADRGy6nIPlmAeVzJs_8)) and put the uncompressed folder under ./checkpoint folder.
 
 To evaluate the performance against existing methods, please run:
 ```bash
