@@ -29,7 +29,7 @@ cd ..
 ```
 
 ### Data preparation
-We convert [ScanNet](http://www.scan-net.org/) data to *.tfrecords* files for training and testing. The *.tfrecords* file can be downloaded from [here](https://drive.google.com/open?id=1NyDrgI02ao18WmXyepgVkWGqtM3YS3_4) (or [here](https://wustl.box.com/s/d3vmtei5sin40svky6dcbe2aqhh5tmoz)) (training) and [here](https://drive.google.com/open?id=1kfd-kreGQQLSRNF66t447R9WgDqsTh-3) (or [here](https://mega.nz/#!IvAixABb!PD3wJtXX_6W3qtfKZQtl_P07mYPLwWst3cwbvuTXlSY) if you cannont access the previous one) (testing).
+We convert [ScanNet](http://www.scan-net.org/) data to *.tfrecords* files for training and testing. The training data can be downloaded from [here](https://drive.google.com/open?id=1NyDrgI02ao18WmXyepgVkWGqtM3YS3_4) (or [here](https://wustl.box.com/s/d3vmtei5sin40svky6dcbe2aqhh5tmoz) if you cannont access the previous one), and the validation data can be downloaded from [here](https://drive.google.com/open?id=1kfd-kreGQQLSRNF66t447R9WgDqsTh-3) (or [here](https://mega.nz/#!IvAixABb!PD3wJtXX_6W3qtfKZQtl_P07mYPLwWst3cwbvuTXlSY)).
 
 If you download the training data from the BOX link, please run the following command to merge downloaded files into one *.tfrecords* file.
 
