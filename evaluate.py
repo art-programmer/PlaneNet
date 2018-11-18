@@ -1686,7 +1686,7 @@ if __name__=='__main__':
                         default=-1, type=int)
     parser.add_argument('--methods', dest='methods',
                         help='methods',
-                        default='0000000', type=str)
+                        default='0222222', type=str)
     parser.add_argument('--dataFolder', dest='dataFolder',
                         help='data folder',
                         default='/mnt/vision/PlaneNet/', type=str)
