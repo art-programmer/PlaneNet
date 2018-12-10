@@ -51,6 +51,9 @@ To evaluate the performance against existing methods, please run:
 python evaluate.py --dataFolder="folder which contains tfrecords files"
 ```
 
+### Plane representation
+A plane is represented by three parameters and a segmentation mask. If the plane equation is **nx**=d where **n** is the surface normal and d is the plane offset, then plane parameters are **n**d. The plane equation is in the camera frame, where *x* points to the right, *y* points to the front, and *z* points to the up.
+
 ### Applications
 Please first download our trained network (see [Evaluation](### Evaluation) section for details). Script *predict.py* predicts and visualizes custom images (if "customImageFolder" is specified) or ScanNet testing images (if "dataFolder" is specified).
 
