@@ -6,6 +6,8 @@ By Chen Liu, Jimei Yang, Duygu Ceylan, Ersin Yumer, and Yasutaka Furukawa
 This paper presents the first end-to-end neural architecture for piece-wise planar reconstruction from a single RGB image. The proposed network, PlaneNet, learns to directly infer a set of plane parameters and corresponding plane segmentation masks. For more details, please refer to our CVPR 2018 [paper](http://art-programmer.github.io/planenet/paper.pdf) or visit our [project website](http://art-programmer.github.io/planenet.html).
 
 ## Updates
+We developed a better technique, PlaneRCNN, for piece-wise planar detection as described in our recent arXiv [paper](https://arxiv.org/abs/1812.04072). Unfortunately, we cannot release the code and data yet.
+
 We add script for extracting plane information from the original ScanNet dataset and rendering 3D planar segmentation results to 2D views. Please see the README in folder *data_preparation/* for details. Note that we made some modifications to the heuristic-heavy plane fitting algorithms when cleaning up the messy codes developed over time. So the plane fitting results will be slightly different with the training data we used (provided in the *.tfrecords* files).
 
 PyTorch training and testing codes are available now (still experimental and without the CRF module).
