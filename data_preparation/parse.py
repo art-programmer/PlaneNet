@@ -124,7 +124,12 @@ def loadClassMap():
         pass
     return classMap, classLabelMap
 
-
+def fitPlane(points):
+    if points.shape[0] == points.shape[1]:
+        return np.linalg.solve(points, np.ones(points.shape[0]))
+    else:
+        return np.linalg.lstsq(points, np.ones(points.shape[0]), rcond=None)[0]
+    
 def mergePlanesNew(points, planes, planePointIndices, planeSegments, segmentNeighbors, numPlanes, planeDiffThreshold = 0.05, planeAngleThreshold = 30, inlierThreshold = 0.9, planeAreaThreshold = 10, orthogonalThreshold = np.cos(np.deg2rad(60)), parallelThreshold = np.cos(np.deg2rad(30)), debug=False):
 
 
