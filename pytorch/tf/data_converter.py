@@ -71,18 +71,18 @@ def writeRecordFile(split, dataset):
                         pass
                     annotationPath = '/'.join(tokens[:-2]) + '/annotation_new/'
 
-                    info = global_gt['info'][batchIndex]
-                    info[1] = info[5]
-                    info[3] = info[6]
-                    info[4] = info[16]
-                    info[5] = info[17]
-                    info[6] = info[18]
-                    info[7] = info[8] = info[9] = 0
-                    info = info[:10]
-                    if not os.path.exists(annotationPath + '/info.npy'):
-                        np.save(annotationPath + '/info.npy', info)
-                        pass
-                    continue
+#                     info = global_gt['info'][batchIndex]
+#                     info[1] = info[5]
+#                     info[3] = info[6]
+#                     info[4] = info[16]
+#                     info[5] = info[17]
+#                     info[6] = info[18]
+#                     info[7] = info[8] = info[9] = 0
+#                     info = info[:10]
+#                     if not os.path.exists(annotationPath + '/info.npy'):
+#                         np.save(annotationPath + '/info.npy', info)
+#                         pass
+#                     continue
                     
                     if os.path.exists(annotationPath + tokens[-1].replace('color.jpg', 'planes.npy')):
                         continue
